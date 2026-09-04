@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.8
+> 版本：v0.0.9
 
 ## ✨ 特性
 
@@ -27,6 +27,15 @@
 3. ./mxgt 启动
 4. 浏览器打开 http://localhost:8080
 ```
+
+**云端编译产物覆盖全部主流平台/框架**（GitHub Actions 自动编译，推 tag 即出）：
+
+| 平台 | 架构 | 产物 |
+|---|---|---|
+| Linux（服务器主流） | amd64 / arm64 / 386 / armv7 | `mxgt-linux-*.zip` |
+| Windows | amd64 / arm64 / 386 | `mxgt-windows-*.zip` |
+| macOS | amd64 / arm64 | `mxgt-darwin-*.zip` |
+| FreeBSD | amd64 | `mxgt-freebsd-amd64.zip` |
 
 首次启动自动生成 `config.yaml` 和运行目录（`data/` SQLite、`cache/`、`logs/`、`uploads/`）。
 
@@ -258,6 +267,10 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.9
+- 新增：GitHub Actions 云端编译矩阵扩展至全部主流平台/框架（Linux amd64/arm64/386/armv7 + Windows amd64/arm64/386 + macOS amd64/arm64 + FreeBSD amd64）
+- 优化：Release 打包改为动态遍历，自动为每个平台生成 zip 与校验和
 
 ### v0.0.8
 - 新增：🍎 苹果 CMS v10 适配——`cms` 包（CMSVod / ListResponse / PlayResponse 结构体 + 多线路 vod 组装）

@@ -11,26 +11,46 @@ permissions:
 
 jobs:
   build:
-    name: build-${{ matrix.os }}-${{ matrix.arch }}
+    name: build-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.armv }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Linux（服务器主流）
           - os: linux
             arch: amd64
             ext: ""
           - os: linux
             arch: arm64
             ext: ""
+          - os: linux
+            arch: "386"
+            ext: ""
+          - os: linux
+            arch: arm
+            armv: "7"
+            ext: ""
+          # Windows
           - os: windows
             arch: amd64
             ext: ".exe"
+          - os: windows
+            arch: arm64
+            ext: ".exe"
+          - os: windows
+            arch: "386"
+            ext: ".exe"
+          # macOS
           - os: darwin
             arch: amd64
             ext: ""
           - os: darwin
             arch: arm64
+            ext: ""
+          # FreeBSD
+          - os: freebsd
+            arch: amd64
             ext: ""
 
     steps:
@@ -46,20 +66,21 @@ jobs:
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
+          GOARM: ${{ matrix.armv }}
           CGO_ENABLED: '0'
         run: |
           mkdir -p dist
           go build -trimpath -ldflags "-s -w -X main.version=${{ github.ref_name }}" \
-            -o dist/mxgt-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }} ./cmd/server
+            -o dist/mxgt-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.armv }}${{ matrix.ext }} ./cmd/server
 
       - name: Generate checksum
         run: |
-          cd dist && sha256sum mxgt-* > mxgt-${{ matrix.os }}-${{ matrix.arch }}.sha256
+          cd dist && sha256sum mxgt-* > mxgt-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.armv }}.sha256
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mxgt-${{ matrix.os }}-${{ matrix.arch }}
+          name: mxgt-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.armv }}
           path: dist/
 
   release:
@@ -76,15 +97,15 @@ jobs:
       - name: Zip per platform
         run: |
           cd dist
-          for f in mxgt-linux-amd64 mxgt-linux-arm64 mxgt-windows-amd64.exe mxgt-darwin-amd64 mxgt-darwin-arm64; do
-            if [ -f "$f" ]; then
-              case "$f" in
-                *.exe) zip -j "mxgt-windows-amd64.zip" "$f" ;;
-                mxgt-darwin-*) zip -j "${f}.zip" "$f" ;;
-                *) zip -j "${f}.zip" "$f" ;;
-              esac
-            fi
+          for f in mxgt-*; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              *.sha256) continue ;;
+              *.exe) zip -j "$(basename "$f" .exe).zip" "$f" ;;
+              *) zip -j "$f.zip" "$f" ;;
+            esac
           done
+          rm -f *.sha256
           sha256sum *.zip > SHA256SUMS.txt
 
       - name: Release
