@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.7
+> 版本：v0.0.8
 
 ## ✨ 特性
 
@@ -9,6 +9,7 @@
 - 🛰️ **JSON 解析路由**：可配置**多条解析规则**（对接多个源站），支持 JSONPath / Regex / Custom 三种提取器，按优先级依次匹配
 - 🔀 **多提取器**：`jsonpath` / `regex` / `custom` 接口化注册，新增提取器只需实现 `Extractor` 接口
 - 📡 **多源采集器**：`api` / `html` / `custom` 采集器接口化注册，支持**对接多个采集源**；`POST /admin/sync` 一键采集 → 剧名模糊匹配 → 自动合并入库
+- 🍎 **苹果 CMS v10 对接**：`/api.php/provide/vod/` 输出标准 CMS 采集接口（list / detail / search / play），多线路自动用 `$$$` 分隔
 - 🎯 **剧名匹配**：Levenshtein 相似度 + 别名表 + 年份/标点规范化；多源同剧自动合并到同一 vod，集数按来源区分
 - 📦 **多存储**：数据库支持 SQLite（默认零配置）/ MySQL；缓存支持内存（默认）/ Redis，接口化可扩展
 - 🔐 **管理后台**：JWT 登录 + 解析规则 CRUD + 采集源管理 CRUD（后台配置即可接入新源站）
@@ -59,6 +60,10 @@ docker run -p 8080:8080 mxgt
 | PUT | `/admin/sources/:id` | 更新采集源 | JWT |
 | DELETE | `/admin/sources/:id` | 删除采集源 | JWT |
 | POST | `/admin/sync` | 触发多源采集→匹配→入库 | JWT |
+| GET | `/api.php/provide/vod/?ac=list` | 苹果 CMS v10 分类列表 | 无 |
+| GET | `/api.php/provide/vod/?ac=detail&ids=1` | 苹果 CMS v10 详情 | 无 |
+| GET | `/api.php/provide/vod/?ac=search&wd=关键词` | 苹果 CMS v10 搜索 | 无 |
+| GET | `/api.php/provide/vod/?ac=play&id=1&ep=1` | 苹果 CMS v10 播放地址 | 无 |
 
 `/api/resolve` 返回格式：
 
@@ -157,6 +162,47 @@ curl -s -X POST http://localhost:8080/admin/sync \
 }
 ```
 
+## 🍎 苹果 CMS v10 对外接口
+
+`GET /api.php/provide/vod/` 兼容苹果 CMS v10 标准采集接口（`ac=list` / `detail` / `search` / `play`），配合多源采集可一键把「采集到的多源数据」输出为标准 CMS 数据，供任意支持该规范的站点 / 播放器对接：
+
+```bash
+# 分类列表（分页 ?pg=，分类筛选 ?t=）
+curl "http://localhost:8080/api.php/provide/vod/?ac=list&pg=1"
+
+# 详情（多 ids 用逗号分隔）
+curl "http://localhost:8080/api.php/provide/vod/?ac=detail&ids=1,2"
+
+# 搜索
+curl "http://localhost:8080/api.php/provide/vod/?ac=search&wd=庆余年"
+
+# 播放：ep 指定集数返回真实直链；不传 ep 返回完整播放串
+curl "http://localhost:8080/api.php/provide/vod/?ac=play&id=1&ep=1"
+```
+
+返回遵循苹果 CMS v10 schema：`code/msg/page/pagecount/limit/total/list[]`，其中 `vod_play_from` 与 `vod_play_url` 支持多线路，线路间用 `$$$` 分隔、集间用 `#` 分隔：
+
+```json
+{
+  "code": 1,
+  "msg": "数据列表",
+  "page": 1,
+  "pagecount": 1,
+  "limit": "20",
+  "total": 1,
+  "list": [
+    {
+      "vod_id": 1,
+      "vod_name": "测试剧集A",
+      "vod_year": "2026",
+      "vod_area": "中国大陆",
+      "vod_play_from": "测试API源A$$$测试API源B",
+      "vod_play_url": "第1集$http://.../1.m3u8#第2集$http://.../2.m3u8$$$第3集$http://.../3.m3u8"
+    }
+  ]
+}
+```
+
 ## 🧱 分层架构
 
 ```
@@ -183,9 +229,10 @@ internal/
 ├── models/       # 数据模型（vods / episodes / sources / extract_rules）
 ├── collector/    # 采集器接口 + 多源实现（api / html / custom）
 ├── matcher/      # 剧名模糊匹配（Levenshtein + 别名）+ 集数提取
+├── cms/          # 苹果 CMS v10 结构体 + vod 组装（多线路 play_from/play_url）
 ├── extractor/    # 提取器接口 + 注册表（jsonpath / regex / custom 可扩展）
 ├── service/      # 业务服务（解析路由 / 多源采集同步）
-├── handler/      # HTTP 处理器（resolve / proxy / admin / rules / sources / sync / health）
+├── handler/      # HTTP 处理器（resolve / proxy / admin / rules / sources / sync / cms / health）
 ├── middleware/   # JWT 鉴权
 └── router/       # 路由注册（分层）
 ```
@@ -211,6 +258,12 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.8
+- 新增：🍎 苹果 CMS v10 适配——`cms` 包（CMSVod / ListResponse / PlayResponse 结构体 + 多线路 vod 组装）
+- 新增：`GET /api.php/provide/vod/` 对外接口（ac=list / detail / search / play），输出标准 CMS 采集数据
+- 新增：多线路输出——同一剧多源合并后 `vod_play_from` / `vod_play_url` 自动用 `$$$` 分隔
+- 打通：多源采集 → 剧名匹配合并 → 入库 → 苹果 CMS 对外输出的完整闭环
 
 ### v0.0.7
 - 新增：📡 多源采集器——Collector 接口 + 注册表（api / html / custom 可扩展，对接多个采集源）

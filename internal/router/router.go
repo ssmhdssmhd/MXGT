@@ -39,6 +39,9 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	api.GET("/resolve", handler.NewResolveHandler(resolveSvc).Resolve)
 	api.GET("/proxy/stream", handler.NewProxyHandler().Stream)
 
+	// 对外：苹果 CMS v10 兼容输出（ac=list / detail / search / play）
+	e.GET("/api.php/provide/vod/", handler.NewCMSHandler(db).Provide)
+
 	// 管理后台层（JWT 保护；规则/采集源支持对接多条，可动态增删改）
 	admin := handler.NewAdminHandler(db)
 	rules := handler.NewRulesHandler(db)

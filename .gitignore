@@ -5,6 +5,7 @@
 /logs/
 /uploads/
 /tmp/
+/.smoke-testapi/
 
 # 构建产物
 /dist/
