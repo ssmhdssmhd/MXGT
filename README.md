@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.9
+> 版本：v0.0.10
 
 ## ✨ 特性
 
@@ -33,7 +33,7 @@
 | 平台 | 架构 | 产物 |
 |---|---|---|
 | Linux（服务器主流） | amd64 / arm64 / 386 / armv7 | `mxgt-linux-*.zip` |
-| Windows | amd64 / arm64 / 386 | `mxgt-windows-*.zip` |
+| Windows | amd64 / arm64 | `mxgt-windows-*.zip` |
 | macOS | amd64 / arm64 | `mxgt-darwin-*.zip` |
 | FreeBSD | amd64 | `mxgt-freebsd-amd64.zip` |
 
@@ -268,8 +268,11 @@ internal/
 
 ## 📝 更新日志
 
+### v0.0.10
+- 修复：移除不支持的 windows/386（modernc.org/sqlite 不支持 32 位 Windows），云端编译矩阵全部平台编译成功
+
 ### v0.0.9
-- 新增：GitHub Actions 云端编译矩阵扩展至全部主流平台/框架（Linux amd64/arm64/386/armv7 + Windows amd64/arm64/386 + macOS amd64/arm64 + FreeBSD amd64）
+- 新增：GitHub Actions 云端编译矩阵扩展至全部主流平台/框架（Linux amd64/arm64/386/armv7 + Windows amd64/arm64 + macOS amd64/arm64 + FreeBSD amd64）
 - 优化：Release 打包改为动态遍历，自动为每个平台生成 zip 与校验和
 
 ### v0.0.8

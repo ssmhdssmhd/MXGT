@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.9
+> 版本：v0.0.10
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions（云端编译）
 > 分发策略：GitHub Actions 云端编译多平台 Go 可执行文件 → 单文件免配置运行 → 更新只替换执行文件
 
@@ -1857,7 +1857,9 @@ GET  /admin/update/logs         → 更新日志
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.9 新增：☁️ 云端编译矩阵扩展至全部主流平台/框架——Linux（amd64/arm64/386/armv7）+ Windows（amd64/arm64/386）+ macOS（amd64/arm64）+ FreeBSD（amd64），Release 打包改为动态遍历自动生成 zip 与校验和。*
+*本文档随代码迭代同步更新。版本 v0.0.10 修复：移除不支持的 windows/386（modernc.org/sqlite 不支持 32 位 Windows），云端编译矩阵全部平台编译成功。*
+
+*前一版本 v0.0.9 新增：☁️ 云端编译矩阵扩展至全部主流平台/框架——Linux（amd64/arm64/386/armv7）+ Windows（amd64/arm64）+ macOS（amd64/arm64）+ FreeBSD（amd64），Release 打包改为动态遍历自动生成 zip 与校验和。*
 
 *前一版本 v0.0.8 新增：🍎 M7 苹果 CMS v10 适配已落地实现——cms 包（CMSVod/ListResponse/PlayResponse 结构体 + 多线路 ToCMSVod/BuildPlayURL 组装）、CMS Handler（ac=list/detail/search/play 四个对外接口）、路由注册 GET /api.php/provide/vod/，打通「多源采集 → 匹配合并 → 入库 → 苹果 CMS 对外输出」闭环。*
 

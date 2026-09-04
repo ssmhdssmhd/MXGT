@@ -31,15 +31,12 @@ jobs:
             arch: arm
             armv: "7"
             ext: ""
-          # Windows
+          # Windows（注：modernc.org/sqlite 不支持 windows/386，故不含 32 位）
           - os: windows
             arch: amd64
             ext: ".exe"
           - os: windows
             arch: arm64
-            ext: ".exe"
-          - os: windows
-            arch: "386"
             ext: ".exe"
           # macOS
           - os: darwin
