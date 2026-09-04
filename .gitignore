@@ -1,0 +1,21 @@
+# 运行环境（用户运行目录，不进仓库；仅限仓库根目录）
+/config.yaml
+/data/
+/cache/
+/logs/
+/uploads/
+/tmp/
+
+# 构建产物
+/dist/
+/mxgt
+/mxgt-*
+*.exe
+*.zip
+*.sha256
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+*.log
+.DS_Store

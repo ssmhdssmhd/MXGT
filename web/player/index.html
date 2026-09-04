@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MXGT 在线播放</title>
+  <script src="https://cdn.jsdelivr.net/npm/dplayer@1.27.1/dist/DPlayer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div class="max-w-4xl mx-auto p-4">
+    <h1 id="title" class="text-xl font-bold mb-1">MXGT 在线播放</h1>
+    <p id="meta" class="text-gray-400 text-sm mb-4"></p>
+
+    <div id="player" class="rounded-lg overflow-hidden shadow-2xl bg-black"></div>
+
+    <div id="status" class="mt-4 text-sm text-gray-300"></div>
+    <div id="error" class="mt-4 text-sm text-red-400 hidden"></div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/player.js"></script>
+</body>
+</html>

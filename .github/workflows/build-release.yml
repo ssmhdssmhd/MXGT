@@ -1,0 +1,94 @@
+name: Build Release
+
+# 云端编译：推送版本 tag（v*）时，在 GitHub Actions 云端编译多平台 Go 可执行文件并发布 Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build-${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            ext: ""
+          - os: linux
+            arch: arm64
+            ext: ""
+          - os: windows
+            arch: amd64
+            ext: ".exe"
+          - os: darwin
+            arch: amd64
+            ext: ""
+          - os: darwin
+            arch: arm64
+            ext: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Build (CGO_ENABLED=0 静态编译 + go:embed 单文件)
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags "-s -w -X main.version=${{ github.ref_name }}" \
+            -o dist/mxgt-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }} ./cmd/server
+
+      - name: Generate checksum
+        run: |
+          cd dist && sha256sum mxgt-* > mxgt-${{ matrix.os }}-${{ matrix.arch }}.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mxgt-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/
+
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Zip per platform
+        run: |
+          cd dist
+          for f in mxgt-linux-amd64 mxgt-linux-arm64 mxgt-windows-amd64.exe mxgt-darwin-amd64 mxgt-darwin-arm64; do
+            if [ -f "$f" ]; then
+              case "$f" in
+                *.exe) zip -j "mxgt-windows-amd64.zip" "$f" ;;
+                mxgt-darwin-*) zip -j "${f}.zip" "$f" ;;
+                *) zip -j "${f}.zip" "$f" ;;
+              esac
+            fi
+          done
+          sha256sum *.zip > SHA256SUMS.txt
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**
+          generate_release_notes: true

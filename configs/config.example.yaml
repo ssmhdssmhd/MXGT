@@ -1,0 +1,31 @@
+# ============================================
+# MXGT 配置文件（首次运行自动生成）
+# 所有配置都在运行文件夹内，升级可执行文件后保留
+# ============================================
+
+server:
+  port: 8080            # 服务端口
+  mode: release         # release / debug
+
+# 数据库：driver 支持 sqlite(默认，零配置) / mysql(填下面的地址)
+database:
+  driver: sqlite        # sqlite / mysql
+  sqlite_path: data/mxgt.db
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: ""
+  dbname: mxgt
+
+# 缓存：driver 支持 memory(默认) / redis
+cache:
+  driver: memory        # memory / redis
+  address: 127.0.0.1:6379
+  password: ""
+  db: 0
+  ttl_seconds: 3600
+
+# 解析路由
+resolve:
+  cache_ttl_seconds: 3600
+  http_timeout_seconds: 15
