@@ -1,8 +1,9 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.5
-> 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions
+> 版本：v0.0.6
+> 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions（云端编译）
+> 分发策略：GitHub Actions 云端编译多平台 Go 可执行文件 → 单文件免配置运行 → 更新只替换执行文件
 
 ---
 
@@ -363,15 +364,23 @@ mxgt/
 │   ├── docker-compose.yml
 │   └── .env.example
 ├── .github/workflows/
-│   └── ci.yml
+│   ├── ci.yml               # 代码检查 + 单测
+│   └── build-release.yml    # ⭐ 云端编译：push tag → 多平台编译 → 发布 GitHub Release
 ├── web/
-│   ├── player/                 # ⭐ 前端在线播放页（?url=xxx）
+│   ├── player/              # ⭐ 前端在线播放页（?url=xxx）—— go:embed 打进可执行文件
 │   │   ├── index.html
 │   │   ├── js/player.js
 │   │   └── js/api.js
-│   └── admin/                  # 管理后台
-│       ├── ai/                 # 🤖 AI 分析页（m3u8 分析 + 内置播放器 + 实时标注 + 指纹库）
-│       └── ...                 # 其余各模块页面（后补）
+│   └── admin/               # 管理后台
+│       ├── ai/              # 🤖 AI 分析页（m3u8 分析 + 内置播放器 + 实时标注 + 指纹库）
+│       └── ...              # 其余各模块页面（后补）
+├── run/                     # ⭐ 运行目录（用户放可执行文件的地方，首次运行自动创建）
+│   ├── mxgt                 # ← 可执行文件（更新时只替换这一个）
+│   ├── config.yaml          # ← 用户配置（首次运行自动生成）
+│   ├── data/                # ← SQLite 数据库（默认，免配置）
+│   ├── cache/               # ← 本地缓存（无 Redis 时）
+│   ├── logs/                # ← 日志
+│   └── uploads/             # ← 上传
 ├── test/
 ├── go.mod
 ├── go.sum
@@ -1549,6 +1558,12 @@ var DefaultMenus = []MenuItem{
 | 内置播放器实时标注 | 复用 DPlayer + hls.js，监听 FRAG_LOADED 拿当前 SN → 映射判定结果实时标红 |
 | 去广告 m3u8 生成 | 剔除广告 ts 后按 #EXTINF 重新拼 #EXTM3U，保留时长信息 |
 | 判定聚合 | 多通道结果按置信度取最高，verdict.go 统一 normal / ad / subtitle / interlude / unknown |
+| GitHub Actions 云端编译 | push tag 触发 build-release.yml，matrix 多平台编译（linux/windows/darwin × amd64/arm64），CGO_ENABLED=0 静态编译 + -trimpath + -ldflags "-s -w"，自动发布 Release |
+| go:embed 单文件 | 编译期把 web/player + web/admin 打进可执行文件，单文件即完整程序，无需额外 web 目录 |
+| 首次运行自建环境 | 检测 config.yaml 不存在则自动生成，创建 data/ cache/ logs/ uploads/ tmp/ 运行目录结构 |
+| SQLite 零配置 | 默认内嵌 SQLite（glebarez/sqlite 纯 Go 无 CGO），config.yaml 配置了 MySQL/Redis 才自动切换 |
+| 替换即更新 | 更新只替换可执行文件，config.yaml / data/ / uploads/ 全在运行目录不受影响，重启即完成升级 |
+| 运行目录隔离 | 程序只使用运行文件夹内相对路径，不写系统其它位置，备份=复制文件夹，卸载=删除文件夹 |
 
 ---
 
@@ -1559,6 +1574,8 @@ github.com/labstack/echo/v4            # Web 框架
 github.com/labstack/echo-contrib       # echo-session / basicauth 等
 gorm.io/gorm                            # ORM
 gorm.io/driver/mysql                    # MySQL 驱动
+gorm.io/driver/sqlite                   # SQLite 驱动（免配置默认存储，零数据库零 CGO）
+github.com/glebarez/sqlite              # 纯 Go SQLite 实现（无 CGO，支持静态编译）
 github.com/spf13/viper                  # 配置管理
 github.com/golang-jwt/jwt/v5            # JWT
 go.uber.org/zap                         # 日志
@@ -1690,11 +1707,129 @@ M16 AI 视频智能分析（ts / 广告 / 字幕 / 插播）
      + 去广告 m3u8 动态生成（auto_skip_ad 一键剔除广告 ts）
      + /admin/ai/* 接口 + SSE 实时分析日志
      + 侧边栏 AI 设置页面（前后端 + 指纹库导入导出）
+
+M17 分发与免配置（云端编译 + 单文件运行）
+  └─ .github/workflows/build-release.yml 多平台云端编译（linux/windows/darwin × amd64/arm64）
+     + CGO_ENABLED=0 静态编译 + go:embed 内嵌 web 前端 → 单文件即完整程序
+     + 首次运行自动建环境（config.yaml / data/ / cache/ / logs/ / uploads/）
+     + SQLite 默认存储（零数据库配置），检测到 MySQL/Redis 配置才连接
+     + 单文件替换更新（后台「更新设置」一键更新 + 手动替换两种方式，配置数据保留）
+     + push tag 自动发布 GitHub Release + README 快速开始文档
 ```
 
 ---
 
-## 十二、设计原则
+## 十二、部署与分发（云端编译 + 免配置运行）
+
+### 1. 核心目标
+
+| 目标 | 说明 |
+|---|---|
+| **云端编译** | 所有构建在 GitHub Actions 完成，用户**不接触任何编译过程** |
+| **免配置运行** | 简单用户下载一个可执行文件就能用，无需 Go / MySQL / Redis / Docker |
+| **运行目录自建环境** | 用户设置、数据库、日志等全部自动创建在**运行文件夹**内，与程序分离 |
+| **替换即更新** | 更新只需替换打包好的 Go 执行文件，配置与数据全部保留 |
+
+### 2. GitHub Actions 云端编译（多平台 Release）
+
+推送版本 tag（如 `v0.0.6`）→ 自动触发 `.github/workflows/build-release.yml` → 云端编译并发布 GitHub Release。
+
+```
+workflow: build-release.yml
+触发条件: push tags (v*)
+    │
+    ├─ 编译矩阵（matrix）
+    │   ├─ linux   / amd64   → mxgt-linux-amd64
+    │   ├─ linux   / arm64   → mxgt-linux-arm64   （树莓派 / ARM 服务器）
+    │   ├─ windows / amd64   → mxgt-windows-amd64.exe
+    │   ├─ darwin  / amd64   → mxgt-darwin-amd64
+    │   └─ darwin  / arm64   → mxgt-darwin-arm64  （Apple Silicon）
+    │
+    ├─ 编译参数
+    │   ├─ CGO_ENABLED=0          # 静态编译，不依赖系统动态库
+    │   ├─ -trimpath              # 去除构建路径信息
+    │   ├─ -ldflags "-s -w"       # 减小体积
+    │   └─ go:embed 内嵌 web 前端  # 单文件即完整程序（含播放页 + 管理后台）
+    │
+    ├─ 打包 zip + 生成 sha256 校验文件
+    │
+    └─ 发布 GitHub Release（草稿 → 人工确认 → 发布）
+```
+
+### 3. 免配置直接使用（单文件）
+
+```
+1. 到 GitHub Releases 下载对应平台的可执行文件
+2. 放到任意目录（该目录即「运行文件夹」）
+3. 双击 或 ./mxgt 启动
+4. 浏览器打开 http://localhost:8080
+5. 完毕 ✅ —— 全程零配置
+```
+
+首次启动自动完成：
+- 生成 `config.yaml`（带注释的默认配置）
+- 自动创建运行目录结构（见下方）
+- 默认内嵌 **SQLite** 数据库（零数据库配置）；若用户在 `config.yaml` 填了 MySQL / Redis 地址，则自动切换连接
+- 打印访问地址 + 默认管理员账号提示
+
+### 4. 运行目录自建环境（一切都在运行文件夹内）
+
+```
+run/  ← 运行文件夹（用户放可执行文件的目录）
+├── mxgt                  ← 可执行文件（更新时只替换这一个）
+├── config.yaml           ← 用户配置（首次运行自动生成，升级保留）
+├── data/
+│   └── mxgt.db           ← SQLite 数据库（默认）
+├── cache/                ← 本地文件缓存（无 Redis 时降级用）
+├── logs/                 ← 运行日志（按天滚动）
+├── uploads/              ← 上传文件
+└── tmp/                  ← 临时文件
+```
+
+- 程序**只使用运行文件夹内的相对路径**，不写系统其它位置
+- 数据库、配置、日志、上传全部集中在运行目录 → **备份 = 复制整个文件夹**，**卸载 = 删除整个文件夹**
+
+### 5. 更新方式（替换即更新）
+
+| 方式 | 步骤 | 适用人群 |
+|---|---|---|
+| **后台一键更新** | 管理后台「更新设置」→ 检查更新 → 一键下载 → 自动备份旧版 → 替换可执行文件 → 提示重启 | 小白用户 |
+| **手动替换** | 下载新 Release 可执行文件 → 覆盖运行目录里的 `mxgt` → 重启 | 进阶用户 |
+
+更新后保留：`config.yaml`、`data/` 数据库、`uploads/`、`logs/` —— 全部在运行目录，不随可执行文件打包，因此**替换执行文件即完成升级**。
+
+### 6. web 静态资源内嵌（go:embed）
+
+```go
+// cmd/server/main.go
+//go:embed all:web/player web/admin
+var webFS embed.FS
+```
+
+- 播放页 / 管理后台 / AI 分析页在编译期打进可执行文件
+- 单文件 = 完整程序，**不需要额外放置 web 目录**
+- 更新可执行文件 = 前端后端一起更新，杜绝版本不一致
+
+### 7. 兼容降级（没有也能跑）
+
+| 依赖 | 降级方案 |
+|---|---|
+| MySQL | 默认 SQLite（`glebarez/sqlite` 纯 Go 驱动，无 CGO） |
+| Redis | 本地文件缓存 / 内存缓存（`cache/` 目录） |
+| Docker | 不需要，单文件直接运行（Docker 仅作为可选高级部署） |
+
+### 8. 后端接口（更新相关，复用 8.8 更新设置）
+
+```
+GET  /admin/update/config       → 读取更新配置（含 Release 下载地址模板）
+POST /admin/update/check        → 检查远端版本 → 返回下载链接（多镜像测速选最快）
+POST /admin/update/download     → 下载新可执行文件 → 校验 sha256 → 备份旧版 → 替换
+GET  /admin/update/logs         → 更新日志
+```
+
+---
+
+## 十三、设计原则
 
 1. **内部包引用必须用绝对 module 路径**，严禁用相对路径
 2. **接口优先**：Collector / Extractor / Matcher 都是 interface 先定义
@@ -1704,10 +1839,13 @@ M16 AI 视频智能分析（ts / 广告 / 字幕 / 插播）
 6. **每次更新代码同步更新 README.md**
 7. **跨域零硬编码**：前端 URL 不写死，后端 CORS 开全，proxy 兜底
 8. **前端只一个文件**：单 HTML + CDN，部署简单
+9. **云端编译**：所有构建在 GitHub Actions 完成，用户不接触编译
+10. **免配置运行**：单文件下载即用，首次运行自动建环境
+11. **运行目录隔离**：配置/数据/日志全在运行文件夹内，更新只换执行文件，卸载即删文件夹
 
 ---
 
-## 十三、待确认事项（TODO）
+## 十四、待确认事项（TODO）
 
 - [ ] 苹果 CMS v10 是 MXGT 作为上游数据源，还是主动调 CMS？
 - [ ] 解析规则引擎是否需要后台灵活配置 JSONPath，还是固定几种类型就够？
@@ -1719,7 +1857,9 @@ M16 AI 视频智能分析（ts / 广告 / 字幕 / 插播）
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.5 新增：🤖 AI 设置（m3u8 智能分析 ts 分片、MD5 指纹库识别视频内嵌广告/字幕/插播、内置播放器实时标注判定、去广告 m3u8 动态生成、SSE 实时分析日志）、3 张新表（ai_settings / ts_analysis_logs / ad_fingerprints）、新 internal 包 ai/、里程碑扩展到 M16、侧边栏增至 11 个模块。*
+*本文档随代码迭代同步更新。版本 v0.0.6 新增：☁️ 部署与分发章节（GitHub Actions 云端编译多平台 Go 可执行文件 + go:embed 单文件免配置运行 + 运行目录自建环境 + 替换即更新 + SQLite 零配置降级）、.github/workflows/build-release.yml 云端编译、M17 里程碑、4 条新设计原则（云端编译 / 免配置运行 / 运行目录隔离 / 替换即更新）。*
+
+*前一版本 v0.0.5 新增：🤖 AI 设置（m3u8 智能分析 ts 分片、MD5 指纹库识别视频内嵌广告/字幕/插播、内置播放器实时标注判定、去广告 m3u8 动态生成、SSE 实时分析日志）、3 张新表（ai_settings / ts_analysis_logs / ad_fingerprints）、新 internal 包 ai/、里程碑扩展到 M16、侧边栏增至 11 个模块。*
 
 *前一版本 v0.0.4 新增：🧠 分析设置（自动识别官方/直链资源）、🎯 匹配设置（AI+规则双通道）、🔌 调用设置（多层 Pipeline 串联）、🗺️ 映射设置（七大站字段映射）、🔄 更新设置（多镜像自动测速 + GitHub 一键更新 + 公告.txt 解析）、4 张新表（analysis_settings / matching_settings / chain_nodes / updater_config + update_logs）、3 个新 internal 包（analyzer / chaining / updater）、里程碑扩展到 M15。*
 
