@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.2
+> 版本：v0.0.3
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions
 
 ---
@@ -511,7 +511,346 @@ CREATE TABLE extract_rules (
 
 ---
 
-## 八、关键技术点
+## 八、管理后台设计（侧边栏 + 页面）
+
+### 侧边栏完整菜单
+
+```
+📊 仪表盘（Dashboard）
+│   ├── 调用统计图表（resolve / proxy / cms 各接口调用量、成功率、耗时）
+│   ├── 今日调用量 / 近7日趋势
+│   ├── 各解析规则命中率 TOP
+│   ├── 各采集源入库量 TOP
+│   ├── 系统状态（MySQL / Redis 连接、版本号）
+│   └── 快捷入口（触发采集 / 测试解析）
+│
+🎨 前端设置（Frontend）
+│   ├── 播放页伪装路径（自定义 ?url= 前后缀，如 /mx.php?url=xxx）
+│   ├── 播放器皮肤（DPlayer / hls.js 默认参数、主题色、LOGO）
+│   ├── API_BASE 注入（是否强制后端地址、跨域设置）
+│   └── 页脚 / 版权 / 备案信息
+│
+🎬 视频抓取映射（Mapping）
+│   ├── 官方七大站预置配置
+│   │   ├── 🟦 腾讯视频 (v.qq.com)
+│   │   ├── 🟩 爱奇艺 (iqiyi.com)
+│   │   ├── 🟧 优酷 (youku.com)
+│   │   ├── 🟥 芒果TV (mgtv.com)
+│   │   ├── 🟪 搜狐视频 (tv.sohu.com)
+│   │   ├── 🟨 咪咕视频 (miguvideo.com)
+│   │   └── 🟫 哔哩哔哩 (bilibili.com)
+│   ├── 剧名字段映射（name / vod_name / title / video_name ...）
+│   ├── 集数字段映射（episodes / urls / play_list ...）
+│   ├── 自定义字段映射 JSONPath
+│   └── 一键测试：粘贴一个源站 URL → 返回映射结果
+│
+🔌 采集源管理（Sources）
+│   ├── 新增 / 编辑 / 删除采集源
+│   ├── 启用 / 禁用
+│   └── 字段提取规则配置
+│
+⚙️ 解析规则（Extract Rules）
+│   ├── 新增 / 编辑 / 删除解析规则
+│   ├── URL 正则匹配测试
+│   ├── JSONPath / Regex / Custom 三种类型
+│   └── need_proxy 标记
+│
+📼 影片管理（Vods）
+│   ├── 影片列表 + 搜索 + 筛选
+│   ├── 集数列表
+│   ├── 手动增删改
+│   └── 别名维护
+│
+🔑 管理员（Admin）
+│   ├── 修改密码
+│   └── 操作日志
+```
+
+### 8.1 仪表盘（Dashboard）
+
+**技术方案：** ECharts CDN 或 Chart.js CDN，数据由后端 `/admin/stats/*` 系列接口返回。
+
+**统计维度：**
+
+| 图表 | 数据源 | 类型 | 说明 |
+|---|---|---|---|
+| 调用总量趋势 | `call_logs` 表 | 折线图 | 近 7 天 / 30 天，按小时聚合 |
+| 各接口调用占比 | `call_logs` | 饼图 | resolve / proxy / cms.play / cms.detail ... |
+| 解析规则命中率 | `extract_rules` + `call_logs` | 柱状图 | 哪条规则被匹配最多 |
+| 采集源入库量 | `sources` + `vods/episodes` | 柱状图 | 每个源站贡献了多少数据 |
+| 成功率 / P95 耗时 | `call_logs` | 仪表盘 / 折线图 | 接口健康度 |
+| 实时调用流 | WebSocket 或轮询 | 滚动列表 | 最近 20 条调用记录 |
+
+**后端统计接口：**
+
+```
+GET /admin/stats/overview          → 今日调用量、缓存命中率、活跃规则数...
+GET /admin/stats/trends?range=7d   → 按小时聚合的调用量 / 耗时 / 成功率
+GET /admin/stats/rules-top?limit=10 → 解析规则 TOP N
+GET /admin/stats/sources-top       → 采集源入库量 TOP
+GET /admin/call-logs?page=1&size=20 → 最近调用明细（分页）
+```
+
+**日志表（新增一张）：**
+
+```sql
+CREATE TABLE call_logs (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    api         VARCHAR(64)  NOT NULL COMMENT '接口标识：resolve / proxy / cms.play / cms.detail ...',
+    rule_id     INT          DEFAULT 0 COMMENT '命中的解析规则 ID',
+    source_id   INT          DEFAULT 0 COMMENT '来源采集源 ID',
+    call_status TINYINT      DEFAULT 0 COMMENT '1=成功 0=失败',
+    duration_ms INT          DEFAULT 0 COMMENT '耗时毫秒',
+    cache_hit   TINYINT      DEFAULT 0 COMMENT '1=命中缓存',
+    client_ip   VARCHAR(64)  DEFAULT '',
+    target_url  VARCHAR(512) DEFAULT '',
+    error_msg   VARCHAR(512) DEFAULT '',
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_api_time (api, created_at),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  PARTITION BY RANGE (TO_DAYS(created_at)) (
+      PARTITION p20260901 VALUES LESS THAN (TO_DAYS('2026-09-10')),
+      PARTITION p20260910 VALUES LESS THAN (TO_DAYS('2026-09-20')),
+      PARTITION p20260920 VALUES LESS THAN (TO_DAYS('2026-09-30')),
+      PARTITION p_future VALUES LESS THAN MAXVALUE
+  );
+```
+
+> 用分区表自动按月/按天归档，避免日志表无限增长。后台可以配"保留 N 天"定时清理。
+
+### 8.2 前端设置（伪装路径）
+
+**核心需求：** 用户访问播放页时，不想用默认的 `/?url=xxx`，可以自定义成任何路径，达到伪装 / 防扫描 / 个性化的目的。
+
+**配置表（新增）：**
+
+```sql
+CREATE TABLE frontend_settings (
+    id          TINYINT PRIMARY KEY COMMENT '单行表，id=1',
+    play_path   VARCHAR(128) NOT NULL DEFAULT '/' COMMENT '播放页入口路径',
+    url_param   VARCHAR(64)  NOT NULL DEFAULT 'url' COMMENT 'URL 参数名',
+    alias_params VARCHAR(255) DEFAULT '' COMMENT '别名参数名，逗号分隔：video,src,link',
+    skin        VARCHAR(64)  DEFAULT 'default' COMMENT '播放器皮肤/主题',
+    player_type VARCHAR(32)  DEFAULT 'dplayer' COMMENT 'dplayer / hls.js / flv.js',
+    logo_url    VARCHAR(512) DEFAULT '',
+    api_base    VARCHAR(255) DEFAULT '' COMMENT '强制注入的后端 API 地址（空=自动同域）',
+    footer_text VARCHAR(255) DEFAULT '',
+    beian       VARCHAR(128) DEFAULT '' COMMENT 'ICP 备案号',
+    cross_origin TINYINT DEFAULT 1 COMMENT '1=开启 CORS',
+    cache_ttl   INT DEFAULT 3600 COMMENT '解析缓存 TTL（秒）',
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**路由设计（后端 Echo）：**
+
+```go
+// 默认路径 /
+e.GET("/", playerHandler)
+
+// 用户自定义伪装路径（支持多个，从 DB 配置读）
+// 例如 play_path = "/mx.php" 时：
+//   https://你的域名/mx.php?url=xxx   ← 和默认 / 完全等价
+//   还支持别名参数：?video=xxx  ?src=xxx
+e.GET(settings.PlayPath, playerHandler)
+// 如果 play_path 带扩展名（.php / .html），Echo 会原样匹配，非常利于伪装
+```
+
+**前端参数别名读取逻辑：**
+
+```js
+// player.js —— 灵活读取目标 URL
+const getTargetUrl = () => {
+    const params = new URLSearchParams(location.search);
+    const aliases = ['url', 'video', 'src', 'link', 'v', 'u'];  // 后端配置下发
+    for (const key of aliases) {
+        const v = params.get(key);
+        if (v && v.startsWith('http')) return decodeURIComponent(v);
+    }
+    return null;
+};
+```
+
+**伪装效果举例：**
+
+| play_path 配置 | 访问地址 | 等价于 |
+|---|---|---|
+| `/` | `https://a.com/?url=xxx` | 默认播放页 |
+| `/mx.php` | `https://a.com/mx.php?url=xxx` | 仿苹果 CMS 采集接口路径 |
+| `/play.php` | `https://a.com/play.php?src=xxx` | 仿 PHP 动态页 |
+| `/embed.html` | `https://a.com/embed.html?video=xxx` | 仿静态嵌入页 |
+| `/live.m3u8` | `https://a.com/live.m3u8?link=xxx` | 仿 m3u8 文件（需要后端做 Content-Type 伪装） |
+
+**后端伪装 Content-Type（高级）：**
+
+```go
+// 如果 play_path 以 .m3u8 / .mp4 结尾，实际返回的是解析后的视频流
+// 前端可以直接 <video src="https://a.com/live.m3u8?link=xxx" />
+e.GET("/live.m3u8", func(c echo.Context) error {
+    targetURL := extractFromAliasParams(c)
+    resolvedURL := resolveService.Resolve(c.Request().Context(), targetURL)
+    c.Response().Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+    return c.Redirect(http.StatusFound, resolvedURL)
+})
+```
+
+### 8.3 视频抓取映射（官方七大站）
+
+**核心需求：** 预置腾讯、爱奇艺、优酷、芒果、搜狐、咪咕、B站七大视频站的字段映射规则，用户可以一键启用/修改，新增源站只需填一下 JSONPath 映射即可。
+
+**映射配置表（新增）：**
+
+```sql
+CREATE TABLE site_mappings (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    site_code   VARCHAR(32)  NOT NULL UNIQUE COMMENT 'tencent / iqiyi / youku / mgtv / sohu / migu / bilibili / custom',
+    site_name   VARCHAR(128) NOT NULL COMMENT '展示名称：腾讯视频、爱奇艺...',
+    site_domain VARCHAR(512) NOT NULL COMMENT '主域名正则匹配：(v\\.qq\\.com|v.qq.com)',
+    site_icon   VARCHAR(255) DEFAULT '' COMMENT '小图标 URL',
+
+    -- ⭐ 字段映射（JSONPath / Regex / 固定值）
+    -- 原始数据来自采集源返回的 JSON 或 HTML
+    name_field      VARCHAR(255) NOT NULL COMMENT '剧名提取路径：$.vod_name / $.data.title / regex:xxx',
+    alias_field     VARCHAR(255) DEFAULT '',
+    cover_field     VARCHAR(255) DEFAULT '',
+    year_field      VARCHAR(255) DEFAULT '',
+    region_field    VARCHAR(255) DEFAULT '',
+    category_field  VARCHAR(255) DEFAULT '',
+    remark_field    VARCHAR(255) DEFAULT '',
+
+    -- ⭐ 集数列表提取
+    episodes_path   VARCHAR(255) NOT NULL COMMENT '集数数组的 JSONPath：$.vod_play_from[0].vod_play_list[0].urls',
+    episode_no_rule VARCHAR(255) DEFAULT '' COMMENT '从单条集数据提取集数的正则/路径',
+    episode_url_rule VARCHAR(255) DEFAULT '' COMMENT '从单条集数据提取播放页 URL 的规则',
+
+    -- ⭐ 播放页解析（可独立于 extract_rules 表，也可联动）
+    extract_rule_id INT DEFAULT 0 COMMENT '关联 extract_rules 表',
+
+    is_builtin      TINYINT DEFAULT 0 COMMENT '1=官方预置不可删 0=用户自定义',
+    enabled         TINYINT DEFAULT 1,
+    priority        INT DEFAULT 0,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_domain (site_domain(128))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**七大站预置数据（初始 INSERT）：**
+
+```sql
+-- 腾讯视频
+INSERT INTO site_mappings (site_code, site_name, site_domain, name_field, episodes_path, extract_rule_id, is_builtin) VALUES
+('tencent', '腾讯视频', '(v\\.|video\\.)qq\\.com', '$.vod_name', '$.vod_play_from[0].vod_play_list[0].urls', 1, 1),
+('iqiyi',   '爱奇艺',   '(www\\.|pc\\.)iqiyi\\.com', '$.title', '$.data.episodes', 2, 1),
+('youku',   '优酷',     '(v\\.|www\\.)youku\\.com', '$.title', '$.episodes', 3, 1),
+('mgtv',    '芒果TV',   '(www\\.|h5\\.)mgtv\\.com', '$.vod_name', '$.data.episodes', 4, 1),
+('sohu',    '搜狐视频', 'tv\\.sohu\\.com', '$.video_name', '$.episodes', 5, 1),
+('migu',    '咪咕视频', 'www\\.miguvideo\\.com', '$.title', '$.episodes', 6, 1),
+('bilibili','哔哩哔哩', '(www\\.|m\\.)bilibili\\.com', '$.title', '$.epList', 7, 1);
+```
+
+**抓取映射的工作流程：**
+
+```
+① 采集源拉到原始数据（JSON 或 HTML 内嵌 JSON）
+    │
+② 用 resty + 站点 domain 匹配 → 命中 site_code=tencent
+    │
+③ 读 site_mappings 的 name_field / episodes_path 等字段
+    │
+④ 用 JSONPath 从原始数据提取：
+    ├─ 剧名   → rawItem.name    → 走 matcher 模糊匹配
+    ├─ 集数数组 → 遍历每集，用 episode_no_rule / episode_url_rule 提取
+    └─ 其他字段 → 封面、年份、分类...
+    │
+⑤ 走 matcher 集数提取 + 剧名模糊匹配
+    │
+⑥ 入库 vods / episodes
+    │
+⑦ 记录 call_logs → 仪表盘图表有数据
+```
+
+**管理后台 UI 交互：**
+
+```
+[编辑 site_mapping] 页面布局：
+
+┌─ 基础信息 ─────────────────────────────┐
+│ 站点名称：腾讯视频  [预置]               │
+│ 域名正则：(v\.|video\.)qq\.com          │
+└─────────────────────────────────────────┘
+
+┌─ 字段映射（JSONPath / Regex）──────────┐
+│ 剧名：    [ $.vod_name              ]  │
+│ 别名：    [ $.vod_actor             ]  │
+│ 封面：    [ $.vod_pic               ]  │
+│ 年份：    [ $.vod_year              ]  │
+│ 分类：    [ $.vod_class             ]  │
+│ 备注：    [ $.vod_content  截断前50字]  │
+└─────────────────────────────────────────┘
+
+┌─ 集数提取 ──────────────────────────────┐
+│ 集数数组路径：[ $.vod_play_from[0].vod_play_list[0].urls ] │
+│ 单条集数号规则：[ regex:第(\d+)集 ]     │
+│ 单条播放页URL规则：[ jsonpath:$.url ]   │
+│ 关联解析规则：[ ▼ rule_id=3 qq_video ] │
+└─────────────────────────────────────────┘
+
+┌─ 🧪 一键测试 ──────────────────────────┐
+│ 粘贴源站 URL / JSON 原始内容：          │
+│ ┌─────────────────────────────────────┐ │
+│ │ { "vod_name": "庆余年", ... }       │ │
+│ └─────────────────────────────────────┘ │
+│ [ 解析 → ]                              │
+│ ┌─ 结果 ─────────────────────────────┐  │
+│ │ ✓ 剧名：庆余年                      │  │
+│ │ ✓ 集数 36 条已提取                  │  │
+│ │   [ {"no":1,"url":"..."}, ... ]     │  │
+│ └─────────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+```
+
+**后端测试接口：**
+
+```
+POST /admin/mapping/test
+    body: { site_code: "tencent", raw_data: "{...}" }
+    → 返回 { name, episodes_count, episodes: [...] }
+
+GET  /admin/mappings          → 列出所有站点映射（含七大站预置）
+GET  /admin/mappings/:code    → 查看/编辑单个站点
+PUT  /admin/mappings/:code    → 修改（builtin 只能改 enabled / priority）
+POST /admin/mappings          → 新增自定义映射
+```
+
+### 8.4 侧边栏菜单树 → 路由权限（后端）
+
+```go
+// pkg/router/menu.go
+type MenuItem struct {
+    Key     string    // 唯一标识：dashboard / frontend / mapping / sources ...
+    Label   string    // 显示名称
+    Icon    string    // 图标名
+    Path    string    // 前端路由路径
+    Order   int
+    Children []MenuItem
+}
+
+var DefaultMenus = []MenuItem{
+    {Key: "dashboard", Label: "仪表盘", Icon: "chart", Path: "/admin/dashboard", Order: 1},
+    {Key: "frontend",  Label: "前端设置", Icon: "palette", Path: "/admin/frontend",  Order: 2},
+    {Key: "mapping",   Label: "视频抓取映射", Icon: "video", Path: "/admin/mapping", Order: 3},
+    {Key: "sources",   Label: "采集源管理", Icon: "database", Path: "/admin/sources", Order: 4},
+    {Key: "rules",     Label: "解析规则", Icon: "code", Path: "/admin/rules", Order: 5},
+    {Key: "vods",      Label: "影片管理", Icon: "film", Path: "/admin/vods", Order: 6},
+    {Key: "admin",     Label: "管理员", Icon: "user", Path: "/admin/account", Order: 99},
+}
+```
+
+---
+
+## 九、关键技术点
 
 | 难点 | 解决方案 |
 |---|---|
@@ -531,7 +870,7 @@ CREATE TABLE extract_rules (
 
 ---
 
-## 九、第三方依赖清单
+## 十、第三方依赖清单
 
 ```
 github.com/labstack/echo/v4            # Web 框架
@@ -554,7 +893,7 @@ github.com/golang-jwt/jwt/v5            # proxy token 签名
 
 ---
 
-## 十、开发顺序（里程碑）
+## 十一、开发顺序（里程碑）
 
 ```
 M1 搭架子
@@ -563,7 +902,9 @@ M1 搭架子
      + 前端 web/player/index.html 基础版（同域 API）
 
 M2 数据层
-  └─ 4 张核心表 gorm model + 自动迁移 + Repository CRUD
+  └─ 7 张核心表 gorm model（vods / episodes / sources / extract_rules
+     + call_logs / frontend_settings / site_mappings）
+     + 自动迁移 + Repository CRUD
 
 M3 前端在线播放页 MVP
   └─ 单文件 index.html + hls.js + DPlayer
@@ -591,16 +932,26 @@ M7 苹果 CMS 适配
   └─ cms_v10 结构体 + 对外 4 个 ac 接口
      + play 接口走解析路由返回真实 URL
 
-M8 管理后台 API
-  └─ source / extract_rule / vod / sync / resolve/test CRUD
+M8 管理后台 — 前端设置 & 视频抓取映射
+  └─ frontend_settings 单行表 CRUD → 后端路由动态注册伪装路径（/mx.php /play.php）
+     + site_mappings 七大站预置数据 INSERT
+     + 字段映射 JSONPath 测试接口 /admin/mapping/test
+     + 采集源 + 映射表联动：自动按域名匹配 site_mappings
+     + 侧边栏菜单树配置
 
-M9 部署
+M9 管理后台 — 仪表盘
+  └─ call_logs 表分区存储 + 自动清理
+     + /admin/stats/overview / trends / rules-top / sources-top 接口
+     + ECharts CDN 仪表盘前端（调用量趋势 / 接口占比饼图 / 规则命中率柱状图）
+     + 实时调用流（WebSocket 或轮询滚动）
+
+M10 部署
   └─ Dockerfile + docker-compose + GitHub Actions + README 更新
 ```
 
 ---
 
-## 十一、设计原则
+## 十二、设计原则
 
 1. **内部包引用必须用绝对 module 路径**，严禁用相对路径
 2. **接口优先**：Collector / Extractor / Matcher 都是 interface 先定义
@@ -613,7 +964,7 @@ M9 部署
 
 ---
 
-## 十二、待确认事项（TODO）
+## 十三、待确认事项（TODO）
 
 - [ ] 苹果 CMS v10 是 MXGT 作为上游数据源，还是主动调 CMS？
 - [ ] 解析规则引擎是否需要后台灵活配置 JSONPath，还是固定几种类型就够？
@@ -625,4 +976,4 @@ M9 部署
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.2 新增三层结构 + 前端播放页思路 + 跨域方案。*
+*本文档随代码迭代同步更新。版本 v0.0.3 新增管理后台侧边栏设计（仪表盘 / 前端设置伪装路径 / 视频抓取映射七大站）+ 3 张新表（call_logs / frontend_settings / site_mappings）+ 里程碑扩展。*
