@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.6
+> 版本：v0.0.7
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions（云端编译）
 > 分发策略：GitHub Actions 云端编译多平台 Go 可执行文件 → 单文件免配置运行 → 更新只替换执行文件
 
@@ -1857,7 +1857,9 @@ GET  /admin/update/logs         → 更新日志
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.6 新增：☁️ 部署与分发章节（GitHub Actions 云端编译多平台 Go 可执行文件 + go:embed 单文件免配置运行 + 运行目录自建环境 + 替换即更新 + SQLite 零配置降级）、.github/workflows/build-release.yml 云端编译、M17 里程碑、4 条新设计原则（云端编译 / 免配置运行 / 运行目录隔离 / 替换即更新）。*
+*本文档随代码迭代同步更新。版本 v0.0.7 新增：🔌 M6 采集器已落地实现——Collector 接口 + 注册表（多源对接 api/html/custom）、matcher 剧名模糊匹配（Levenshtein + 别名）与集数提取、sync_service 多源采集→匹配→合并入库 vods/episodes、采集源管理 CRUD + POST /admin/sync 接口。*
+
+*前一版本 v0.0.6 新增：☁️ 部署与分发章节（GitHub Actions 云端编译多平台 Go 可执行文件 + go:embed 单文件免配置运行 + 运行目录自建环境 + 替换即更新 + SQLite 零配置降级）、.github/workflows/build-release.yml 云端编译、M17 里程碑、4 条新设计原则（云端编译 / 免配置运行 / 运行目录隔离 / 替换即更新）。*
 
 *前一版本 v0.0.5 新增：🤖 AI 设置（m3u8 智能分析 ts 分片、MD5 指纹库识别视频内嵌广告/字幕/插播、内置播放器实时标注判定、去广告 m3u8 动态生成、SSE 实时分析日志）、3 张新表（ai_settings / ts_analysis_logs / ad_fingerprints）、新 internal 包 ai/、里程碑扩展到 M16、侧边栏增至 11 个模块。*
 

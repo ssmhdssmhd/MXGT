@@ -39,9 +39,11 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	api.GET("/resolve", handler.NewResolveHandler(resolveSvc).Resolve)
 	api.GET("/proxy/stream", handler.NewProxyHandler().Stream)
 
-	// 管理后台层（JWT 保护；规则支持对接多条，可动态增删改）
+	// 管理后台层（JWT 保护；规则/采集源支持对接多条，可动态增删改）
 	admin := handler.NewAdminHandler(db)
 	rules := handler.NewRulesHandler(db)
+	sources := handler.NewSourcesHandler(db)
+	syncSvc := service.NewSyncService(db)
 
 	e.POST("/admin/login", admin.Login)
 	adminGroup := e.Group("/admin", mw.JWTAuth)
@@ -49,6 +51,15 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	adminGroup.POST("/rules", rules.Create)
 	adminGroup.PUT("/rules/:id", rules.Update)
 	adminGroup.DELETE("/rules/:id", rules.Delete)
+
+	// 采集源管理（多源对接）
+	adminGroup.GET("/sources", sources.List)
+	adminGroup.POST("/sources", sources.Create)
+	adminGroup.PUT("/sources/:id", sources.Update)
+	adminGroup.DELETE("/sources/:id", sources.Delete)
+
+	// 采集同步（多源采集 → 匹配 → 入库）
+	adminGroup.POST("/sync", handler.NewSyncHandler(syncSvc).Sync)
 
 	// 静态资源（go:embed 内嵌播放页，单文件运行）
 	// 注意：/api/* 精确路由优先于 /* 静态通配
