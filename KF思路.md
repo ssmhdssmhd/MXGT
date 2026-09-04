@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.3
+> 版本：v0.0.4
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions
 
 ---
@@ -306,6 +306,22 @@ mxgt/
 │   │   ├── route.go            # 路由匹配：url_pattern → rule
 │   │   ├── proxy.go            # ⭐ proxy 转发（解决跨域/防盗链）
 │   │   └── cache.go            # Redis 缓存解析结果
+│   ├── analyzer/               # 🧠 资源类型分析引擎（新增）
+│   │   ├── analyzer.go         # Analyzer 接口：输入 URL → 判断 official / direct / unknown
+│   │   ├── official.go         # 官方七大站域名正则匹配
+│   │   ├── direct.go           # HEAD 请求探测 .m3u8 / .mp4 / .flv Content-Type
+│   │   └── ai.go               # AI 辅助分析（可选，openai / doubao / custom）
+│   ├── chaining/               # 🔌 调用 Pipeline（新增）
+│   │   ├── pipeline.go         # Pipeline 引擎：链式执行 chain_nodes
+│   │   ├── node.go             # 节点执行器（skip_ad / block_ad / proxy / custom）
+│   │   ├── fallback.go         # 三种回退策略：skip / abort / fallback
+│   │   └── templating.go       # {input_url} 占位符替换 + JSONPath 结果提取
+│   ├── updater/                # 🔄 自动更新（新增）
+│   │   ├── updater.go          # 更新主流程：测速 → 检查版本 → 下载 → 安装
+│   │   ├── speedtest.go        # 并发测速 BuiltinMirrors → 选最快
+│   │   ├── semver.go           # 版本号比较（v0.0.99 → v0.1.0）
+│   │   ├── notice.go           # 公告.txt 解析
+│   │   └── installer.go        # 下载 → 校验 → 备份 → 解压 → 覆盖
 │   ├── cms/                    # 苹果 CMS 适配层
 │   │   ├── cms_v10.go
 │   │   └── models.go
@@ -525,12 +541,36 @@ CREATE TABLE extract_rules (
 │   └── 快捷入口（触发采集 / 测试解析）
 │
 🎨 前端设置（Frontend）
+│   ├── 输出格式选择（用户调用时返回 JSON 接口 或 URL 网页播放器 两种模式）
 │   ├── 播放页伪装路径（自定义 ?url= 前后缀，如 /mx.php?url=xxx）
 │   ├── 播放器皮肤（DPlayer / hls.js 默认参数、主题色、LOGO）
-│   ├── API_BASE 注入（是否强制后端地址、跨域设置）
+│   ├── API_BASE 注入 / 跨域设置（前端 URL 不硬编码）
 │   └── 页脚 / 版权 / 备案信息
 │
-🎬 视频抓取映射（Mapping）
+🧠 分析设置（Analysis）
+│   ├── 官方资源自动识别（输入 URL → 自动判断：腾讯 / 爱奇艺 / 优酷 / 芒果 / 搜狐 / 哔哩哔哩 / 咪咕）
+│   ├── 从官方资源自动获取并映射 剧名 和 集数
+│   ├── 可播放资源识别（输入直接 m3u8/mp4 链接 → 走专门的匹配规则）
+│   ├── 分析引擎开关 / 优先级
+│   └── 一键测试：粘贴 URL → 返回分析结果（官方站 / 直链）
+│
+🎯 匹配设置（Matching）
+│   ├── AI 自动识别匹配（可选，需配置 AI Key）
+│   ├── 指定规则匹配（域名正则 / JSONPath / 字段映射）
+│   ├── 匹配模式选择：
+│   │   ├── 官方链接 → 走匹配模式（解析剧名 + 集数 + 播放页 URL）
+│   │   └── 直接播放资源 → 走去插播配置（跳过剧名匹配，直接套广告/插播规则）
+│   └── 匹配优先级：AI > 指定规则 > 去插播兜底
+│
+🔌 调用设置（Chaining）
+│   ├── 多层接口串联（A → B → C，按顺序依次调用）
+│   ├── 套去插播接口（匹配到资源后，自动调用去广告/去插播接口处理）
+│   ├── 套去广告接口（同上，可与去插播叠加）
+│   ├── 每个环节可独立启用 / 禁用 / 调整顺序
+│   ├── 请求 Header / Body 透传配置
+│   └── 出错回退策略（某层失败是否跳过继续 / 直接返回原始结果）
+│
+🗺️ 映射设置（Mapping）
 │   ├── 官方七大站预置配置
 │   │   ├── 🟦 腾讯视频 (v.qq.com)
 │   │   ├── 🟩 爱奇艺 (iqiyi.com)
@@ -541,13 +581,8 @@ CREATE TABLE extract_rules (
 │   │   └── 🟫 哔哩哔哩 (bilibili.com)
 │   ├── 剧名字段映射（name / vod_name / title / video_name ...）
 │   ├── 集数字段映射（episodes / urls / play_list ...）
-│   ├── 自定义字段映射 JSONPath
-│   └── 一键测试：粘贴一个源站 URL → 返回映射结果
-│
-🔌 采集源管理（Sources）
-│   ├── 新增 / 编辑 / 删除采集源
-│   ├── 启用 / 禁用
-│   └── 字段提取规则配置
+│   ├── 自定义字段映射 JSONPath（只提取需要的字段）
+│   └── 一键测试：粘贴源站 URL → 返回映射结果
 │
 ⚙️ 解析规则（Extract Rules）
 │   ├── 新增 / 编辑 / 删除解析规则
@@ -560,6 +595,19 @@ CREATE TABLE extract_rules (
 │   ├── 集数列表
 │   ├── 手动增删改
 │   └── 别名维护
+│
+🔄 更新设置（Updater）
+│   ├── GitHub 仓库地址（默认：https://github.com/ssmhdssmhd/MXGT）
+│   ├── 多条内置镜像（国内加速）：
+│   │   ├── 官方 GitHub
+│   │   ├── ghproxy.com
+│   │   ├── mirror.ghproxy.cn
+│   │   └── kkgithub.com
+│   ├── 启动时 / 手动 测速所有镜像 → 自动选最快的下载源
+│   ├── 检查更新（对比远程版本号 vs 当前版本号）
+│   ├── 更新公告（从项目根目录公告.txt 读取 → 显示更新内容 + 版本号 + 发布时间）
+│   ├── 一键下载安装更新
+│   └── 更新日志查看
 │
 🔑 管理员（Admin）
 │   ├── 修改密码
@@ -824,27 +872,410 @@ PUT  /admin/mappings/:code    → 修改（builtin 只能改 enabled / priority�
 POST /admin/mappings          → 新增自定义映射
 ```
 
-### 8.4 侧边栏菜单树 → 路由权限（后端）
+### 8.4 分析设置（Analysis Engine）
+
+**核心需求：** 当用户输入一个 URL 时，系统自动分析它是什么类型的资源，选择对应的处理策略。
+
+**分析分类：**
+
+| 输入类型 | 判断依据 | 后续走的流程 |
+|---|---|---|
+| **官方资源** | URL 域名匹配 site_mappings 预置的七大站域名正则 | 提取剧名 + 集数 + 播放页 URL → 入库 → 匹配模式 |
+| **可播放资源** | URL 后缀是 `.m3u8` / `.mp4` / `.flv` 且可直接返回视频流 | 跳过剧名匹配 → 走去插播配置 → 直接播放 |
+| **未知类型** | 不匹配以上任何一种 | 返回 404 + 提示用户手动配置解析规则 |
+
+**分析引擎流程：**
+
+```
+用户输入 URL →
+    │
+    ├─ ① 提取域名（net.Parse → hostname）
+    │
+    ├─ ② 匹配 site_mappings.site_domain 正则
+    │      ├─ 命中 → type = "official", site_code = "tencent" ...
+    │      └─ 未命中 ↓
+    │
+    ├─ ③ 判断 URL 后缀 / Content-Type（HEAD 请求探测）
+    │      ├─ .m3u8 / application/vnd.apple.mpegurl → type = "direct"
+    │      ├─ .mp4 / video/mp4                     → type = "direct"
+    │      └─ .flv / video/x-flv                   → type = "direct"
+    │
+    └─ ④ 都不匹配 → type = "unknown"
+```
+
+**配置表（新增）：**
+
+```sql
+CREATE TABLE analysis_settings (
+    id              TINYINT PRIMARY KEY COMMENT '单行表，id=1',
+    enabled         TINYINT DEFAULT 1 COMMENT '分析引擎总开关',
+    priority        VARCHAR(32) DEFAULT 'official_first' COMMENT 'official_first / direct_first / ai_first',
+    ai_enabled      TINYINT DEFAULT 0 COMMENT '是否启用 AI 辅助分析',
+    ai_provider     VARCHAR(32) DEFAULT '' COMMENT 'openai / doubao / custom',
+    ai_api_key      VARCHAR(255) DEFAULT '',
+    ai_endpoint     VARCHAR(512) DEFAULT '',
+    unknown_mode    VARCHAR(32) DEFAULT 'reject' COMMENT 'reject 返回404 / direct 当直链处理 / rule 走解析规则',
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**后端接口：**
+
+```
+POST /admin/analysis/test
+    body: { url: "https://v.qq.com/x/cover/abc123/e00123.html" }
+    → 返回 { type: "official", site_code: "tencent", site_name: "腾讯视频", matched: true }
+
+GET  /admin/analysis/settings    → 读取分析引擎配置
+PUT  /admin/analysis/settings    → 修改配置
+```
+
+**内置七大站域名正则：**
+
+```go
+var OfficialSites = []struct{ code, name, pattern string }{
+    {"tencent",   "腾讯视频",   `(v\.|video\.)qq\.com`},
+    {"iqiyi",     "爱奇艺",     `(www\.|pc\.)iqiyi\.com`},
+    {"youku",     "优酷",       `(v\.|www\.)youku\.com`},
+    {"mgtv",      "芒果TV",     `(www\.|h5\.)mgtv\.com`},
+    {"sohu",      "搜狐视频",   `tv\.sohu\.com`},
+    {"migu",      "咪咕视频",   `www\.miguvideo\.com`},
+    {"bilibili",  "哔哩哔哩",   `(www\.|m\.)bilibili\.com`},
+}
+```
+
+---
+
+### 8.5 匹配设置（Matching Strategy）
+
+**核心需求：** 分析引擎判断出资源类型后，选择匹配策略将资源和内部数据关联。
+
+**两种匹配模式：**
+
+```
+模式 A：官方链接 → 走「匹配模式」
+───────────────────────────────
+  输入：官方站播放页 URL
+     │
+     ├─ resty 请求官方 API / HTML
+     ├─ 用 site_mappings 字段映射提取 剧名 + 集数
+     ├─ matcher 模糊匹配内部 vods 表
+     ├─ 找不到同名 → 新建 vod + episode
+     └─ 关联成功 → 继续走调用设置
+
+模式 B：直接播放资源 → 走「去插播配置」
+─────────────────────────────────────────
+  输入：m3u8 / mp4 直链
+     │
+     ├─ 跳过剧名匹配
+     ├─ 直接进入调用设置链路（去插播接口 → 去广告接口）
+     ├─ 可选：存为临时条目（不入库 vods）
+     └─ 返回处理后的直链
+```
+
+**匹配优先级链：**
+
+```
+1. AI 自动识别（如果 analysis_settings.ai_enabled = 1）
+   → 把 URL + 页面内容发给 AI，让 AI 判断剧名和集数
+2. 指定规则匹配（默认）
+   → site_mappings 字段映射 + matcher 模糊匹配
+3. 去插播兜底
+   → 以上都匹配不上时，当直链处理
+```
+
+**配置表（新增）：**
+
+```sql
+CREATE TABLE matching_settings (
+    id              TINYINT PRIMARY KEY COMMENT '单行表，id=1',
+    mode            VARCHAR(32) DEFAULT 'rule' COMMENT 'rule / ai / hybrid',
+    fallback        VARCHAR(32) DEFAULT 'direct' COMMENT '匹配失败时：direct 当直链处理 / reject 拒绝',
+    fuzzy_threshold INT DEFAULT 85 COMMENT '模糊匹配相似度阈值（0-100）',
+    auto_create     TINYINT DEFAULT 1 COMMENT '匹配不到时是否自动新建 vods 条目',
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+### 8.6 调用设置（Chaining / Pipeline）
+
+**核心需求：** 匹配成功后，资源经过多层接口串联处理（去插播 → 去广告 → proxy 等），每个环节可独立启停和调整顺序。
+
+**链路模型：**
+
+```
+资源 URL 进入
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│  Pipeline（按顺序依次执行，每个节点可跳过）   │
+│                                             │
+│  [1] 去插播接口 ──┐                         │
+│  [2] 去广告接口 ──┤──→ 结果传给下一层        │
+│  [3] proxy 转发 ──┤                         │
+│  [4] 自定义接口 ──┘                         │
+│                                             │
+│  出错回退：某层失败 → skip / abort / fallback│
+└─────────────────────────────────────────────┘
+    │
+    ▼
+最终输出（处理后的视频流）
+```
+
+**配置表（新增）：**
+
+```sql
+CREATE TABLE chain_nodes (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(128) NOT NULL COMMENT '节点名称：去插播 / 去广告 / proxy / 自定义',
+    node_type       VARCHAR(32)  NOT NULL COMMENT 'skip_ad / block_ad / proxy / custom',
+    order_no        INT NOT NULL COMMENT '执行顺序，越小越先执行',
+    endpoint_url    VARCHAR(512) DEFAULT '' COMMENT '接口地址，支持 {input_url} 占位符',
+    method          VARCHAR(8)   DEFAULT 'GET',
+    headers         JSON,
+    params          JSON,
+    body_template   TEXT COMMENT '请求体模板（JSON 字符串，{input_url} 占位）',
+    result_path     VARCHAR(255) DEFAULT '' COMMENT '从接口返回中提取结果的 JSONPath',
+    fallback        VARCHAR(16)  DEFAULT 'skip' COMMENT '失败时：skip 跳过继续 / abort 终止返回错误 / fallback 返回原始',
+    enabled         TINYINT DEFAULT 1,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_order (order_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**内置预置节点（初始数据）：**
+
+```sql
+INSERT INTO chain_nodes (name, node_type, order_no, endpoint_url, result_path, fallback, enabled) VALUES
+('去插播接口', 'skip_ad',    1, 'https://example.com/api?url={input_url}', '$.data.url', 'skip', 1),
+('去广告接口', 'block_ad',   2, '', '', 'skip', 0),
+('proxy 转发', 'proxy',      3, '/api/proxy/stream', '', 'skip', 1);
+```
+
+**后端接口：**
+
+```
+GET  /admin/chain/nodes          → 列出所有链路节点（按 order_no 排序）
+POST /admin/chain/nodes          → 新增节点
+PUT  /admin/chain/nodes/:id      → 修改节点
+DELETE /admin/chain/nodes/:id    → 删除节点
+POST /admin/chain/reorder        → 调整顺序 body: { ids: [3, 1, 2] }
+POST /admin/chain/test           → 测试整条链路 body: { input_url: "xxx" } → 返回每一层的中间结果
+```
+
+---
+
+### 8.7 更新设置（Updater）
+
+**核心需求：** 支持从 GitHub 仓库自动下载最新版本，内置多条镜像解决国内访问问题，自动测速选最快源，显示更新公告。
+
+**镜像列表（内置多条）：**
+
+```go
+var BuiltinMirrors = []struct{ name, baseURL string }{
+    {"官方 GitHub",     "https://github.com"},
+    {"ghproxy.com",     "https://ghproxy.com"},
+    {"gh-proxy.com",    "https://gh-proxy.com"},
+    {"mirror.ghproxy.cn","https://mirror.ghproxy.cn"},
+    {"kkgithub.com",    "https://kkgithub.com"},
+    {"hub.fastgit.xyz", "https://hub.fastgit.xyz"},
+}
+```
+
+**更新流程：**
+
+```
+用户点击「检查更新」或启动时自动检查
+    │
+    ├─ ① 并发测速所有内置镜像（HEAD 请求 + 计算耗时）
+    │      └─ 选最快镜像作为本次更新源
+    │
+    ├─ ② 获取远程版本号
+    │      ├─ GitHub: api.github.com/repos/ssmhdssmhd/MXGT/releases/latest
+    │      └─ 镜像: 镜像前缀 + /ssmhdssmhd/MXGT/releases/latest
+    │      └─ 解析 tag_name → remote_version
+    │
+    ├─ ③ 对比 remote_version vs 当前版本号（从 config.yaml / VERSION 文件读取）
+    │      ├─ remote > current → 有更新
+    │      └─ remote <= current → 已是最新
+    │
+    ├─ ④ 获取更新公告
+    │      └─ 从项目根目录 公告.txt 读取（GitHub raw 或镜像 raw）
+    │         公告.txt 格式：
+    │         ┌──────────────────┐
+    │         │ 版本：v0.0.4     │
+    │         │ 日期：2026-09-04 │
+    │         │ ─────────────── │
+    │         │ 更新内容：      │
+    │         │ 1. 新增分析设置 │
+    │         │ 2. 新增匹配设置 │
+    │         │ 3. 新增更新设置 │
+    │         │ ─────────────── │
+    │         │ 下载地址：...    │
+    │         └──────────────────┘
+    │
+    ├─ ⑤ 用户点击「一键更新」
+    │      ├─ 下载 zip 包（走最快镜像）
+    │      ├─ 解压到临时目录
+    │      ├─ 备份当前版本到 backup/
+    │      ├─ 覆盖更新（保留 config.yaml）
+    │      └─ 提示重启
+    │
+    └─ ⑥ 更新完成 → 记录到 update_logs
+```
+
+**配置表（新增）：**
+
+```sql
+CREATE TABLE updater_config (
+    id              TINYINT PRIMARY KEY COMMENT '单行表，id=1',
+    repo_url        VARCHAR(255) NOT NULL DEFAULT 'https://github.com/ssmhdssmhd/MXGT',
+    auto_check      TINYINT DEFAULT 1 COMMENT '启动时是否自动检查',
+    last_check_at   DATETIME DEFAULT NULL,
+    last_version    VARCHAR(32) DEFAULT '',
+    fastest_mirror  VARCHAR(64) DEFAULT '' COMMENT '上次测速选出的最快镜像名',
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE update_logs (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    from_version    VARCHAR(32) NOT NULL,
+    to_version      VARCHAR(32) NOT NULL,
+    mirror_used     VARCHAR(64) DEFAULT '',
+    status          VARCHAR(16) DEFAULT 'success' COMMENT 'success / failed / partial',
+    notice          TEXT COMMENT '更新公告内容',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**后端接口：**
+
+```
+GET  /admin/update/config          → 读取更新配置
+PUT  /admin/update/config          → 修改配置
+
+POST /admin/update/mirror-speed    → 手动触发所有镜像测速
+    → 返回 [{ name: "官方 GitHub", latency_ms: 1200, reachable: false },
+            { name: "ghproxy.com", latency_ms: 320, reachable: true }]
+
+POST /admin/update/check           → 检查更新（对比远程版本 vs 当前）
+    → 返回 { current: "v0.0.3", remote: "v0.0.4", has_update: true,
+             notice: "公告.txt 内容", download_url: "...", mirror_used: "ghproxy.com" }
+
+POST /admin/update/download        → 下载并安装更新
+    → 返回 { success: true, backup_path: "backup/MXGT-v0.0.3-20260904/",
+             extracted_to: "tmp/update/", next_step: "请手动重启服务" }
+
+GET  /admin/update/logs            → 更新日志（分页）
+```
+
+**测速算法（Go 实现）：**
+
+```go
+// internal/updater/speedtest.go
+func BenchmarkMirrors(mirrors []Mirror) (*Mirror, []MirrorResult) {
+    results := make([]MirrorResult, len(mirrors))
+    var mu sync.Mutex
+    var wg sync.WaitGroup
+
+    for i, m := range mirrors {
+        wg.Add(1)
+        go func(idx int, mirror Mirror) {
+            defer wg.Done()
+            start := time.Now()
+            req, _ := http.NewRequest("HEAD", mirror.baseURL, nil)
+            client := &http.Client{Timeout: 5 * time.Second}
+            resp, err := client.Do(req)
+            latency := time.Since(start)
+            if err != nil {
+                results[idx] = MirrorResult{mirror, 0, false, err.Error()}
+                return
+            }
+            resp.Body.Close()
+            mu.Lock()
+            results[idx] = MirrorResult{mirror, latency.Milliseconds(), true, ""}
+            mu.Unlock()
+        }(i, m)
+    }
+    wg.Wait()
+
+    // 选最快可达的
+    var fastest *Mirror
+    bestLatency := int64(1<<62)
+    for _, r := range results {
+        if r.reachable && r.latency_ms < bestLatency {
+            bestLatency = r.latency_ms
+            m := r.mirror
+            fastest = &m
+        }
+    }
+    return fastest, results
+}
+```
+
+**公告.txt 格式规范（项目根目录）：**
+
+```
+==============================
+MXGT 更新公告
+==============================
+版本：v0.0.4
+日期：2026-09-04
+作者：MXGT Team
+------------------------------
+【本次更新内容】
+
+✨ 新增功能
+  • 🧠 分析设置：自动识别官方资源 / 可播放资源
+  • 🎯 匹配设置：AI + 指定规则 双通道匹配
+  • 🔌 调用设置：多层接口串联（去插播 + 去广告）
+  • 🗺️ 映射设置：七大站字段映射可配置
+  • 🔄 更新设置：内置多镜像自动测速 + 一键更新
+
+🐛 修复
+  • 修复 proxy 接口在某些情况下无法正确转发 Referer 的问题
+  • 修复 Redis 缓存 key 未做 hash 导致超长的问题
+
+💡 优化
+  • 仪表盘加载速度提升 30%
+  • 解析规则匹配优先级更合理
+
+------------------------------
+下载地址：见 Release 页面
+MD5：a1b2c3d4e5f6...
+SHA256：...
+==============================
+```
+
+---
+
+### 8.8 侧边栏菜单树 → 路由权限（后端）
 
 ```go
 // pkg/router/menu.go
 type MenuItem struct {
-    Key     string    // 唯一标识：dashboard / frontend / mapping / sources ...
-    Label   string    // 显示名称
-    Icon    string    // 图标名
-    Path    string    // 前端路由路径
-    Order   int
-    Children []MenuItem
+    Key       string    // 唯一标识：dashboard / frontend / analysis / matching ...
+    Label     string    // 显示名称
+    Icon      string    // 图标名
+    Path      string    // 前端路由路径
+    Order     int
+    Children  []MenuItem
 }
 
 var DefaultMenus = []MenuItem{
-    {Key: "dashboard", Label: "仪表盘", Icon: "chart", Path: "/admin/dashboard", Order: 1},
-    {Key: "frontend",  Label: "前端设置", Icon: "palette", Path: "/admin/frontend",  Order: 2},
-    {Key: "mapping",   Label: "视频抓取映射", Icon: "video", Path: "/admin/mapping", Order: 3},
-    {Key: "sources",   Label: "采集源管理", Icon: "database", Path: "/admin/sources", Order: 4},
-    {Key: "rules",     Label: "解析规则", Icon: "code", Path: "/admin/rules", Order: 5},
-    {Key: "vods",      Label: "影片管理", Icon: "film", Path: "/admin/vods", Order: 6},
-    {Key: "admin",     Label: "管理员", Icon: "user", Path: "/admin/account", Order: 99},
+    {Key: "dashboard", Label: "仪表盘",     Icon: "chart",    Path: "/admin/dashboard",  Order: 1},
+    {Key: "frontend",  Label: "前端设置",   Icon: "palette",  Path: "/admin/frontend",   Order: 2},
+    {Key: "analysis",  Label: "分析设置",   Icon: "brain",    Path: "/admin/analysis",   Order: 3},
+    {Key: "matching",  Label: "匹配设置",   Icon: "crosshair", Path: "/admin/matching",  Order: 4},
+    {Key: "chaining",  Label: "调用设置",   Icon: "link",     Path: "/admin/chaining",   Order: 5},
+    {Key: "mapping",   Label: "映射设置",   Icon: "map",      Path: "/admin/mapping",    Order: 6},
+    {Key: "rules",     Label: "解析规则",   Icon: "code",     Path: "/admin/rules",      Order: 7},
+    {Key: "vods",      Label: "影片管理",   Icon: "film",     Path: "/admin/vods",       Order: 8},
+    {Key: "updater",   Label: "更新设置",   Icon: "refresh",  Path: "/admin/updater",    Order: 9},
+    {Key: "admin",     Label: "管理员",     Icon: "user",     Path: "/admin/account",    Order: 99},
 }
 ```
 
@@ -867,6 +1298,14 @@ var DefaultMenus = []MenuItem{
 | 解析缓存 | Redis，key = `md5(url) + rule_id`，TTL 可配置 |
 | proxy token | JWT short-lived（5min），包含目标 URL + 需要注入的 Header |
 | m3u8 拖动进度条 | proxy 必须支持 HTTP Range 请求（206 Partial Content） |
+| 资源类型自动分析 | 域名正则匹配 + HEAD 请求探测 Content-Type 双重判断，并行请求不阻塞 |
+| 多接口串联 Pipeline | 链式执行每个节点，支持 skip / abort / fallback 三种回退策略，中间结果 JSONPath 提取 |
+| 国内用户 GitHub 加速 | 内置 6+ 镜像，启动时并发测速（HEAD + 5s timeout），选最快源，失败自动切换下一个 |
+| 版本号对比 | 语义化版本比较器（semver.Parse），处理 v0.0.99 → v0.1.0 的跳跃 |
+| 更新公告解析 | 项目根目录公告.txt 纯文本，用正则提取版本/日期/内容/下载地址，兼容 GBK/UTF-8 |
+| 更新安全 | 下载后 SHA256 校验 + 备份旧版本到 backup/ + 保留 config.yaml 不被覆盖 |
+| 分析引擎可配置 | analysis_settings 单行表，优先级顺序（official_first / direct_first / ai_first）运行时生效 |
+| AI 辅助分析 | 可选，通过 analysis_settings.ai_provider 配置，把 URL + 页面内容压缩后发给 AI |
 
 ---
 
@@ -889,6 +1328,9 @@ golang.org/x/sync/errgroup              # 并发
 github.com/xrash/smetrics               # 字符串相似度
 github.com/go-redis/redis/v9            # Redis 缓存
 github.com/golang-jwt/jwt/v5            # proxy token 签名
+github.com/Masterminds/semver/v3        # 版本号比较（更新设置）
+golang.org/x/sync/errgroup              # 并发测速 / 并发分析
+github.com/natefinch/lumberjack         # 日志 rotate（更新日志归档）
 ```
 
 ---
@@ -902,8 +1344,10 @@ M1 搭架子
      + 前端 web/player/index.html 基础版（同域 API）
 
 M2 数据层
-  └─ 7 张核心表 gorm model（vods / episodes / sources / extract_rules
-     + call_logs / frontend_settings / site_mappings）
+  └─ 12 张核心表 gorm model（vods / episodes / sources / extract_rules
+     + call_logs / frontend_settings / site_mappings
+     + analysis_settings / matching_settings / chain_nodes
+     + updater_config / update_logs）
      + 自动迁移 + Repository CRUD
 
 M3 前端在线播放页 MVP
@@ -911,6 +1355,7 @@ M3 前端在线播放页 MVP
      + ?url=xxx 参数解析
      + API_BASE 四层兜底（重点是不硬编码）
      + 调 /api/resolve 播放 m3u8
+     + 输出格式切换（JSON 接口 vs URL 网页播放器）
 
 M4 中间层解析路由 MVP
   └─ /api/resolve + extract_rules 表
@@ -947,6 +1392,44 @@ M9 管理后台 — 仪表盘
 
 M10 部署
   └─ Dockerfile + docker-compose + GitHub Actions + README 更新
+
+M11 分析引擎
+  └─ internal/analyzer + OfficialSites 七大站域名正则
+     + net.Parse + HEAD 请求探测 Content-Type
+     + 三种分析结果：official / direct / unknown
+     + analysis_settings 单行表 CRUD + 运行时热加载
+     + /admin/analysis/test 接口（输入 URL → 返回分析结果）
+
+M12 匹配策略
+  └─ internal/matcher 增强：AI 自动识别 + 指定规则匹配双通道
+     + matching_settings 配置（mode / fallback / fuzzy_threshold / auto_create）
+     + 两种匹配模式：官方链接 → 匹配模式 / 直接资源 → 去插播配置
+     + AI 可选接入（openai / doubao / custom）
+
+M13 调用 Pipeline
+  └─ internal/chaining Pipeline 引擎
+     + chain_nodes 表 CRUD + 顺序调整 + 独立启停
+     + 三种回退策略：skip / abort / fallback
+     + 中间结果 JSONPath 提取（{input_url} 占位符替换）
+     + 内置去插播 / 去广告 / proxy 预置节点
+     + /admin/chain/test 接口（测试整条链路中间结果）
+
+M14 更新设置
+  └─ internal/updater
+     + BuiltinMirrors 6+ 内置镜像（官方 GitHub + ghproxy + gh-proxy + mirror.ghproxy.cn + kkgithub + hub.fastgit.xyz）
+     + 并发测速 BenchmarkMirrors（HEAD + 5s timeout → 选最快）
+     + semver.Parse 版本号对比（v0.0.99 → v0.1.0 正确处理）
+     + 公告.txt 解析（正则提取版本/日期/内容/下载地址）
+     + 一键更新：下载 → 校验 → 备份 → 解压 → 覆盖（保留 config.yaml）
+     + updater_config + update_logs 表
+     + /admin/update/check / mirror-speed / download / logs 接口
+
+M15 整体联调 + 侧边栏前端
+  └─ 分析 → 匹配 → 调用 → 解析 全链路打通
+     + 侧边栏前端 10 个模块全部可访问
+     + 侧边栏菜单树权限联动（DefaultMenus）
+     + 前端设置输出格式切换（JSON vs 网页播放器）
+     + 最终端到端测试：官方站播放页 URL → 自动识别 → 匹配 → 解析 → 播放
 ```
 
 ---
@@ -976,4 +1459,6 @@ M10 部署
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.3 新增管理后台侧边栏设计（仪表盘 / 前端设置伪装路径 / 视频抓取映射七大站）+ 3 张新表（call_logs / frontend_settings / site_mappings）+ 里程碑扩展。*
+*本文档随代码迭代同步更新。版本 v0.0.4 新增：🧠 分析设置（自动识别官方/直链资源）、🎯 匹配设置（AI+规则双通道）、🔌 调用设置（多层 Pipeline 串联）、🗺️ 映射设置（七大站字段映射）、🔄 更新设置（多镜像自动测速 + GitHub 一键更新 + 公告.txt 解析）、4 张新表（analysis_settings / matching_settings / chain_nodes / updater_config + update_logs）、3 个新 internal 包（analyzer / chaining / updater）、里程碑扩展到 M15。*
+
+*前一版本 v0.0.3 新增管理后台侧边栏设计（仪表盘 / 前端设置伪装路径 / 视频抓取映射七大站）+ 3 张新表（call_logs / frontend_settings / site_mappings）+ 里程碑扩展。*
