@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.4
+> 版本：v0.0.5
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions
 
 ---
@@ -311,6 +311,15 @@ mxgt/
 │   │   ├── official.go         # 官方七大站域名正则匹配
 │   │   ├── direct.go           # HEAD 请求探测 .m3u8 / .mp4 / .flv Content-Type
 │   │   └── ai.go               # AI 辅助分析（可选，openai / doubao / custom）
+│   ├── ai/                     # 🤖 AI 智能分析 ts / 广告 / 字幕（新增）
+│   │   ├── ai.go               # AI 服务封装（openai / doubao / qwen / custom 多模态）
+│   │   ├── m3u8.go             # m3u8 解析 → ts 分片列表（序号/时长/大小/URL）
+│   │   ├── md5.go              # 分片 MD5 流式计算 + 指纹库 O(1) 比对
+│   │   ├── tsanalyzer.go       # ts 分片分析主流程（并发下载 + 双通道判定）
+│   │   ├── frame.go            # ts 解码抽帧（ffmpeg 可选 / 纯 Go mpegts 解析）
+│   │   ├── subtitle.go         # 字幕 / 水印 / 台标检测
+│   │   ├── clean.go            # 去广告 m3u8 动态生成（剔除广告 ts）
+│   │   └── verdict.go          # 判定聚合：normal / ad / subtitle / interlude / unknown
 │   ├── chaining/               # 🔌 调用 Pipeline（新增）
 │   │   ├── pipeline.go         # Pipeline 引擎：链式执行 chain_nodes
 │   │   ├── node.go             # 节点执行器（skip_ad / block_ad / proxy / custom）
@@ -360,7 +369,9 @@ mxgt/
 │   │   ├── index.html
 │   │   ├── js/player.js
 │   │   └── js/api.js
-│   └── admin/                  # 管理后台（后补）
+│   └── admin/                  # 管理后台
+│       ├── ai/                 # 🤖 AI 分析页（m3u8 分析 + 内置播放器 + 实时标注 + 指纹库）
+│       └── ...                 # 其余各模块页面（后补）
 ├── test/
 ├── go.mod
 ├── go.sum
@@ -524,6 +535,11 @@ CREATE TABLE extract_rules (
 | POST | `/admin/sync` | 触发全量/增量采集 |
 | POST | `/admin/resolve/test` | 测试某 URL 能被哪条规则解析 |
 | GET  | `/admin/vods` | 影片列表 |
+| CRUD | `/admin/ai/settings` | 🤖 AI 分析配置 |
+| POST | `/admin/ai/analyze` | 🤖 分析 m3u8（解析全部 ts → MD5 + AI 判定广告/字幕/插播） |
+| GET  | `/admin/ai/ts` | 🤖 查看某次分析的 ts 列表（可按判定筛选） |
+| GET  | `/admin/ai/result/m3u8` | 🤖 去广告后的干净 m3u8 |
+| GET  | `/admin/ai/fingerprints` | 🤖 MD5 指纹特征库（广告/字幕/插播） |
 
 ---
 
@@ -553,6 +569,18 @@ CREATE TABLE extract_rules (
 │   ├── 可播放资源识别（输入直接 m3u8/mp4 链接 → 走专门的匹配规则）
 │   ├── 分析引擎开关 / 优先级
 │   └── 一键测试：粘贴 URL → 返回分析结果（官方站 / 直链）
+│
+🤖 AI 设置（AI Analysis）
+│   ├── AI 服务配置（provider / api_key / endpoint / model，支持 openai / doubao / qwen / custom）
+│   ├── m3u8 智能分析（输入 m3u8 → 自动解析全部 ts 分片）
+│   │   ├── 实时查看每个 ts（序号 / 时长 / 大小 / MD5 / AI 判定：正常·广告·字幕·插播）
+│   │   ├── 广告 / 字幕 / 插播自动识别（MD5 指纹命中 + AI 画面分析双通道）
+│   │   ├── 视频内嵌广告检测（广告直接烧录在 ts 画面里，靠 MD5 特征库 + AI 抽帧识别）
+│   │   └── MD5 指纹库（同一广告片段跨视频重复出现 → 指纹一致秒级命中）
+│   ├── 内置播放器（管理后台内嵌，可预览 原始 m3u8 / 去广告 m3u8 / 单个 ts 片段，播放时实时标注当前 ts 的判定）
+│   ├── 去插播 / 去广告（一键剔除广告 ts → 动态生成干净的 m3u8）
+│   ├── 实时分析日志（SSE 推送分析进度与命中明细）
+│   └── 分析参数（AI 抽样比例、是否自动去广告、指纹库管理 / 导入）
 │
 🎯 匹配设置（Matching）
 │   ├── AI 自动识别匹配（可选，需配置 AI Key）
@@ -743,7 +771,7 @@ e.GET("/live.m3u8", func(c echo.Context) error {
 })
 ```
 
-### 8.3 视频抓取映射（官方七大站）
+### 8.3 映射设置（Mapping / 官方七大站）
 
 **核心需求：** 预置腾讯、爱奇艺、优酷、芒果、搜狐、咪咕、B站七大视频站的字段映射规则，用户可以一键启用/修改，新增源站只需填一下 JSONPath 映射即可。
 
@@ -946,7 +974,215 @@ var OfficialSites = []struct{ code, name, pattern string }{
 
 ---
 
-### 8.5 匹配设置（Matching Strategy）
+### 8.5 AI 设置（AI Analysis：ts / 广告 / 字幕 智能识别）
+
+**核心需求：** 分析 m3u8 视频流中的广告、字幕、插播，自动识别并剔除。很多广告 / 字幕 / 插播是**直接烧录在 ts 分片画面里**的（不是单独的 ad 接口），所以必须对 ts 分片**内容本身**做分析，靠 **MD5 指纹特征库 + AI 画面识别** 双通道判定。
+
+**为什么需要 MD5 指纹：**
+- 同一个广告片头 / 插播片段，会在**不同剧集、不同视频**里反复出现
+- 这些 ts 分片的二进制内容完全一致 → **MD5 完全一致**
+- 首次发现存入 `ad_fingerprints` 特征库，之后任何 m3u8 只要命中 MD5 → **秒级判定为广告**，无需再跑 AI（省成本、速度快）
+
+**检测策略（双通道）：**
+
+```
+输入 m3u8 URL
+    │
+    ▼
+① 解析 m3u8 → 得到全部 ts 分片列表（序号 / 时长 / 大小 / URL）
+    │
+    ▼
+② MD5 快速命中（全部 ts 并发下载，流式计算 MD5）
+    │   ├─ 命中 ad_fingerprints(md5)          → 判定 ad         （置信度 0.99）
+    │   ├─ 命中 subtitle_fingerprints(md5)    → 判定 subtitle   （置信度 0.95）
+    │   ├─ 命中 interlude_fingerprints(md5)   → 判定 interlude  （置信度 0.95）
+    │   └─ 未命中 ↓
+    │
+    ▼
+③ AI 画面抽样分析（只抽 analyze_ratio，默认 30%）
+    │   对 ts 解码抽帧 → 送多模态 AI 判断画面类型
+    │   ├─ 广告帧（品牌 logo / 促销文案 / 台标突变 / 黑场+大字幕）
+    │   ├─ 字幕水印（底部硬字幕 / 台标 / 角标）
+    │   ├─ 插播（内容断裂点 / 画面风格突变）
+    │   └─ 正常内容
+    │   判定结果 → 回写 ad_fingerprints 特征库（扩散命中）
+    │
+    ▼
+④ 特征启发式辅助（可选，不依赖 AI）
+    │   ├─ 时长异常短的 ts（常为拼接广告）
+    │   ├─ 相邻 ts 画面哈希突变
+    │   └─ 音频响度突变 / 静音段
+    │
+    ▼
+⑤ 汇总生成分析报告
+    │   ├─ 广告 ts 列表（一键剔除 → 动态生成干净 m3u8）
+    │   ├─ 字幕 / 水印 ts 列表
+    │   ├─ 插播位置
+    │   └─ 置信度明细 + 判定原因
+    │
+    ▼
+⑥ 写库 ts_analysis_logs + 更新 ad_fingerprints
+```
+
+**配置表（新增）：**
+
+```sql
+-- AI 服务配置（单行表）
+CREATE TABLE ai_settings (
+    id              TINYINT PRIMARY KEY COMMENT '单行表，id=1',
+    enabled         TINYINT DEFAULT 0 COMMENT 'AI 分析总开关',
+    provider        VARCHAR(32) DEFAULT '' COMMENT 'openai / doubao / qwen / custom',
+    api_key         VARCHAR(255) DEFAULT '',
+    endpoint        VARCHAR(512) DEFAULT '',
+    model           VARCHAR(64)  DEFAULT '' COMMENT '多模态模型名',
+    analyze_ratio   DECIMAL(3,2) DEFAULT 0.30 COMMENT 'AI 抽样分析比例（0-1）',
+    md5_enabled     TINYINT DEFAULT 1 COMMENT '是否启用 MD5 指纹快速命中',
+    auto_skip_ad    TINYINT DEFAULT 0 COMMENT '检测到广告 ts 是否自动剔除并生成干净 m3u8',
+    concurrency     INT DEFAULT 8 COMMENT 'ts 并发下载数',
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ts 分片分析记录
+CREATE TABLE ts_analysis_logs (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    task_id         VARCHAR(64)  NOT NULL COMMENT '一次分析的批次 id',
+    m3u8_url        VARCHAR(1024) NOT NULL COMMENT '被分析的 m3u8',
+    ts_index        INT NOT NULL COMMENT '分片序号（从0开始）',
+    ts_url          VARCHAR(1024) NOT NULL,
+    duration_sec    DECIMAL(8,3) DEFAULT 0,
+    size_bytes      INT DEFAULT 0,
+    md5             CHAR(32) DEFAULT '',
+    ai_verdict      VARCHAR(16) DEFAULT 'normal' COMMENT 'normal / ad / subtitle / interlude / unknown',
+    confidence      DECIMAL(4,2) DEFAULT 0 COMMENT '判定置信度 0-1',
+    reason          VARCHAR(512) DEFAULT '' COMMENT '判定原因（md5_hit / ai_frame / heuristic）',
+    analyzed_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_task (task_id),
+    INDEX idx_m3u8 (m3u8_url(255)),
+    INDEX idx_md5 (md5),
+    INDEX idx_ai_verdict (ai_verdict)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 广告 / 字幕 / 插播 MD5 指纹特征库
+CREATE TABLE ad_fingerprints (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    fingerprint_type VARCHAR(16) NOT NULL COMMENT 'ad / subtitle / interlude / watermark',
+    md5             CHAR(32) NOT NULL UNIQUE,
+    source_m3u8     VARCHAR(1024) DEFAULT '' COMMENT '首次发现来源',
+    hit_count       INT DEFAULT 1 COMMENT '命中次数，越高越可信',
+    last_hit_at     DATETIME DEFAULT NULL,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_type (fingerprint_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**内置播放器（去插播验证 + 实时标注）：**
+
+```
+管理后台内嵌播放器（复用 DPlayer + hls.js）
+    │
+    ├─ 播放原始 m3u8        → 前端 ?url=原始
+    ├─ 播放去广告 m3u8      → /admin/ai/result/m3u8?task_id=xxx（auto_skip_ad 动态生成）
+    └─ 预览单个 ts 片段     → /admin/ai/ts/:id/play
+
+实时标注（关键交互）：
+    监听 hls.js FRAG_LOADED 事件 → 拿到当前分片 SN
+    → 映射到 ts_analysis_logs 的判定结果
+    → 播放器下方显示：第 N 个 ts | MD5:xxxx | ⚠️ 广告 / 💬 字幕 / ✅ 正常
+    → 广告片段红色进度条标记，可点击跳转预览
+```
+
+**后端接口：**
+
+```
+GET  /admin/ai/settings              → 读取 AI 配置
+PUT  /admin/ai/settings              → 修改配置
+
+POST /admin/ai/analyze               → 分析一个 m3u8  body: { url: "xxx" } → 返回 task_id
+GET  /admin/ai/analyze/:task_id      → 查询分析进度 / 汇总结果（轮询）
+GET  /admin/ai/ts                    → 某次分析的 ts 列表 ?task_id=&verdict=ad&page=
+GET  /admin/ai/ts/:id/play           → 播放单个 ts（内置播放器预览）
+GET  /admin/ai/result/m3u8           → 去广告后的干净 m3u8 ?task_id=
+GET  /admin/ai/fingerprints          → 指纹库列表（按 hit_count 排序，可分类型筛选）
+DELETE /admin/ai/fingerprints/:id    → 删除指纹
+POST /admin/ai/fingerprints/import   → 批量导入已有 md5 特征（文本每行一个）
+POST /admin/ai/fingerprints/export   → 导出特征库（备份 / 分享）
+GET  /admin/ai/stream                → 实时推送分析日志（SSE 或 WebSocket）
+```
+
+**MD5 流式计算（Go 实现，边下边算不全量缓存）：**
+
+```go
+// internal/ai/md5.go
+func ComputeMD5FromURL(url string, maxBytes int64) (string, error) {
+    req, _ := http.NewRequest("GET", url, nil)
+    req.Header.Set("User-Agent", randomUA())
+    req.Header.Set("Referer", deriveReferer(url))
+    resp, err := httpClient.Do(req)   // 支持 Range: bytes=0-maxBytes 只取头部即可近似
+    if err != nil { return "", err }
+    defer resp.Body.Close()
+
+    h := md5.New()
+    io.Copy(h, io.LimitReader(resp.Body, maxBytes))
+    return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// 指纹比对：O(1) 命中
+func MatchFingerprint(db *gorm.DB, md5 string) *AdFingerprint {
+    var fp AdFingerprint
+    if err := db.Where("md5 = ?", md5).First(&fp).Error; err != nil {
+        return nil
+    }
+    db.Model(&fp).UpdateColumn("hit_count", gorm.Expr("hit_count + 1"))
+    return &fp
+}
+```
+
+**去广告 m3u8 动态生成：**
+
+```
+输入：原始 m3u8 + ts_analysis_logs（ad 判定列表）
+输出：干净 m3u8（剔除广告 ts，保留 #EXTINF 时长信息）
+
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:10
+#EXTINF:10.000,
+https://xxx/seg_000.ts      ← 正常
+#EXTINF:10.000,
+https://xxx/seg_002.ts      ← 正常（广告 seg_001 已剔除）
+...
+#EXT-X-ENDLIST
+```
+
+**判定聚合（verdict.go）：**
+
+```go
+type Verdict string
+
+const (
+    VerdictNormal    Verdict = "normal"
+    VerdictAd        Verdict = "ad"
+    VerdictSubtitle  Verdict = "subtitle"
+    VerdictInterlude Verdict = "interlude"
+    VerdictUnknown   Verdict = "unknown"
+)
+
+// 多通道结果合并，取置信度最高的判定
+func Merge(verdicts []Candidate) Verdict {
+    best := VerdictUnknown
+    bestConf := 0.0
+    for _, v := range verdicts {
+        if v.Confidence > bestConf {
+            best, bestConf = v.Verdict, v.Confidence
+        }
+    }
+    return best
+}
+```
+
+---
+
+### 8.6 匹配设置（Matching Strategy）
 
 **核心需求：** 分析引擎判断出资源类型后，选择匹配策略将资源和内部数据关联。
 
@@ -999,7 +1235,7 @@ CREATE TABLE matching_settings (
 
 ---
 
-### 8.6 调用设置（Chaining / Pipeline）
+### 8.7 调用设置（Chaining / Pipeline）
 
 **核心需求：** 匹配成功后，资源经过多层接口串联处理（去插播 → 去广告 → proxy 等），每个环节可独立启停和调整顺序。
 
@@ -1067,7 +1303,7 @@ POST /admin/chain/test           → 测试整条链路 body: { input_url: "xxx"
 
 ---
 
-### 8.7 更新设置（Updater）
+### 8.8 更新设置（Updater）
 
 **核心需求：** 支持从 GitHub 仓库自动下载最新版本，内置多条镜像解决国内访问问题，自动测速选最快源，显示更新公告。
 
@@ -1252,7 +1488,7 @@ SHA256：...
 
 ---
 
-### 8.8 侧边栏菜单树 → 路由权限（后端）
+### 8.9 侧边栏菜单树 → 路由权限（后端）
 
 ```go
 // pkg/router/menu.go
@@ -1266,16 +1502,17 @@ type MenuItem struct {
 }
 
 var DefaultMenus = []MenuItem{
-    {Key: "dashboard", Label: "仪表盘",     Icon: "chart",    Path: "/admin/dashboard",  Order: 1},
-    {Key: "frontend",  Label: "前端设置",   Icon: "palette",  Path: "/admin/frontend",   Order: 2},
-    {Key: "analysis",  Label: "分析设置",   Icon: "brain",    Path: "/admin/analysis",   Order: 3},
-    {Key: "matching",  Label: "匹配设置",   Icon: "crosshair", Path: "/admin/matching",  Order: 4},
-    {Key: "chaining",  Label: "调用设置",   Icon: "link",     Path: "/admin/chaining",   Order: 5},
-    {Key: "mapping",   Label: "映射设置",   Icon: "map",      Path: "/admin/mapping",    Order: 6},
-    {Key: "rules",     Label: "解析规则",   Icon: "code",     Path: "/admin/rules",      Order: 7},
-    {Key: "vods",      Label: "影片管理",   Icon: "film",     Path: "/admin/vods",       Order: 8},
-    {Key: "updater",   Label: "更新设置",   Icon: "refresh",  Path: "/admin/updater",    Order: 9},
-    {Key: "admin",     Label: "管理员",     Icon: "user",     Path: "/admin/account",    Order: 99},
+    {Key: "dashboard", Label: "仪表盘",     Icon: "chart",     Path: "/admin/dashboard",  Order: 1},
+    {Key: "frontend",  Label: "前端设置",   Icon: "palette",   Path: "/admin/frontend",   Order: 2},
+    {Key: "analysis",  Label: "分析设置",   Icon: "brain",     Path: "/admin/analysis",   Order: 3},
+    {Key: "ai",        Label: "AI 设置",    Icon: "robot",     Path: "/admin/ai",         Order: 4},
+    {Key: "matching",  Label: "匹配设置",   Icon: "crosshair", Path: "/admin/matching",   Order: 5},
+    {Key: "chaining",  Label: "调用设置",   Icon: "link",      Path: "/admin/chaining",   Order: 6},
+    {Key: "mapping",   Label: "映射设置",   Icon: "map",       Path: "/admin/mapping",    Order: 7},
+    {Key: "rules",     Label: "解析规则",   Icon: "code",      Path: "/admin/rules",      Order: 8},
+    {Key: "vods",      Label: "影片管理",   Icon: "film",      Path: "/admin/vods",       Order: 9},
+    {Key: "updater",   Label: "更新设置",   Icon: "refresh",   Path: "/admin/updater",    Order: 10},
+    {Key: "admin",     Label: "管理员",     Icon: "user",      Path: "/admin/account",    Order: 99},
 }
 ```
 
@@ -1306,6 +1543,12 @@ var DefaultMenus = []MenuItem{
 | 更新安全 | 下载后 SHA256 校验 + 备份旧版本到 backup/ + 保留 config.yaml 不被覆盖 |
 | 分析引擎可配置 | analysis_settings 单行表，优先级顺序（official_first / direct_first / ai_first）运行时生效 |
 | AI 辅助分析 | 可选，通过 analysis_settings.ai_provider 配置，把 URL + 页面内容压缩后发给 AI |
+| 视频内嵌广告识别 | 广告烧录在 ts 画面里 → 靠 MD5 指纹库（跨视频重复广告秒级命中）+ AI 抽帧画面判定双通道 |
+| MD5 指纹快速命中 | 全 ts 并发下载 + 流式计算 MD5（LimitReader 只取头部近似），ad_fingerprints 表 O(1) 命中 |
+| AI 抽帧分析 | 对抽样 ts 解码抽帧（ffmpeg 可选 / 纯 Go mpegts 解析）→ 多模态模型判断广告/字幕/插播 |
+| 内置播放器实时标注 | 复用 DPlayer + hls.js，监听 FRAG_LOADED 拿当前 SN → 映射判定结果实时标红 |
+| 去广告 m3u8 生成 | 剔除广告 ts 后按 #EXTINF 重新拼 #EXTM3U，保留时长信息 |
+| 判定聚合 | 多通道结果按置信度取最高，verdict.go 统一 normal / ad / subtitle / interlude / unknown |
 
 ---
 
@@ -1331,6 +1574,10 @@ github.com/golang-jwt/jwt/v5            # proxy token 签名
 github.com/Masterminds/semver/v3        # 版本号比较（更新设置）
 golang.org/x/sync/errgroup              # 并发测速 / 并发分析
 github.com/natefinch/lumberjack         # 日志 rotate（更新日志归档）
+github.com/sashabaranov/go-openai       # 🤖 AI 多模态分析客户端（openai 兼容协议）
+github.com/asticode/go-astits           # 🤖 纯 Go mpegts（ts 分片解复用，可选）
+ffmpeg / ffprobe (系统命令，可选)      # 🤖 ts 解码抽帧（未安装时降级为纯 Go 解析）
+github.com/gorilla/websocket            # SSE / WebSocket 实时推送分析日志
 ```
 
 ---
@@ -1344,10 +1591,11 @@ M1 搭架子
      + 前端 web/player/index.html 基础版（同域 API）
 
 M2 数据层
-  └─ 12 张核心表 gorm model（vods / episodes / sources / extract_rules
+  └─ 15 张核心表 gorm model（vods / episodes / sources / extract_rules
      + call_logs / frontend_settings / site_mappings
      + analysis_settings / matching_settings / chain_nodes
-     + updater_config / update_logs）
+     + updater_config / update_logs
+     + ai_settings / ts_analysis_logs / ad_fingerprints）
      + 自动迁移 + Repository CRUD
 
 M3 前端在线播放页 MVP
@@ -1426,10 +1674,22 @@ M14 更新设置
 
 M15 整体联调 + 侧边栏前端
   └─ 分析 → 匹配 → 调用 → 解析 全链路打通
-     + 侧边栏前端 10 个模块全部可访问
+     + 侧边栏前端 11 个模块全部可访问
      + 侧边栏菜单树权限联动（DefaultMenus）
      + 前端设置输出格式切换（JSON vs 网页播放器）
      + 最终端到端测试：官方站播放页 URL → 自动识别 → 匹配 → 解析 → 播放
+
+M16 AI 视频智能分析（ts / 广告 / 字幕 / 插播）
+  └─ internal/ai 包（ai / m3u8 / md5 / tsanalyzer / frame / subtitle / clean / verdict）
+     + ai_settings 单行表 + ts_analysis_logs + ad_fingerprints MD5 指纹库
+     + m3u8 解析 → 全量 ts 分片列表（并发下载 + MD5 流式计算）
+     + MD5 指纹快速命中（ad / subtitle / interlude / watermark，O(1) 比对）
+     + AI 多模态抽帧分析（openai / doubao / qwen / custom，抽样比例可配）
+     + 特征启发式辅助（时长异常 / 画面突变 / 静音段，不依赖 AI）
+     + 内置播放器（原始 / 去广告 / 单 ts 预览，hls.js FRAG_LOADED 实时标注判定）
+     + 去广告 m3u8 动态生成（auto_skip_ad 一键剔除广告 ts）
+     + /admin/ai/* 接口 + SSE 实时分析日志
+     + 侧边栏 AI 设置页面（前后端 + 指纹库导入导出）
 ```
 
 ---
@@ -1459,6 +1719,8 @@ M15 整体联调 + 侧边栏前端
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.4 新增：🧠 分析设置（自动识别官方/直链资源）、🎯 匹配设置（AI+规则双通道）、🔌 调用设置（多层 Pipeline 串联）、🗺️ 映射设置（七大站字段映射）、🔄 更新设置（多镜像自动测速 + GitHub 一键更新 + 公告.txt 解析）、4 张新表（analysis_settings / matching_settings / chain_nodes / updater_config + update_logs）、3 个新 internal 包（analyzer / chaining / updater）、里程碑扩展到 M15。*
+*本文档随代码迭代同步更新。版本 v0.0.5 新增：🤖 AI 设置（m3u8 智能分析 ts 分片、MD5 指纹库识别视频内嵌广告/字幕/插播、内置播放器实时标注判定、去广告 m3u8 动态生成、SSE 实时分析日志）、3 张新表（ai_settings / ts_analysis_logs / ad_fingerprints）、新 internal 包 ai/、里程碑扩展到 M16、侧边栏增至 11 个模块。*
+
+*前一版本 v0.0.4 新增：🧠 分析设置（自动识别官方/直链资源）、🎯 匹配设置（AI+规则双通道）、🔌 调用设置（多层 Pipeline 串联）、🗺️ 映射设置（七大站字段映射）、🔄 更新设置（多镜像自动测速 + GitHub 一键更新 + 公告.txt 解析）、4 张新表（analysis_settings / matching_settings / chain_nodes / updater_config + update_logs）、3 个新 internal 包（analyzer / chaining / updater）、里程碑扩展到 M15。*
 
 *前一版本 v0.0.3 新增管理后台侧边栏设计（仪表盘 / 前端设置伪装路径 / 视频抓取映射七大站）+ 3 张新表（call_logs / frontend_settings / site_mappings）+ 里程碑扩展。*
