@@ -230,6 +230,49 @@ func SeedChainNodes(db *gorm.DB) {
 	}
 }
 
+// UpdaterConfig 自动更新设置（单行表，id=1）：GitHub 仓库 + 多镜像 + 检查开关
+type UpdaterConfig struct {
+	ID             uint            `gorm:"primaryKey" json:"id"`
+	Repo           string          `gorm:"size:255;default:https://github.com/ssmhdssmhd/MXGT" json:"repo"`
+	MirrorsJSON    string          `gorm:"column:mirrors;type:text" json:"-"`
+	Mirrors        json.RawMessage `gorm:"-" json:"mirrors,omitempty"`
+	AutoCheck      int8            `gorm:"default:1" json:"auto_check"` // 启动时是否自动检查更新
+	CurrentVersion string          `gorm:"size:32" json:"current_version"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+}
+
+// TableName 指定表名
+func (UpdaterConfig) TableName() string { return "updater_config" }
+
+// DefaultUpdaterConfig 默认更新配置（单行 id=1）
+func DefaultUpdaterConfig(version string) UpdaterConfig {
+	def := []string{
+		"https://github.com/ssmhdssmhd/MXGT",
+		"https://ghproxy.com/https://github.com/ssmhdssmhd/MXGT",
+		"https://gh-proxy.com/https://github.com/ssmhdssmhd/MXGT",
+		"https://mirror.ghproxy.cn/https://github.com/ssmhdssmhd/MXGT",
+		"https://kkgithub.com/ssmhdssmhd/MXGT",
+		"https://hub.fastgit.org/ssmhdssmhd/MXGT",
+	}
+	b, _ := json.Marshal(def)
+	return UpdaterConfig{
+		ID: 1, Repo: "https://github.com/ssmhdssmhd/MXGT",
+		MirrorsJSON: string(b), AutoCheck: 1, CurrentVersion: version,
+	}
+}
+
+// UpdateLog 更新日志
+type UpdateLog struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Version   string    `gorm:"size:32" json:"version"`
+	Status    string    `gorm:"size:16" json:"status"` // success / failed / skipped
+	Message   string    `gorm:"size:512" json:"message"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// TableName 指定表名
+func (UpdateLog) TableName() string { return "update_logs" }
+
 // 七大站预置映射数据（官方站点，is_builtin=1）
 var builtinSiteMappings = []SiteMapping{
 	{SiteCode: "tencent", SiteName: "腾讯视频", SiteDomain: `(v\.|video\.)qq\.com`, NameField: "$.vod_name", AliasField: "$.vod_actor", CoverField: "$.vod_pic", YearField: "$.vod_year", RegionField: "$.vod_area", CategoryField: "$.vod_class", RemarkField: "$.vod_content", EpisodesPath: "$.vod_play_from[0].vod_play_list[0].urls", IsBuiltin: 1, Enabled: 1, Priority: 70},
@@ -267,5 +310,7 @@ func AutoMigrate(db interface {
 		&AnalysisSetting{},
 		&MatchingSetting{},
 		&ChainNode{},
+		&UpdaterConfig{},
+		&UpdateLog{},
 	)
 }

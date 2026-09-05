@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.15
+> 版本：v0.0.16
 
 ## ✨ 特性
 
@@ -17,6 +17,7 @@
 - 🎯 **剧名匹配**：Levenshtein 相似度 + 别名表 + 年份/标点规范化；多源同剧自动合并到同一 vod，集数按来源区分
 - 🧠 **匹配策略**：AI/规则双通道（rule / ai / auto）可配回退与相似度阈值；支持直接资源走去插播决策
 - 🔌 **调用 Pipeline**：链式串联多节点（proxy / 去插播 / 去广告 / 自定义 HTTP），支持排序、独立启停、三种回退策略与链路测试
+- 🔄 **自动更新**：GitHub 多镜像并发测速选最快源，检查更新（semver 对比）+ 一键下载安装（备份旧版 / 保留配置），更新日志记录
 - 📦 **多存储**：数据库支持 SQLite（默认零配置）/ MySQL；缓存支持内存（默认）/ Redis，接口化可扩展
 - 🔐 **管理后台**：JWT 登录 + 解析规则 CRUD + 采集源管理 CRUD（后台配置即可接入新源站）
 - 🔌 **跨域 / 防盗链**：Echo CORS + `/api/proxy/stream` 代理转发（带 Referer，支持 Range 拖动进度条）
@@ -103,6 +104,12 @@ docker compose down           # 停止
 | DELETE | `/admin/chain/nodes/:id` | 删除节点（内置不可删） | JWT |
 | PUT | `/admin/chain/reorder` | 批量调整节点顺序 | JWT |
 | POST | `/admin/chain/test` | 测试整条链路中间结果 | JWT |
+| GET | `/admin/update/config` | 更新设置读取（仓库/镜像列表/自动检查） | JWT |
+| PUT | `/admin/update/config` | 更新设置保存 | JWT |
+| POST | `/admin/update/mirror-speed` | 并发测速所有镜像，返回最快源 | JWT |
+| POST | `/admin/update/check` | 检查远端最新版本（GitHub API 对比） | JWT |
+| POST | `/admin/update/download` | 一键下载并替换可执行文件（备份旧版） | JWT |
+| GET | `/admin/update/logs` | 最近更新日志 | JWT |
 | GET | `/admin-ui` | 管理后台仪表盘前端（ECharts） | - |
 | GET | `/api.php/provide/vod/?ac=list` | 苹果 CMS v10 分类列表 | 无 |
 | GET | `/api.php/provide/vod/?ac=detail&ids=1` | 苹果 CMS v10 详情 | 无 |
@@ -302,6 +309,10 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.16
+- 新增：🔄 M14 更新设置——internal/updater（semver 版本比较 v0.0.99→v0.1.0 / 镜像并发测速选最快 / GitHub API 检查更新 / 公告解析 / 下载→备份→覆盖）
+- 新增：updater_config + update_logs 表，`/admin/update/config · mirror-speed · check · download · logs` 接口
 
 ### v0.0.15
 - 新增：🔌 M13 调用 Pipeline——internal/chaining（Pipeline 引擎 + `{input_url}` 占位符 + JSONPath 结果提取）

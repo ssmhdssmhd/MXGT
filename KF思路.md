@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.15
+> 版本：v0.0.16
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions（云端编译）
 > 分发策略：GitHub Actions 云端编译多平台 Go 可执行文件 → 单文件免配置运行 → 更新只替换执行文件
 
@@ -1857,7 +1857,9 @@ GET  /admin/update/logs         → 更新日志
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.15 新增：🔌 M13 调用 Pipeline 已落地——internal/chaining（Pipeline 引擎 + templating 占位符 {input_url} + JSONPath 结果提取）、chain_nodes 表（sort_order 排序 / 独立启停 / fallback 三种回退策略 skip·abort·fallback / 内置 proxy·skip_ad·block_ad 预置节点）、/admin/chain/nodes CRUD + /admin/chain/reorder + /admin/chain/test 链路测试接口。*
+*本文档随代码迭代同步更新。版本 v0.0.16 新增：🔄 M14 更新设置已落地——internal/updater（semver 版本比较 v0.0.99→v0.1.0 正确进位 / BenchmarkMirrors 并发测速 / CheckLatest 通过 GitHub API 对比版本 / ParseNotice 公告解析 / Install 下载→备份→覆盖，保留 config.yaml 与数据）、updater_config + update_logs 表、/admin/update/config · mirror-speed · check · download · logs 接口。*
+
+*前一版本 v0.0.15 新增：🔌 M13 调用 Pipeline 已落地——internal/chaining（Pipeline 引擎 + templating 占位符 {input_url} + JSONPath 结果提取）、chain_nodes 表（sort_order 排序 / 独立启停 / fallback 三种回退策略 skip·abort·fallback / 内置 proxy·skip_ad·block_ad 预置节点）、/admin/chain/nodes CRUD + /admin/chain/reorder + /admin/chain/test 链路测试接口。*
 
 *前一版本 v0.0.14 新增：🎯 M12 匹配策略已落地——matching_settings 单行表（mode=rule/ai/auto + fallback 回退 + fuzzy_threshold 阈值 + auto_create + direct_action 直接资源去插播）、matcher 双通道策略引擎（规则匹配 + AI 自动识别，含权/别名/相似度打分）、OpenAI 兼容 AI 匹配客户端（openai/doubao/custom 可配）、POST /admin/matching/test 一键测试、/admin/matching/settings CRUD。*
 

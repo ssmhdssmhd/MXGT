@@ -110,6 +110,15 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	adminGroup.PUT("/chain/reorder", chaining.Reorder)
 	adminGroup.POST("/chain/test", chaining.Test)
 
+	// 更新设置（镜像测速 / 检查更新 / 一键下载 / 日志）
+	updater := handler.NewUpdaterHandler(db, version)
+	adminGroup.GET("/update/config", updater.GetConfig)
+	adminGroup.PUT("/update/config", updater.UpdateConfig)
+	adminGroup.POST("/update/mirror-speed", updater.MirrorSpeed)
+	adminGroup.POST("/update/check", updater.Check)
+	adminGroup.POST("/update/download", updater.Download)
+	adminGroup.GET("/update/logs", updater.Logs)
+
 	// 管理后台 UI：/admin-ui → admin/index.html（独立前缀，避免与 /admin API 冲突）
 	e.GET("/admin-ui", func(c echo.Context) error {
 		data, err := fs.ReadFile(web.AdminFS, "admin/index.html")
