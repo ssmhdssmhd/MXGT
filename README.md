@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.11
+> 版本：v0.0.12
 
 ## ✨ 特性
 
@@ -11,6 +11,8 @@
 - 📡 **多源采集器**：`api` / `html` / `custom` 采集器接口化注册，支持**对接多个采集源**；`POST /admin/sync` 一键采集 → 剧名模糊匹配 → 自动合并入库
 - 🍎 **苹果 CMS v10 对接**：`/api.php/provide/vod/` 输出标准 CMS 采集接口（list / detail / search / play），多线路自动用 `$$$` 分隔
 - 🎭 **前端设置伪装路径**：单行表配置播放页入口路径（如 `/mx.php`）与参数别名，后端动态注册伪装路由
+- 📊 **仪表盘**：调用日志统计（overview / 趋势 / 规则TOP / 采集源TOP），ECharts 前端 /admin-ui
+- 📋 **调用日志**：resolve / proxy / cms 自动记录（状态 / 耗时 / 缓存命中 / IP），定期自动清理
 - 🗺️ **视频抓取映射**：预置腾讯/爱奇艺/优酷/芒果/搜狐/咪咕/B站七大站字段映射，JSONPath 提取可后台测试
 - 🎯 **剧名匹配**：Levenshtein 相似度 + 别名表 + 年份/标点规范化；多源同剧自动合并到同一 vod，集数按来源区分
 - 📦 **多存储**：数据库支持 SQLite（默认零配置）/ MySQL；缓存支持内存（默认）/ Redis，接口化可扩展
@@ -79,6 +81,12 @@ docker run -p 8080:8080 mxgt
 | PUT | `/admin/mappings/:id` | 更新站点映射 | JWT |
 | DELETE | `/admin/mappings/:id` | 删除站点映射（预置不可删） | JWT |
 | POST | `/admin/mapping/test` | 测试 JSONPath 字段映射提取 | JWT |
+| GET | `/admin/stats/overview` | 仪表盘总览（今日/累计/成功率/缓存命中） | JWT |
+| GET | `/admin/stats/trends` | 调用趋势（按天聚合） | JWT |
+| GET | `/admin/stats/rules-top` | 解析规则调用 TOP | JWT |
+| GET | `/admin/stats/sources-top` | 采集源入库量 TOP | JWT |
+| GET | `/admin/call-logs` | 最近调用明细（分页） | JWT |
+| GET | `/admin-ui` | 管理后台仪表盘前端（ECharts） | - |
 | GET | `/api.php/provide/vod/?ac=list` | 苹果 CMS v10 分类列表 | 无 |
 | GET | `/api.php/provide/vod/?ac=detail&ids=1` | 苹果 CMS v10 详情 | 无 |
 | GET | `/api.php/provide/vod/?ac=search&wd=关键词` | 苹果 CMS v10 搜索 | 无 |
@@ -277,6 +285,12 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.12
+- 新增：📊 M9 仪表盘——call_logs 调用日志表 + resolve/proxy/cms 自动记录（状态/耗时/缓存命中/IP，定期清理）
+- 新增：统计接口 overview / trends / rules-top / sources-top / call-logs（JWT）
+- 新增：📊 ECharts 仪表盘前端 `/admin-ui`
+- 新增：管理后台静态资源 `web/admin` 内嵌
 
 ### v0.0.11
 - 新增：🎭 前端设置伪装路径——frontend_settings 单行表（play_path / url_param / 参数别名 / 皮肤 / 备案号），后端动态注册伪装路由（如 `/mx.php`），默认 `/` 与伪装路径同时可用

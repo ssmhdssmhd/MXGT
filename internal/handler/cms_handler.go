@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/ssmhdssmhd/MXGT/internal/cms"
@@ -25,18 +26,31 @@ const cmsPageSize = 20
 
 // Provide 统一入口：ac=list / detail / search / play
 func (h *CMSHandler) Provide(c echo.Context) error {
-	switch c.QueryParam("ac") {
-	case "detail":
-		return h.detail(c)
-	case "search":
-		return h.search(c)
-	case "play":
-		return h.play(c)
-	case "list", "":
-		return h.list(c)
-	default:
-		return h.list(c)
+	ac := c.QueryParam("ac")
+	if ac == "" {
+		ac = "list"
 	}
+	start := time.Now()
+	var err error
+	switch ac {
+	case "detail":
+		err = h.detail(c)
+	case "search":
+		err = h.search(c)
+	case "play":
+		err = h.play(c)
+	case "list":
+		err = h.list(c)
+	default:
+		err = h.list(c)
+	}
+	dur := int(time.Since(start).Milliseconds())
+	status := int8(1)
+	if err != nil {
+		status = 0
+	}
+	RecordCall(h.db, "cms."+ac, 0, 0, status, dur, 0, c.RealIP(), c.Request().URL.String(), "")
+	return err
 }
 
 // list 分类列表（支持 ?pg=页数&t=分类）

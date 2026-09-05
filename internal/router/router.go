@@ -37,8 +37,8 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	// API 层
 	api := e.Group("/api")
 	api.GET("/health", handler.NewHealthHandler(db, c, version).Check)
-	api.GET("/resolve", handler.NewResolveHandler(resolveSvc).Resolve)
-	api.GET("/proxy/stream", handler.NewProxyHandler().Stream)
+	api.GET("/resolve", handler.NewResolveHandler(db, resolveSvc).Resolve)
+	api.GET("/proxy/stream", handler.NewProxyHandler(db).Stream)
 
 	// 对外：苹果 CMS v10 兼容输出（ac=list / detail / search / play）
 	e.GET("/api.php/provide/vod/", handler.NewCMSHandler(db).Provide)
@@ -81,8 +81,25 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	// 公开：播放页前端设置（播放页读取，无需登录）
 	e.GET("/api/settings", settings.PublicGet)
 
-	// 静态资源（go:embed 内嵌播放页，单文件运行）
-	// 注意：/api/* 精确路由优先于 /* 静态通配
+	// 仪表盘统计（调用日志 / 趋势 / TOP）
+	stats := handler.NewStatsHandler(db)
+	adminGroup.GET("/stats/overview", stats.Overview)
+	adminGroup.GET("/stats/trends", stats.Trends)
+	adminGroup.GET("/stats/rules-top", stats.RulesTop)
+	adminGroup.GET("/stats/sources-top", stats.SourcesTop)
+	adminGroup.GET("/call-logs", stats.CallLogs)
+
+	// 管理后台 UI：/admin-ui → admin/index.html（独立前缀，避免与 /admin API 冲突）
+	e.GET("/admin-ui", func(c echo.Context) error {
+		data, err := fs.ReadFile(web.AdminFS, "admin/index.html")
+		if err != nil {
+			return c.String(http.StatusNotFound, "管理后台不存在")
+		}
+		c.Response().Header().Set(echo.HeaderContentType, "text/html; charset=utf-8")
+		return c.String(http.StatusOK, string(data))
+	})
+
+	// 播放页静态资源 root
 	if sub, err := fs.Sub(web.PlayerFS, "player"); err == nil {
 		e.StaticFS("/", sub)
 

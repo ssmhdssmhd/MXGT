@@ -3,19 +3,23 @@ package handler
 import (
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
 // ProxyHandler /api/proxy/stream 视频流代理（解决跨域 / 防盗链 Referer）
 type ProxyHandler struct {
 	client *resty.Client
+	db     *gorm.DB
 }
 
 // NewProxyHandler 创建代理处理器
-func NewProxyHandler() *ProxyHandler {
+func NewProxyHandler(db *gorm.DB) *ProxyHandler {
 	return &ProxyHandler{
+		db: db,
 		client: resty.New().
 			SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MXGT/"+proxyVersion),
 	}
@@ -29,6 +33,7 @@ func (h *ProxyHandler) Stream(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "缺少 url 参数")
 	}
 
+	start := time.Now()
 	req := h.client.R().
 		SetContext(c.Request().Context()).
 		SetDoNotParseResponse(true)
@@ -44,9 +49,16 @@ func (h *ProxyHandler) Stream(c echo.Context) error {
 	}
 
 	resp, err := req.Get(target)
+	dur := int(time.Since(start).Milliseconds())
 	if err != nil {
+		RecordCall(h.db, "proxy", 0, 0, 0, dur, 0, c.RealIP(), target, err.Error())
 		return c.String(http.StatusBadGateway, "代理请求失败: "+err.Error())
 	}
+	status := int8(1)
+	if resp.StatusCode() != 200 {
+		status = 0
+	}
+	RecordCall(h.db, "proxy", 0, 0, status, dur, 0, c.RealIP(), target, "")
 	defer resp.RawBody().Close()
 
 	// CORS + 透传 Content-Type
@@ -64,4 +76,4 @@ func (h *ProxyHandler) Stream(c echo.Context) error {
 }
 
 // proxyVersion 版本号占位（构建时由 ldflags 注入，见 cmd/server）
-const proxyVersion = "v0.0.11"
+const proxyVersion = "v0.0.12"

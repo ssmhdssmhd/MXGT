@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MXGT 仪表盘</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif; background:#0f172a; color:#e2e8f0; }
+  header { padding:18px 24px; background:#1e293b; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #334155; }
+  header h1 { font-size:20px; color:#38bdf8; }
+  #loginBox { display:flex; gap:8px; align-items:center; }
+  #loginBox input { padding:6px 10px; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; }
+  button { padding:6px 14px; border-radius:6px; border:none; background:#38bdf8; color:#0f172a; font-weight:600; cursor:pointer; }
+  button:hover { background:#0ea5e9; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; padding:20px 24px; }
+  .card { background:#1e293b; border:1px solid #334155; border-radius:10px; padding:16px; }
+  .card .num { font-size:28px; font-weight:700; color:#38bdf8; margin-top:6px; }
+  .card .label { color:#94a3b8; font-size:13px; }
+  .charts { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:0 24px 20px; }
+  .chart { background:#1e293b; border:1px solid #334155; border-radius:10px; padding:14px; height:320px; }
+  .chart h3 { font-size:14px; color:#94a3b8; margin-bottom:8px; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { padding:8px 10px; text-align:left; font-size:13px; border-bottom:1px solid #334155; }
+  th { color:#94a3b8; font-weight:500; }
+  .logs { padding:0 24px 30px; }
+  .logs h3 { font-size:15px; color:#94a3b8; margin-bottom:10px; }
+  .ok { color:#4ade80; } .fail { color:#f87171; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MXGT 仪表盘</h1>
+  <div id="loginBox">
+    <input id="user" placeholder="用户名" value="admin">
+    <input id="pass" type="password" placeholder="密码" value="admin123">
+    <button onclick="doLogin()">登录</button>
+  </div>
+</header>
+
+<div class="grid" id="cards"></div>
+<div class="charts">
+  <div class="chart"><h3>近 7 天调用趋势</h3><div id="trendChart" style="height:280px"></div></div>
+  <div class="chart"><h3>解析规则 TOP</h3><div id="rulesChart" style="height:280px"></div></div>
+  <div class="chart"><h3>采集源入库 TOP</h3><div id="sourcesChart" style="height:280px"></div></div>
+  <div class="chart"><h3>今日调用（条/小时）</h3><div id="hourChart" style="height:280px"></div></div>
+</div>
+<div class="logs">
+  <h3>最近调用记录</h3>
+  <table id="logTable">
+    <thead><tr><th>ID</th><th>接口</th><th>规则</th><th>状态</th><th>耗时(ms)</th><th>缓存</th><th>IP</th><th>时间</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+let TOKEN = localStorage.getItem('mxgt_token') || '';
+let user = localStorage.getItem('mxgt_user') || 'admin';
+
+async function api(path, method='GET', body=null){
+  const opt = { method, headers:{'Authorization':'Bearer '+TOKEN} };
+  if(body){ opt.headers['Content-Type']='application/json'; opt.body=JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  return r.json();
+}
+
+async function doLogin(){
+  const r = await fetch('/admin/login', {method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:document.getElementById('user').value, password:document.getElementById('pass').value})});
+  const d = await r.json();
+  if(d.code===1){ TOKEN=d.data.token; localStorage.setItem('mxgt_token',TOKEN); loadAll(); }
+  else alert(d.msg||'登录失败');
+}
+
+function card(label,num){ return `<div class="card"><div class="label">${label}</div><div class="num">${num}</div></div>`; }
+
+async function loadOverview(){
+  const d = await api('/admin/stats/overview');
+  if(d.code!==1) return false;
+  const o = d.data;
+  document.getElementById('cards').innerHTML =
+    card('今日调用', o.today_calls) +
+    card('累计调用', o.total_calls) +
+    card('成功率', o.success_rate.toFixed(1)+'%') +
+    card('缓存命中', o.cache_hit_rate.toFixed(1)+'%') +
+    card('活跃规则', o.active_rules) +
+    card('活跃采集源', o.active_sources) +
+    card('影片', o.vods) + card('集数', o.episodes);
+  return true;
+}
+
+async function loadTrends(){
+  const d = await api('/admin/stats/trends?range=7');
+  if(d.code!==1) return;
+  const dates = d.data.map(x=>x.date);
+  const calls = d.data.map(x=>x.calls);
+  const avg = d.data.map(x=>x.avg_ms);
+  const t = echarts.init(document.getElementById('trendChart'));
+  t.setOption({tooltip:{trigger:'axis'}, legend:{data:['调用量','平均耗时'],textStyle:{color:'#94a3b8'}},
+    grid:{left:50,right:50}, xAxis:{type:'category',data:dates,axisLabel:{color:'#94a3b8'}},
+    yAxis:[{type:'value',axisLabel:{color:'#94a3b8'}},{type:'value',axisLabel:{color:'#94a3b8'}}],
+    series:[{name:'调用量',type:'bar',data:calls,itemStyle:{color:'#38bdf8'}},
+            {name:'平均耗时',type:'line',yAxisIndex:1,data:avg,itemStyle:{color:'#fbbf24'}}]});
+  window.addEventListener('resize',()=>t.resize());
+}
+
+async function loadRules(){
+  const d = await api('/admin/stats/rules-top?limit=10');
+  if(d.code!==1) return;
+  const names = d.data.map(x=>x.name||('#'+x.rule_id));
+  const calls = d.data.map(x=>x.calls);
+  const r = echarts.init(document.getElementById('rulesChart'));
+  r.setOption({tooltip:{trigger:'axis'}, grid:{left:120,right:30},
+    xAxis:{type:'value',axisLabel:{color:'#94a3b8'}},
+    yAxis:{type:'category',data:names.reverse(),axisLabel:{color:'#94a3b8'}},
+    series:[{type:'bar',data:calls.reverse(),itemStyle:{color:'#34d399'}}]});
+  window.addEventListener('resize',()=>r.resize());
+}
+
+async function loadSources(){
+  const d = await api('/admin/stats/sources-top?limit=10');
+  if(d.code!==1) return;
+  const names = d.data.map(x=>x.source_name);
+  const eps = d.data.map(x=>x.episodes);
+  const s = echarts.init(document.getElementById('sourcesChart'));
+  s.setOption({tooltip:{trigger:'axis'}, grid:{left:120,right:30},
+    xAxis:{type:'value',axisLabel:{color:'#94a3b8'}},
+    yAxis:{type:'category',data:names.reverse(),axisLabel:{color:'#94a3b8'}},
+    series:[{type:'bar',data:eps.reverse(),itemStyle:{color:'#c084fc'}}]});
+  window.addEventListener('resize',()=>s.resize());
+}
+
+async function loadHour(){
+  const d = await api('/admin/stats/trends?range=1');
+  if(d.code!==1) return;
+  const h = echarts.init(document.getElementById('hourChart'));
+  h.setOption({tooltip:{trigger:'axis'}, xAxis:{type:'category',data:['今日'],axisLabel:{color:'#94a3b8'}},
+    yAxis:{type:'value',axisLabel:{color:'#94a3b8'}},
+    series:[{type:'bar',data:[d.data[0].calls],itemStyle:{color:'#38bdf8'}}]});
+  window.addEventListener('resize',()=>h.resize());
+}
+
+async function loadLogs(){
+  const d = await api('/admin/call-logs?page=1&size=20');
+  if(d.code!==1) return;
+  const rows = d.data.list.map(l=>`<tr>
+    <td>${l.id}</td><td>${l.api}</td><td>${l.rule_id||'-'}</td>
+    <td class="${l.call_status===1?'ok':'fail'}">${l.call_status===1?'成功':'失败'}</td>
+    <td>${l.duration_ms}</td><td>${l.cache_hit===1?'是':'否'}</td>
+    <td>${l.client_ip||'-'}</td><td>${(l.created_at||'').replace('T',' ').slice(0,19)}</td></tr>`).join('');
+  document.querySelector('#logTable tbody').innerHTML = rows;
+}
+
+async function loadAll(){
+  const okv = await loadOverview();
+  if(!okv){ alert('请先登录'); return; }
+  loadTrends(); loadRules(); loadSources(); loadHour(); loadLogs();
+}
+
+if(TOKEN){ loadAll(); } else { doLogin(); }
+</script>
+</body>
+</html>

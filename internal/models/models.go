@@ -123,6 +123,24 @@ type SiteMapping struct {
 // TableName 指定表名
 func (SiteMapping) TableName() string { return "site_mappings" }
 
+// CallLog 调用日志（仪表盘统计源，定期清理）
+type CallLog struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	API        string    `gorm:"size:64;index" json:"api"` // resolve / proxy / cms.play / cms.detail ...
+	RuleID     int       `gorm:"default:0;index" json:"rule_id"`
+	SourceID   int       `gorm:"default:0;index" json:"source_id"`
+	CallStatus int8      `gorm:"default:0" json:"call_status"` // 1=成功 0=失败
+	DurationMS int       `gorm:"default:0" json:"duration_ms"`
+	CacheHit   int8      `gorm:"default:0" json:"cache_hit"`
+	ClientIP   string    `gorm:"size:64" json:"client_ip"`
+	TargetURL  string    `gorm:"size:512" json:"target_url"`
+	ErrorMsg   string    `gorm:"size:512" json:"error_msg"`
+	CreatedAt  time.Time `gorm:"index" json:"created_at"`
+}
+
+// TableName 指定表名
+func (CallLog) TableName() string { return "call_logs" }
+
 // 七大站预置映射数据（官方站点，is_builtin=1）
 var builtinSiteMappings = []SiteMapping{
 	{SiteCode: "tencent", SiteName: "腾讯视频", SiteDomain: `(v\.|video\.)qq\.com`, NameField: "$.vod_name", AliasField: "$.vod_actor", CoverField: "$.vod_pic", YearField: "$.vod_year", RegionField: "$.vod_area", CategoryField: "$.vod_class", RemarkField: "$.vod_content", EpisodesPath: "$.vod_play_from[0].vod_play_list[0].urls", IsBuiltin: 1, Enabled: 1, Priority: 70},
@@ -156,5 +174,6 @@ func AutoMigrate(db interface {
 		&ExtractRule{},
 		&FrontendSetting{},
 		&SiteMapping{},
+		&CallLog{},
 	)
 }
