@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.14
+> 版本：v0.0.15
 
 ## ✨ 特性
 
@@ -16,6 +16,7 @@
 - 🗺️ **视频抓取映射**：预置腾讯/爱奇艺/优酷/芒果/搜狐/咪咕/B站七大站字段映射，JSONPath 提取可后台测试
 - 🎯 **剧名匹配**：Levenshtein 相似度 + 别名表 + 年份/标点规范化；多源同剧自动合并到同一 vod，集数按来源区分
 - 🧠 **匹配策略**：AI/规则双通道（rule / ai / auto）可配回退与相似度阈值；支持直接资源走去插播决策
+- 🔌 **调用 Pipeline**：链式串联多节点（proxy / 去插播 / 去广告 / 自定义 HTTP），支持排序、独立启停、三种回退策略与链路测试
 - 📦 **多存储**：数据库支持 SQLite（默认零配置）/ MySQL；缓存支持内存（默认）/ Redis，接口化可扩展
 - 🔐 **管理后台**：JWT 登录 + 解析规则 CRUD + 采集源管理 CRUD（后台配置即可接入新源站）
 - 🔌 **跨域 / 防盗链**：Echo CORS + `/api/proxy/stream` 代理转发（带 Referer，支持 Range 拖动进度条）
@@ -96,6 +97,12 @@ docker compose down           # 停止
 | GET | `/admin/matching/settings` | 匹配策略设置读取（AI/规则双通道） | JWT |
 | PUT | `/admin/matching/settings` | 匹配策略设置更新（mode/回退/阈值/直接资源去插播） | JWT |
 | POST | `/admin/matching/test` | 测试匹配策略（按剧名匹配已入库影片 / 直接资源去插播决策） | JWT |
+| GET | `/admin/chain/nodes` | 调用 Pipeline 节点列表 | JWT |
+| POST | `/admin/chain/nodes` | 新增 Pipeline 节点 | JWT |
+| PUT | `/admin/chain/nodes/:id` | 更新 Pipeline 节点 | JWT |
+| DELETE | `/admin/chain/nodes/:id` | 删除节点（内置不可删） | JWT |
+| PUT | `/admin/chain/reorder` | 批量调整节点顺序 | JWT |
+| POST | `/admin/chain/test` | 测试整条链路中间结果 | JWT |
 | GET | `/admin-ui` | 管理后台仪表盘前端（ECharts） | - |
 | GET | `/api.php/provide/vod/?ac=list` | 苹果 CMS v10 分类列表 | 无 |
 | GET | `/api.php/provide/vod/?ac=detail&ids=1` | 苹果 CMS v10 详情 | 无 |
@@ -295,6 +302,11 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.15
+- 新增：🔌 M13 调用 Pipeline——internal/chaining（Pipeline 引擎 + `{input_url}` 占位符 + JSONPath 结果提取）
+- 新增：chain_nodes 表（sort_order 排序 / 独立启停 / fallback 三种回退策略 skip·abort·fallback / 内置 proxy·skip_ad·block_ad 预置节点）
+- 新增：`/admin/chain/nodes` CRUD + `/admin/chain/reorder` 排序 + `/admin/chain/test` 链路测试（返回每步中间结果）
 
 ### v0.0.14
 - 新增：🎯 M12 匹配策略——matching_settings 单行表（mode=rule/ai/auto 双通道 + fallback 回退 + fuzzy_threshold 模糊阈值 + auto_create 自动入库 + direct_action 直接资源去插播）

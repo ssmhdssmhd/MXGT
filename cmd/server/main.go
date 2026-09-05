@@ -13,7 +13,7 @@ import (
 )
 
 // version 程序版本（构建时可用 -ldflags "-X main.version=vX.Y.Z" 覆盖）
-var version = "v0.0.14"
+var version = "v0.0.15"
 
 func main() {
 	// 运行文件夹：所有用户环境（config / data / logs...）都建立在此目录内
@@ -34,8 +34,9 @@ func main() {
 	if err := models.AutoMigrate(db); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
-	// 首次运行插入七大站预置映射（幂等）
+	// 首次运行插入七大站预置映射 / 内置 Pipeline 节点（幂等）
 	models.SeedSiteMappings(db)
+	models.SeedChainNodes(db)
 
 	// ③ 缓存（多驱动：memory 默认 / redis 可选）
 	c, err := cache.New(&cfg.Cache)

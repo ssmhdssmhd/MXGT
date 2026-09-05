@@ -189,6 +189,47 @@ func DefaultMatchingSetting() MatchingSetting {
 	}
 }
 
+// ChainNode 调用 Pipeline 节点（M13）：按 order 顺序执行，可独立启停，出错回退策略可配
+type ChainNode struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Name         string    `gorm:"size:128;not null" json:"name"`
+	NodeType     string    `gorm:"size:32;not null" json:"node_type"` // proxy / skip_ad / block_ad / custom
+	Endpoint     string    `gorm:"size:512" json:"endpoint"`          // HTTP 节点请求地址，支持 {input_url}
+	Method       string    `gorm:"size:8;default:GET" json:"method"`
+	HeadersJSON  string    `gorm:"column:headers" json:"-"`           // 请求头（JSON）
+	Headers      json.RawMessage `gorm:"-" json:"headers,omitempty"`
+	ResultPath   string    `gorm:"size:255" json:"result_path"`       // 从响应提取结果的 JSONPath，如 $.data.url
+	Fallback     string    `gorm:"size:16;default:skip" json:"fallback"` // 出错回退：skip / abort / fallback
+	FallbackTo   string    `gorm:"size:512" json:"fallback_to"`       // fallback 策略的兜底地址（空=用上一环节结果）
+	Order        int       `gorm:"column:sort_order;default:0" json:"order"` // 执行顺序，小→大
+	IsBuiltin    int8      `gorm:"default:0" json:"is_builtin"`       // 1=内置预置节点
+	Enabled      int8      `gorm:"default:1" json:"enabled"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// TableName 指定表名
+func (ChainNode) TableName() string { return "chain_nodes" }
+
+// 内置调用 Pipeline 预置节点（is_builtin=1）
+var builtinChainNodes = []ChainNode{
+	{Name: "通用 HTTP 提取", NodeType: "custom", Fallback: "skip", Order: 10, IsBuiltin: 1, Enabled: 1},
+	{Name: "代理转发（防盗链）", NodeType: "proxy", Fallback: "skip", Order: 20, IsBuiltin: 1, Enabled: 1},
+	{Name: "去插播", NodeType: "skip_ad", Fallback: "skip", Order: 30, IsBuiltin: 1, Enabled: 1},
+	{Name: "去广告", NodeType: "block_ad", Fallback: "skip", Order: 40, IsBuiltin: 1, Enabled: 1},
+}
+
+// SeedChainNodes 首次运行时插入内置 Pipeline 节点（幂等）
+func SeedChainNodes(db *gorm.DB) {
+	var n ChainNode
+	if db.First(&n).Error == nil {
+		return
+	}
+	for i := range builtinChainNodes {
+		_ = db.Create(&builtinChainNodes[i])
+	}
+}
+
 // 七大站预置映射数据（官方站点，is_builtin=1）
 var builtinSiteMappings = []SiteMapping{
 	{SiteCode: "tencent", SiteName: "腾讯视频", SiteDomain: `(v\.|video\.)qq\.com`, NameField: "$.vod_name", AliasField: "$.vod_actor", CoverField: "$.vod_pic", YearField: "$.vod_year", RegionField: "$.vod_area", CategoryField: "$.vod_class", RemarkField: "$.vod_content", EpisodesPath: "$.vod_play_from[0].vod_play_list[0].urls", IsBuiltin: 1, Enabled: 1, Priority: 70},
@@ -225,5 +266,6 @@ func AutoMigrate(db interface {
 		&CallLog{},
 		&AnalysisSetting{},
 		&MatchingSetting{},
+		&ChainNode{},
 	)
 }

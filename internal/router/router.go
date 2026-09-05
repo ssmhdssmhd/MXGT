@@ -101,6 +101,15 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	adminGroup.PUT("/matching/settings", matching.UpdateSettings)
 	adminGroup.POST("/matching/test", matching.Test)
 
+	// 调用 Pipeline（chain_nodes CRUD + 排序 + 链路测试）
+	chaining := handler.NewChainingHandler(db)
+	adminGroup.GET("/chain/nodes", chaining.List)
+	adminGroup.POST("/chain/nodes", chaining.Create)
+	adminGroup.PUT("/chain/nodes/:id", chaining.Update)
+	adminGroup.DELETE("/chain/nodes/:id", chaining.Delete)
+	adminGroup.PUT("/chain/reorder", chaining.Reorder)
+	adminGroup.POST("/chain/test", chaining.Test)
+
 	// 管理后台 UI：/admin-ui → admin/index.html（独立前缀，避免与 /admin API 冲突）
 	e.GET("/admin-ui", func(c echo.Context) error {
 		data, err := fs.ReadFile(web.AdminFS, "admin/index.html")
