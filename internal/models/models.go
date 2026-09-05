@@ -5,6 +5,8 @@ package models
 import (
 	"encoding/json"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // Vod 影片主表
@@ -73,6 +75,76 @@ type ExtractRule struct {
 // TableName 指定表名
 func (ExtractRule) TableName() string { return "extract_rules" }
 
+// FrontendSetting 前端设置（单行表，id=1）：播放页伪装路径 / 参数别名 / 皮肤等
+type FrontendSetting struct {
+	ID          uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	PlayPath    string    `gorm:"size:128;default:/" json:"play_path"`  // 播放页入口路径，如 /mx.php
+	URLParam    string    `gorm:"size:64;default:url" json:"url_param"` // 主 URL 参数名
+	AliasParams string    `gorm:"size:255" json:"alias_params"`         // 别名参数名，逗号分隔：video,src,link
+	Skin        string    `gorm:"size:64;default:default" json:"skin"`
+	PlayerType  string    `gorm:"size:32;default:dplayer" json:"player_type"` // dplayer / hls.js / flv.js
+	LogoURL     string    `gorm:"size:512" json:"logo_url"`
+	APIBase     string    `gorm:"size:255" json:"api_base"` // 强制注入后端 API 地址（空=自动同域）
+	FooterText  string    `gorm:"size:255" json:"footer_text"`
+	Beian       string    `gorm:"size:128" json:"beian"` // ICP 备案号
+	CrossOrigin int8      `gorm:"default:1" json:"cross_origin"`
+	CacheTTL    int       `gorm:"default:3600" json:"cache_ttl"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// TableName 指定表名
+func (FrontendSetting) TableName() string { return "frontend_settings" }
+
+// SiteMapping 站点映射（预置腾讯/爱奇艺/优酷/芒果/搜狐/咪咕/B站七大站 + 自定义）
+type SiteMapping struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	SiteCode       string    `gorm:"size:32;uniqueIndex;not null" json:"site_code"` // tencent/iqiyi/youku/mgtv/sohu/migu/bilibili/custom
+	SiteName       string    `gorm:"size:128;not null" json:"site_name"`
+	SiteDomain     string    `gorm:"size:512;not null" json:"site_domain"` // 域名正则
+	SiteIcon       string    `gorm:"size:255" json:"site_icon"`
+	NameField      string    `gorm:"size:255;not null" json:"name_field"` // 剧名提取：$.vod_name / regex:xxx
+	AliasField     string    `gorm:"size:255" json:"alias_field"`
+	CoverField     string    `gorm:"size:255" json:"cover_field"`
+	YearField      string    `gorm:"size:255" json:"year_field"`
+	RegionField    string    `gorm:"size:255" json:"region_field"`
+	CategoryField  string    `gorm:"size:255" json:"category_field"`
+	RemarkField    string    `gorm:"size:255" json:"remark_field"`
+	EpisodesPath   string    `gorm:"size:255;not null" json:"episodes_path"` // 集数数组 JSONPath
+	EpisodeNoRule  string    `gorm:"size:255" json:"episode_no_rule"`
+	EpisodeURLRule string    `gorm:"size:255" json:"episode_url_rule"`
+	ExtractRuleID  int       `gorm:"default:0" json:"extract_rule_id"` // 关联 extract_rules
+	IsBuiltin      int8      `gorm:"default:0" json:"is_builtin"`      // 1=预置不可删
+	Enabled        int8      `gorm:"default:1" json:"enabled"`
+	Priority       int       `gorm:"default:0" json:"priority"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// TableName 指定表名
+func (SiteMapping) TableName() string { return "site_mappings" }
+
+// 七大站预置映射数据（官方站点，is_builtin=1）
+var builtinSiteMappings = []SiteMapping{
+	{SiteCode: "tencent", SiteName: "腾讯视频", SiteDomain: `(v\.|video\.)qq\.com`, NameField: "$.vod_name", AliasField: "$.vod_actor", CoverField: "$.vod_pic", YearField: "$.vod_year", RegionField: "$.vod_area", CategoryField: "$.vod_class", RemarkField: "$.vod_content", EpisodesPath: "$.vod_play_from[0].vod_play_list[0].urls", IsBuiltin: 1, Enabled: 1, Priority: 70},
+	{SiteCode: "iqiyi", SiteName: "爱奇艺", SiteDomain: `(www\.|pc\.)iqiyi\.com`, NameField: "$.title", CoverField: "$.imageUrl", YearField: "$.year", RegionField: "$.area", CategoryField: "$.categories", EpisodesPath: "$.data.episodes", IsBuiltin: 1, Enabled: 1, Priority: 60},
+	{SiteCode: "youku", SiteName: "优酷", SiteDomain: `(v\.|www\.)youku\.com`, NameField: "$.title", CoverField: "$.poster", YearField: "$.year", CategoryField: "$.showCategory", EpisodesPath: "$.episodes", IsBuiltin: 1, Enabled: 1, Priority: 50},
+	{SiteCode: "mgtv", SiteName: "芒果TV", SiteDomain: `(www\.|h5\.)mgtv\.com`, NameField: "$.vod_name", CoverField: "$.img", EpisodesPath: "$.data.episodes", IsBuiltin: 1, Enabled: 1, Priority: 40},
+	{SiteCode: "sohu", SiteName: "搜狐视频", SiteDomain: `tv\.sohu\.com`, NameField: "$.video_name", CoverField: "$.pic", EpisodesPath: "$.episodes", IsBuiltin: 1, Enabled: 1, Priority: 30},
+	{SiteCode: "migu", SiteName: "咪咕视频", SiteDomain: `www\.miguvideo\.com`, NameField: "$.title", CoverField: "$.img", EpisodesPath: "$.episodes", IsBuiltin: 1, Enabled: 1, Priority: 20},
+	{SiteCode: "bilibili", SiteName: "哔哩哔哩", SiteDomain: `(www\.|m\.)bilibili\.com`, NameField: "$.title", CoverField: "$.pic", YearField: "$.pubdate", CategoryField: "$.tname", EpisodesPath: "$.epList", IsBuiltin: 1, Enabled: 1, Priority: 10},
+}
+
+// SeedSiteMappings 首次运行时插入七大站预置映射（幂等：已有则不重复插入）
+func SeedSiteMappings(db *gorm.DB) {
+	var m SiteMapping
+	if db.First(&m).Error == nil {
+		return // 已有数据，不重复插入
+	}
+	for i := range builtinSiteMappings {
+		_ = db.Create(&builtinSiteMappings[i])
+	}
+}
+
 // AutoMigrate 自动建表/迁移
 func AutoMigrate(db interface {
 	AutoMigrate(dst ...interface{}) error
@@ -82,5 +154,7 @@ func AutoMigrate(db interface {
 		&Episode{},
 		&Source{},
 		&ExtractRule{},
+		&FrontendSetting{},
+		&SiteMapping{},
 	)
 }

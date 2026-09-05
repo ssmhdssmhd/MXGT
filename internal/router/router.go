@@ -11,6 +11,7 @@ import (
 	"github.com/ssmhdssmhd/MXGT/internal/config"
 	"github.com/ssmhdssmhd/MXGT/internal/handler"
 	mw "github.com/ssmhdssmhd/MXGT/internal/middleware"
+	"github.com/ssmhdssmhd/MXGT/internal/models"
 	"github.com/ssmhdssmhd/MXGT/internal/service"
 	"github.com/ssmhdssmhd/MXGT/web"
 	"gorm.io/gorm"
@@ -47,6 +48,8 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	rules := handler.NewRulesHandler(db)
 	sources := handler.NewSourcesHandler(db)
 	syncSvc := service.NewSyncService(db)
+	settings := handler.NewSettingsHandler(db)
+	mappings := handler.NewMappingsHandler(db)
 
 	e.POST("/admin/login", admin.Login)
 	adminGroup := e.Group("/admin", mw.JWTAuth)
@@ -64,10 +67,39 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	// 采集同步（多源采集 → 匹配 → 入库）
 	adminGroup.POST("/sync", handler.NewSyncHandler(syncSvc).Sync)
 
+	// 前端设置（单行表：播放页伪装路径 / 参数别名 / 皮肤等）
+	adminGroup.GET("/settings", settings.Get)
+	adminGroup.PUT("/settings", settings.Update)
+
+	// 站点映射（七大站预置 + 自定义）
+	adminGroup.GET("/mappings", mappings.List)
+	adminGroup.POST("/mappings", mappings.Create)
+	adminGroup.PUT("/mappings/:id", mappings.Update)
+	adminGroup.DELETE("/mappings/:id", mappings.Delete)
+	adminGroup.POST("/mapping/test", mappings.Test)
+
+	// 公开：播放页前端设置（播放页读取，无需登录）
+	e.GET("/api/settings", settings.PublicGet)
+
 	// 静态资源（go:embed 内嵌播放页，单文件运行）
 	// 注意：/api/* 精确路由优先于 /* 静态通配
 	if sub, err := fs.Sub(web.PlayerFS, "player"); err == nil {
 		e.StaticFS("/", sub)
+
+		// 伪装路径动态注册：从 frontend_settings 读取 play_path（如 /mx.php /play.php）
+		var fsSetting models.FrontendSetting
+		if db.First(&fsSetting, 1).Error == nil &&
+			fsSetting.PlayPath != "" && fsSetting.PlayPath != "/" && fsSetting.PlayPath != "/index.html" {
+			path := fsSetting.PlayPath
+			e.GET(path, func(c echo.Context) error {
+				data, err := fs.ReadFile(sub, "index.html")
+				if err != nil {
+					return c.String(http.StatusNotFound, "播放页不存在")
+				}
+				c.Response().Header().Set(echo.HeaderContentType, "text/html; charset=utf-8")
+				return c.String(http.StatusOK, string(data))
+			})
+		}
 	}
 
 	return e

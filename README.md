@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.10
+> 版本：v0.0.11
 
 ## ✨ 特性
 
@@ -10,6 +10,8 @@
 - 🔀 **多提取器**：`jsonpath` / `regex` / `custom` 接口化注册，新增提取器只需实现 `Extractor` 接口
 - 📡 **多源采集器**：`api` / `html` / `custom` 采集器接口化注册，支持**对接多个采集源**；`POST /admin/sync` 一键采集 → 剧名模糊匹配 → 自动合并入库
 - 🍎 **苹果 CMS v10 对接**：`/api.php/provide/vod/` 输出标准 CMS 采集接口（list / detail / search / play），多线路自动用 `$$$` 分隔
+- 🎭 **前端设置伪装路径**：单行表配置播放页入口路径（如 `/mx.php`）与参数别名，后端动态注册伪装路由
+- 🗺️ **视频抓取映射**：预置腾讯/爱奇艺/优酷/芒果/搜狐/咪咕/B站七大站字段映射，JSONPath 提取可后台测试
 - 🎯 **剧名匹配**：Levenshtein 相似度 + 别名表 + 年份/标点规范化；多源同剧自动合并到同一 vod，集数按来源区分
 - 📦 **多存储**：数据库支持 SQLite（默认零配置）/ MySQL；缓存支持内存（默认）/ Redis，接口化可扩展
 - 🔐 **管理后台**：JWT 登录 + 解析规则 CRUD + 采集源管理 CRUD（后台配置即可接入新源站）
@@ -69,6 +71,14 @@ docker run -p 8080:8080 mxgt
 | PUT | `/admin/sources/:id` | 更新采集源 | JWT |
 | DELETE | `/admin/sources/:id` | 删除采集源 | JWT |
 | POST | `/admin/sync` | 触发多源采集→匹配→入库 | JWT |
+| GET | `/admin/settings` | 前端设置读取（伪装路径等） | JWT |
+| PUT | `/admin/settings` | 前端设置更新（伪装路径/参数别名/皮肤） | JWT |
+| GET | `/api/settings` | 前端设置公开读取（播放页用） | 无 |
+| GET | `/admin/mappings` | 站点映射列表（七大站预置+自定义） | JWT |
+| POST | `/admin/mappings` | 新增自定义站点映射 | JWT |
+| PUT | `/admin/mappings/:id` | 更新站点映射 | JWT |
+| DELETE | `/admin/mappings/:id` | 删除站点映射（预置不可删） | JWT |
+| POST | `/admin/mapping/test` | 测试 JSONPath 字段映射提取 | JWT |
 | GET | `/api.php/provide/vod/?ac=list` | 苹果 CMS v10 分类列表 | 无 |
 | GET | `/api.php/provide/vod/?ac=detail&ids=1` | 苹果 CMS v10 详情 | 无 |
 | GET | `/api.php/provide/vod/?ac=search&wd=关键词` | 苹果 CMS v10 搜索 | 无 |
@@ -267,6 +277,12 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.11
+- 新增：🎭 前端设置伪装路径——frontend_settings 单行表（play_path / url_param / 参数别名 / 皮肤 / 备案号），后端动态注册伪装路由（如 `/mx.php`），默认 `/` 与伪装路径同时可用
+- 新增：🗺️ 视频抓取映射——site_mappings 表 + 腾讯/爱奇艺/优酷/芒果/搜狐/咪咕/B站七大站预置数据
+- 新增：`POST /admin/mapping/test` 字段映射 JSONPath 提取测试接口
+- 新增：`GET/PUT /admin/settings` 与公开 `GET /api/settings`
 
 ### v0.0.10
 - 修复：移除不支持的 windows/386（modernc.org/sqlite 不支持 32 位 Windows），云端编译矩阵全部平台编译成功

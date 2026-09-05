@@ -151,4 +151,4 @@ func hashURL(url string) string {
 }
 
 // version 程序版本（与文档版本一致，由构建时 ldflags 覆盖）
-var version = "v0.0.10"
+var version = "v0.0.11"

@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.10
+> 版本：v0.0.11
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions（云端编译）
 > 分发策略：GitHub Actions 云端编译多平台 Go 可执行文件 → 单文件免配置运行 → 更新只替换执行文件
 
@@ -1857,7 +1857,9 @@ GET  /admin/update/logs         → 更新日志
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.10 修复：移除不支持的 windows/386（modernc.org/sqlite 不支持 32 位 Windows），云端编译矩阵全部平台编译成功。*
+*本文档随代码迭代同步更新。版本 v0.0.11 新增：🎭 M8 前端设置 & 视频抓取映射已落地——frontend_settings 单行表（伪装路径 play_path / 参数别名 / 皮肤 / 备案号）CRUD + 后端动态注册伪装路由（如 /mx.php，默认 / 同时可用）、site_mappings 站点映射表 + 腾讯/爱奇艺/优酷/芒果/搜狐/咪咕/B站七大站预置数据、POST /admin/mapping/test 字段映射 JSONPath 提取测试接口、公开 GET /api/settings。*
+
+*前一版本 v0.0.10 修复：移除不支持的 windows/386（modernc.org/sqlite 不支持 32 位 Windows），云端编译矩阵全部平台编译成功。*
 
 *前一版本 v0.0.9 新增：☁️ 云端编译矩阵扩展至全部主流平台/框架——Linux（amd64/arm64/386/armv7）+ Windows（amd64/arm64）+ macOS（amd64/arm64）+ FreeBSD（amd64），Release 打包改为动态遍历自动生成 zip 与校验和。*
 
