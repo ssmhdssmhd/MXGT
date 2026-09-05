@@ -119,6 +119,9 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	adminGroup.POST("/update/download", updater.Download)
 	adminGroup.GET("/update/logs", updater.Logs)
 
+	// 影片管理（列表 / 搜索 / 分页）
+	adminGroup.GET("/vods", handler.NewVodsHandler(db).List)
+
 	// 管理后台 UI：/admin-ui → admin/index.html（独立前缀，避免与 /admin API 冲突）
 	e.GET("/admin-ui", func(c echo.Context) error {
 		data, err := fs.ReadFile(web.AdminFS, "admin/index.html")

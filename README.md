@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.16
+> 版本：v0.0.17
 
 ## ✨ 特性
 
@@ -18,6 +18,7 @@
 - 🧠 **匹配策略**：AI/规则双通道（rule / ai / auto）可配回退与相似度阈值；支持直接资源走去插播决策
 - 🔌 **调用 Pipeline**：链式串联多节点（proxy / 去插播 / 去广告 / 自定义 HTTP），支持排序、独立启停、三种回退策略与链路测试
 - 🔄 **自动更新**：GitHub 多镜像并发测速选最快源，检查更新（semver 对比）+ 一键下载安装（备份旧版 / 保留配置），更新日志记录
+- 🖥️ **管理后台 SPA**：11 个模块侧边栏单页（仪表盘 / 前端 / 分析 / AI / 匹配 / 调用 / 映射 / 规则 / 影片 / 更新 / 管理员），全部对接后端接口
 - 📦 **多存储**：数据库支持 SQLite（默认零配置）/ MySQL；缓存支持内存（默认）/ Redis，接口化可扩展
 - 🔐 **管理后台**：JWT 登录 + 解析规则 CRUD + 采集源管理 CRUD（后台配置即可接入新源站）
 - 🔌 **跨域 / 防盗链**：Echo CORS + `/api/proxy/stream` 代理转发（带 Referer，支持 Range 拖动进度条）
@@ -110,7 +111,8 @@ docker compose down           # 停止
 | POST | `/admin/update/check` | 检查远端最新版本（GitHub API 对比） | JWT |
 | POST | `/admin/update/download` | 一键下载并替换可执行文件（备份旧版） | JWT |
 | GET | `/admin/update/logs` | 最近更新日志 | JWT |
-| GET | `/admin-ui` | 管理后台仪表盘前端（ECharts） | - |
+| GET | `/admin/vods` | 影片列表（分页/搜索） | JWT |
+| GET | `/admin-ui` | 管理后台 SPA（11 模块侧边栏） | - |
 | GET | `/api.php/provide/vod/?ac=list` | 苹果 CMS v10 分类列表 | 无 |
 | GET | `/api.php/provide/vod/?ac=detail&ids=1` | 苹果 CMS v10 详情 | 无 |
 | GET | `/api.php/provide/vod/?ac=search&wd=关键词` | 苹果 CMS v10 搜索 | 无 |
@@ -309,6 +311,10 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.17
+- 新增：🗂️ M15 管理后台侧边栏前端——11 模块 SPA（仪表盘 / 前端设置 / 分析设置 / AI 设置 / 匹配设置 / 调用设置 / 映射设置 / 解析规则 / 影片管理 / 更新设置 / 管理员），全量对接后端接口
+- 新增：`GET /admin/vods` 影片列表接口（分页/搜索）
 
 ### v0.0.16
 - 新增：🔄 M14 更新设置——internal/updater（semver 版本比较 v0.0.99→v0.1.0 / 镜像并发测速选最快 / GitHub API 检查更新 / 公告解析 / 下载→备份→覆盖）

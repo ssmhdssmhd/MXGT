@@ -3,162 +3,353 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MXGT 仪表盘</title>
+<title>MXGT 管理后台</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif; background:#0f172a; color:#e2e8f0; }
-  header { padding:18px 24px; background:#1e293b; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #334155; }
-  header h1 { font-size:20px; color:#38bdf8; }
-  #loginBox { display:flex; gap:8px; align-items:center; }
-  #loginBox input { padding:6px 10px; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; }
-  button { padding:6px 14px; border-radius:6px; border:none; background:#38bdf8; color:#0f172a; font-weight:600; cursor:pointer; }
-  button:hover { background:#0ea5e9; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; padding:20px 24px; }
-  .card { background:#1e293b; border:1px solid #334155; border-radius:10px; padding:16px; }
-  .card .num { font-size:28px; font-weight:700; color:#38bdf8; margin-top:6px; }
-  .card .label { color:#94a3b8; font-size:13px; }
-  .charts { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:0 24px 20px; }
-  .chart { background:#1e293b; border:1px solid #334155; border-radius:10px; padding:14px; height:320px; }
-  .chart h3 { font-size:14px; color:#94a3b8; margin-bottom:8px; }
-  table { width:100%; border-collapse:collapse; }
-  th,td { padding:8px 10px; text-align:left; font-size:13px; border-bottom:1px solid #334155; }
-  th { color:#94a3b8; font-weight:500; }
-  .logs { padding:0 24px 30px; }
-  .logs h3 { font-size:15px; color:#94a3b8; margin-bottom:10px; }
-  .ok { color:#4ade80; } .fail { color:#f87171; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;background:#0f172a;color:#e2e8f0;display:flex}
+#sbar{width:210px;min-height:100vh;background:#0b1220;border-right:1px solid #1e293b;position:fixed;top:0;bottom:0;overflow-y:auto}
+#sbar .brand{padding:18px;font-size:18px;font-weight:700;color:#38bdf8;border-bottom:1px solid #1e293b}
+#sbar nav a{display:flex;align-items:center;gap:10px;padding:12px 18px;color:#94a3b8;text-decoration:none;font-size:14px;border-left:3px solid transparent}
+#sbar nav a:hover{background:#1e293b;color:#e2e8f0}
+#sbar nav a.active{background:#1e293b;color:#38bdf8;border-left-color:#38bdf8}
+#main{flex:1;margin-left:210px;padding:20px 24px;min-width:0}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+header h1{font-size:18px;color:#38bdf8}
+#loginBox{display:flex;gap:8px;align-items:center}
+input,select,textarea{padding:6px 10px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:13px}
+input:focus,select:focus,textarea:focus{outline:2px solid #38bdf8}
+label{display:block;font-size:12px;color:#94a3b8;margin:8px 0 4px}
+button{padding:6px 14px;border-radius:6px;border:none;background:#38bdf8;color:#0f172a;font-weight:600;cursor:pointer;font-size:13px}
+button:hover{background:#0ea5e9}
+button.ghost{background:#1e293b;color:#94a3b8;border:1px solid #334155}
+button.danger{background:#f87171;color:#0f172a}
+button.sm{padding:3px 9px;font-size:12px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:16px}
+.card h3{font-size:14px;color:#94a3b8;margin-bottom:10px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #1e293b}
+th{color:#94a3b8;font-weight:500;white-space:nowrap}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.grid3 .card .num{font-size:26px;font-weight:700;color:#38bdf8;margin-top:6px}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.chart{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;height:300px}
+.chart h3{font-size:14px;color:#94a3b8;margin-bottom:8px}
+.ok{color:#4ade80}.fail{color:#f87171}.dim{color:#64748b}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+#content{display:block}
+.nav-hint{color:#38bdf8;cursor:pointer;font-size:13px;margin-left:10px}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;background:#1e293b;border:1px solid #334155}
+.pill.on{background:#164e3a;color:#4ade80;border-color:#166534}
+.pill.off{background:#4c1d1d;color:#f87171;border-color:#7f1d1d}
 </style>
 </head>
 <body>
-<header>
-  <h1>MXGT 仪表盘</h1>
-  <div id="loginBox">
-    <input id="user" placeholder="用户名" value="admin">
-    <input id="pass" type="password" placeholder="密码" value="admin123">
-    <button onclick="doLogin()">登录</button>
-  </div>
-</header>
-
-<div class="grid" id="cards"></div>
-<div class="charts">
-  <div class="chart"><h3>近 7 天调用趋势</h3><div id="trendChart" style="height:280px"></div></div>
-  <div class="chart"><h3>解析规则 TOP</h3><div id="rulesChart" style="height:280px"></div></div>
-  <div class="chart"><h3>采集源入库 TOP</h3><div id="sourcesChart" style="height:280px"></div></div>
-  <div class="chart"><h3>今日调用（条/小时）</h3><div id="hourChart" style="height:280px"></div></div>
+<div id="sbar">
+  <div class="brand">MXGT 后台</div>
+  <nav id="nav"></nav>
 </div>
-<div class="logs">
-  <h3>最近调用记录</h3>
-  <table id="logTable">
-    <thead><tr><th>ID</th><th>接口</th><th>规则</th><th>状态</th><th>耗时(ms)</th><th>缓存</th><th>IP</th><th>时间</th></tr></thead>
-    <tbody></tbody>
-  </table>
+<div id="main">
+  <header>
+    <h1 id="pageTitle">仪表盘</h1>
+    <div id="loginBox">
+      <span id="userBox" class="dim"></span>
+      <input id="user" placeholder="用户名" value="admin" size="8">
+      <input id="pass" type="password" placeholder="密码" value="admin123" size="10">
+      <button onclick="doLogin()">登录</button>
+    </div>
+  </header>
+  <div id="content"></div>
 </div>
 
 <script>
 let TOKEN = localStorage.getItem('mxgt_token') || '';
-let user = localStorage.getItem('mxgt_user') || 'admin';
+const MENU = [
+  {id:'dash',   label:'仪表盘',      icon:'📊'},
+  {id:'front',  label:'前端设置',    icon:'🎭'},
+  {id:'analysis',label:'分析设置',   icon:'🧠'},
+  {id:'ai',     label:'AI 设置',     icon:'🤖'},
+  {id:'matching',label:'匹配设置',   icon:'🎯'},
+  {id:'chaining',label:'调用设置',   icon:'🔌'},
+  {id:'mapping', label:'映射设置',   icon:'🗺️'},
+  {id:'rules',  label:'解析规则',    icon:'⚙️'},
+  {id:'vods',   label:'影片管理',    icon:'📼'},
+  {id:'updater',label:'更新设置',    icon:'🔄'},
+  {id:'admin',  label:'管理员',      icon:'🔑'},
+];
+let CURRENT={id:'dash'};
+let E = Object.create(null); // 图表实例缓存
 
-async function api(path, method='GET', body=null){
-  const opt = { method, headers:{'Authorization':'Bearer '+TOKEN} };
-  if(body){ opt.headers['Content-Type']='application/json'; opt.body=JSON.stringify(body); }
-  const r = await fetch(path, opt);
-  return r.json();
+// ---------- 基础工具 ----------
+async function api(path,method='GET',body=null){
+  const opt={method,headers:{'Authorization':'Bearer '+TOKEN}};
+  if(body){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(body);}
+  const r=await fetch(path,opt);
+  try{return await r.json();}catch(e){return {code:0,msg:'网络错误'};}
 }
-
 async function doLogin(){
-  const r = await fetch('/admin/login', {method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({username:document.getElementById('user').value, password:document.getElementById('pass').value})});
-  const d = await r.json();
-  if(d.code===1){ TOKEN=d.data.token; localStorage.setItem('mxgt_token',TOKEN); loadAll(); }
+  const r=await fetch('/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:document.getElementById('user').value,password:document.getElementById('pass').value})});
+  const d=await r.json();
+  if(d.code===1){TOKEN=d.data.token;localStorage.setItem('mxgt_token',TOKEN);show(CURRENT.id);}
   else alert(d.msg||'登录失败');
 }
+const h=document.getElementById.bind(document);
+function el(tag,attrs){const n=document.createElement(tag);Object.assign(n,attrs||{});return n;}
+function btn(label,cls,on){const b=el('button',{className:cls,textContent:label});b.onclick=on;return b;}
+function txt(text){const p=el('p',{textContent:text});p.style.cssText='color:#94a3b8;font-size:13px;padding:8px 0';return p;}
+function msgOk(r){return r&&r.code===1;}
 
-function card(label,num){ return `<div class="card"><div class="label">${label}</div><div class="num">${num}</div></div>`; }
-
-async function loadOverview(){
-  const d = await api('/admin/stats/overview');
-  if(d.code!==1) return false;
-  const o = d.data;
-  document.getElementById('cards').innerHTML =
-    card('今日调用', o.today_calls) +
-    card('累计调用', o.total_calls) +
-    card('成功率', o.success_rate.toFixed(1)+'%') +
-    card('缓存命中', o.cache_hit_rate.toFixed(1)+'%') +
-    card('活跃规则', o.active_rules) +
-    card('活跃采集源', o.active_sources) +
-    card('影片', o.vods) + card('集数', o.episodes);
-  return true;
+// ---------- 渲染 ----------
+function drawNav(){
+  h('nav').innerHTML='';
+  MENU.forEach(m=>{
+    const a=el('a',{href:'#',className:m.id===CURRENT.id?'active':'',innerHTML:`${m.icon} ${m.label}`});
+    a.onclick=e=>{e.preventDefault();show(m.id);};
+    h('nav').appendChild(a);
+  });
+}
+function show(id){
+  const m=MENU.find(x=>x.id===id);if(!m)return;
+  CURRENT.id=id;h('pageTitle').textContent=m.label;drawNav();
+  h('userBox').textContent=TOKEN?'已登录':'未登录';
+  content().innerHTML='';
+  const fn=loaders[id];if(fn)fn();
+}
+const content=()=>h('content');
+function tableCard(title,cols,rows){
+  const c=el('div',{className:'card'});
+  const th=el('h3',{textContent:title});c.appendChild(th);
+  const t=el('table');const thead=el('thead');const tr=el('tr');
+  cols.forEach(x=>{const thd=el('th',{textContent:x});tr.appendChild(thd);});thead.appendChild(tr);t.appendChild(thead);
+  const tb=el('tbody');rows.forEach(r=>{const trd=el('tr');r.forEach(cd=>{const td=el('td');td.innerHTML=cd;trd.appendChild(td);});tb.appendChild(trd);});t.appendChild(tb);
+  c.appendChild(t);return c;
 }
 
-async function loadTrends(){
-  const d = await api('/admin/stats/trends?range=7');
-  if(d.code!==1) return;
-  const dates = d.data.map(x=>x.date);
-  const calls = d.data.map(x=>x.calls);
-  const avg = d.data.map(x=>x.avg_ms);
-  const t = echarts.init(document.getElementById('trendChart'));
-  t.setOption({tooltip:{trigger:'axis'}, legend:{data:['调用量','平均耗时'],textStyle:{color:'#94a3b8'}},
-    grid:{left:50,right:50}, xAxis:{type:'category',data:dates,axisLabel:{color:'#94a3b8'}},
-    yAxis:[{type:'value',axisLabel:{color:'#94a3b8'}},{type:'value',axisLabel:{color:'#94a3b8'}}],
-    series:[{name:'调用量',type:'bar',data:calls,itemStyle:{color:'#38bdf8'}},
-            {name:'平均耗时',type:'line',yAxisIndex:1,data:avg,itemStyle:{color:'#fbbf24'}}]});
-  window.addEventListener('resize',()=>t.resize());
+// ---------- 模块加载器 ----------
+const loaders={
+  // 1 仪表盘
+  dash:function(){
+    const ct=content();
+    ct.appendChild(el('div',{id:'cards',className:'grid3'}));
+    const ch=el('div',{className:'charts'});
+    [['trendChart','近7天调用趋势'],['rulesChart','解析规则 TOP'],['sourcesChart','采集源入库 TOP'],['hourChart','今日调用（小时）']].forEach(x=>{
+      const d=el('div',{className:'chart'});const hh=el('h3',{textContent:x[1]});const d2=el('div',{style:'height:230px',id:x[0]});d.appendChild(hh);d.appendChild(d2);ch.appendChild(d);});
+    ct.appendChild(ch);
+    ct.appendChild(tableCard('最近调用记录',['ID','接口','规则','状态','耗时(ms)','缓存','IP','时间'],[]));
+    if(!TOKEN){alert('请先登录');return;}
+    (async()=>{
+      const o=await api('/admin/stats/overview');
+      if(o.code===1){const d=o.data;
+        const c=el('div');c.style.display='flex';c.style.flexWrap='wrap';c.style.gap='14px';
+        const k=[['今日调用',d.today_calls],['累计调用',d.total_calls],['成功率',d.success_rate.toFixed?d.success_rate.toFixed(1)+'%':(d.success_rate||0)+'%'],['缓存命中',d.cache_hit_rate.toFixed?d.cache_hit_rate.toFixed(1)+'%':(d.cache_hit_rate||0)+'%'],['活跃规则',d.active_rules],['活跃源',d.active_sources],['影片',d.vods],['集数',d.episodes]];
+        k.forEach(x=>{const card=el('div',{className:'card'});card.innerHTML=`<div class="label" style="color:#94a3b8;font-size:12px">${x[0]}</div><div class="num">${x[1]}</div>`;c.appendChild(card);});
+        h('cards').innerHTML='';h('cards').appendChild(c);
+      }
+      const tr=await api('/admin/stats/trends?range=7');
+      if(tr.code===1){echart('trendChart',{x:tr.data.map(d=>d.date),s1:tr.data.map(d=>d.calls),s2:tr.data.map(d=>d.avg_ms)},'bar');}
+      const rl=await api('/admin/stats/rules-top?limit=10');
+      if(rl.code===1)echart('rulesChart',{x:rl.data.map(d=>d.name||'#'+d.rule_id),s1:rl.data.map(d=>d.calls)},'h');
+      const sr=await api('/admin/stats/sources-top?limit=10');
+      if(sr.code===1)echart('sourcesChart',{x:sr.data.map(d=>d.source_name),s1:sr.data.map(d=>d.episodes)},'h');
+      const hh=await api('/admin/stats/trends?range=1');
+      if(hh.code===1&&hh.data[0])echart('hourChart',{x:['今日'],s1:[hh.data[0].calls]},'bar');
+      const lg=await api('/admin/call-logs?page=1&size=12');
+      if(lg.code===1){const rows=lg.data.list.map(l=>`<tr><td>${l.id}</td><td>${l.api}</td><td>${l.rule_id||'-'}</td><td class="${l.call_status===1?'ok':'fail'}">${l.call_status===1?'成功':'失败'}</td><td>${l.duration_ms}</td><td>${l.cache_hit===1?'是':'否'}</td><td>${l.client_ip||'-'}</td><td>${(l.created_at||'').replace('T',' ').slice(0,19)}</td></tr>`).join('');
+        content().lastChild.querySelector('tbody').innerHTML=rows; }
+    })();
+  },
+  // 2 前端设置
+  front:function(){
+    content().innerHTML='';
+    (async()=>{
+      const d=await api('/admin/settings');if(d.code!==1){alert('请先登录');return;}
+      const s=d.data;
+      const f=(label,val)=>`<div><label>${label}</label><input class="f" data-k="${label}" value="${(val==null?'':val)}"></div>`;
+      const card=el('div',{className:'card'});
+      card.innerHTML=`<h3>前端设置</h3>
+        ${f('play_path',s.play_path)}${f('url_param',s.url_param)}${f('alias_params',s.alias_params)}
+        ${f('skin',s.skin)}${f('player_type',s.player_type)}${f('api_base',s.api_base)}${f('footer_text',s.footer_text)}
+        ${f('beian',s.beian)}${f_s('cross_origin',s.cross_origin)}${f('cache_ttl',s.cache_ttl)}`;
+      card.appendChild(btn('保存','',async()=>{const body={};card.querySelectorAll('.f').forEach(i=>{const k=i.dataset.k;body[k]=isNaN(+i.value)?i.value:+i.value;});const r=await api('/admin/settings','PUT',body);alert(msgOk(r)?'已保存':'保存失败');}));
+      content().appendChild(card);
+      function f_s(k,v){return `<div><label>${k}</label><select class="f" data-k="${k}"><option value="1" ${v===1?'selected':''}>开</option><option value="0" ${v===0?'selected':''}>关</option></select></div>`;}
+    })();
+  },
+  // 3 分析设置
+  analysis:function(){
+    content().innerHTML='';
+    (async()=>{
+      const d=await api('/admin/analysis/settings');if(d.code!==1){alert('请先登录');return;}
+      const s=d.data,card=el('div',{className:'card'});
+      card.innerHTML=`<h3>分析引擎设置</h3>
+      <div><label>启用</label><select id="a_enabled"><option value="1" ${s.enabled===1?'selected':''}>开</option><option value="0" ${s.enabled===0?'selected':''}>关</option></select></div>
+      <div><label>优先级</label><select id="a_priority">${['official_first','direct_first','ai_first'].map(o=>`<option ${s.priority===o?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div><label>未知类型处理</label><select id="a_unknown">${['reject','direct','rule'].map(o=>`<option ${s.unknown_mode===o?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div><label>AI 辅助分析</label><select id="a_ai_enabled"><option value="1" ${s.ai_enabled===1?'selected':''}>开</option><option value="0" ${s.ai_enabled===0?'selected':''}>关</option></select></div>
+      <div><label>AI Provider</label><input id="a_provider" value="${s.ai_provider||''}"></div>
+      <div><label>AI API Key</label><input id="a_apikey" type="password" value="${s.ai_api_key||''}"></div>
+      <div><label>AI Endpoint</label><input id="a_endpoint" value="${s.ai_endpoint||''}"></div>
+      <div class="row" style="margin-top:12px">
+        <button onclick="saveAnalysis()">保存</button>
+        <input id="t_url" placeholder="粘贴 URL 一键测试" style="flex:1">
+        <button class="ghost" onclick="testAnalysis()">测试</button>
+        <span id="t_res" class="dim"></span>
+      </div>`;
+      content().appendChild(card);
+    })();
+    window.saveAnalysis=async()=>{const body={enabled:+h('a_enabled').value,priority:h('a_priority').value,unknown_mode:h('a_unknown').value,ai_enabled:+h('a_ai_enabled').value,ai_provider:h('a_provider').value,ai_api_key:h('a_apikey').value,ai_endpoint:h('a_endpoint').value};const r=await api('/admin/analysis/settings','PUT',body);alert(msgOk(r)?'已保存':'保存失败');};
+    window.testAnalysis=async()=>{const r=await api('/admin/analysis/test','POST',{url:h('t_url').value});h('t_res').textContent=r.code===1?JSON.stringify(r.data):(r.msg||'失败');};
+  },
+  // 4 AI 设置（M16 落地）
+  ai:function(){content().innerHTML='';const c=el('div',{className:'card'});c.innerHTML='<h3>🤖 AI 智能视频分析</h3><p class="dim" style="padding:12px 0">该模块为 M16 里程碑内容（m3u8 分片解析、MD5 指纹、去广告/去插播、内置播放器），将在 v0.0.17+ 版本提供。';content().appendChild(c);},
+  // 5 匹配设置
+  matching:function(){
+    content().innerHTML='';
+    (async()=>{const d=await api('/admin/matching/settings');if(d.code!==1){alert('请先登录');return;}const s=d.data;
+      const card=el('div',{className:'card'});
+      card.innerHTML=`<h3>匹配策略设置（AI/规则双通道）</h3>
+      <div><label>模式</label><select id="m_mode">${['rule','ai','auto'].map(o=>`<option ${s.mode===o?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div><label>回退通道</label><select id="m_fb">${['rule','ai'].map(o=>`<option ${s.fallback===o?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div><label>模糊匹配阈值</label><input id="m_th" type="number" value="${s.fuzzy_threshold}"></div>
+      <div><label>自动入库</label><select id="m_ac"><option value="1" ${s.auto_create===1?'selected':''}>开</option><option value="0" ${s.auto_create===0?'selected':''}>关</option></select></div>
+      <div><label>直接资源去插播</label><select id="m_da">${['none','skip_ad','block_ad'].map(o=>`<option ${s.direct_action===o?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div><label>AI 匹配启用</label><select id="m_aie"><option value="1" ${s.ai_enabled===1?'selected':''}>开</option><option value="0" ${s.ai_enabled===0?'selected':''}>关</option></select></div>
+      <div><label>AI Endpoint</label><input id="m_aep" value="${s.ai_endpoint||''}"></div>
+      <div><label>AI Key</label><input id="m_aek" type="password" value="${s.ai_api_key||''}"></div>
+      <div><label>AI Model</label><input id="m_aem" value="${s.ai_model||''}"></div>
+      <div class="row" style="margin-top:12px"><button onclick="saveMatch()">保存</button>
+        <input id="m_name" placeholder="测试匹配的剧名" style="flex:1">
+        <button class="ghost" onclick="testMatch()">测试匹配</button></div>
+      <pre id="m_res" style="margin-top:10px;font-size:12px;color:#94a3b8;overflow:auto"></pre>`;
+      content().appendChild(card);
+    })();
+    window.saveMatch=async()=>{const body={mode:h('m_mode').value,fallback:h('m_fb').value,fuzzy_threshold:+h('m_th').value,auto_create:+h('m_ac').value,direct_action:h('m_da').value,ai_enabled:+h('m_aie').value,ai_endpoint:h('m_aep').value,ai_api_key:h('m_aek').value,ai_model:h('m_aem').value};const r=await api('/admin/matching/settings','PUT',body);alert(msgOk(r)?'已保存':'保存失败');};
+    window.testMatch=async()=>{const r=await api('/admin/matching/test','POST',{name:h('m_name').value});h('m_res').textContent=r.code===1?JSON.stringify(r.data,null,2):(r.msg||'失败');};
+  },
+  // 6 调用设置
+  chaining:function(){ chainUI(); },
+  // 7 映射设置
+  mapping:function(){ mapUI(); },
+  // 8 解析规则
+  rules:function(){ rulesUI(); },
+  // 9 影片管理
+  vods:function(){ vodsUI(); },
+  // 10 更新设置
+  updater:function(){ updaterUI(); },
+  // 11 管理员
+  admin:function(){
+    content().innerHTML='';
+    (async()=>{const hh=await api('/api/health');
+      const c=el('div',{className:'card'});
+      c.innerHTML=`<h3>🔑 管理员</h3>
+      <p style="padding:6px 0">默认账号：admin / admin123（可用环境变量 MXGT_ADMIN_USER / MXGT_ADMIN_PASSWORD 覆盖）</p>
+      <p style="padding:6px 0;color:#94a3b8">系统状态：${hh.code===1?JSON.stringify(hh.data):'获取失败'}</p>
+      <div class="row" style="margin-top:8px"><button class="ghost" onclick="delToken()">退出登录</button></div>`;
+      content().appendChild(c);
+      content().appendChild(tableCard('最近调用日志',['接口','状态','耗时','时间'],[]));
+      const lg=await api('/admin/call-logs?page=1&size=10');
+      if(lg.code===1)content().lastChild.querySelector('tbody').innerHTML=lg.data.list.map(l=>`<tr><td>${l.api}</td><td class="${l.call_status===1?'ok':'fail'}">${l.call_status===1?'成功':'失败'}</td><td>${l.duration_ms}</td><td>${(l.created_at||'').replace('T',' ').slice(0,19)}</td></tr>`).join('');
+    })();
+    window.delToken=()=>{localStorage.removeItem('mxgt_token');TOKEN='';alert('已退出');show('dash');};
+  },
+};
+
+function echart(eleId,o,type){
+  if(E[eleId]){E[eleId].dispose();}
+  const c=echarts.init(h(eleId));E[eleId]=c;
+  const base={tooltip:{trigger:'axis'},grid:{left:50,right:50,top:20,bottom:30}};
+  let opt;
+  if(type==='h'){
+    opt={...base,...{grid:{left:140,right:30},xAxis:{type:'value',axisLabel:{color:'#94a3b8'}},yAxis:{type:'category',data:o.x.slice().reverse(),axisLabel:{color:'#94a3b8'}},series:[{type:'bar',data:o.s1.slice().reverse(),itemStyle:{color:'#34d399'}}]}};
+  }else if(type==='line'){
+    opt={...base,...{legend:{textStyle:{color:'#94a3b8'}},xAxis:{type:'category',data:o.x,axisLabel:{color:'#94a3b8'}},yAxis:{type:'value',axisLabel:{color:'#94a3b8'}},series:[{type:'line',data:o.s1,itemStyle:{color:'#fbbf24'}}]}};
+  }else{
+    opt={...base,...{legend:{textStyle:{color:'#94a3b8'}},xAxis:{type:'category',data:o.x,axisLabel:{color:'#94a3b8'}},yAxis:{type:'value',axisLabel:{color:'#94a3b8'}},series:[{name:'调用量',type:'bar',data:o.s1,itemStyle:{color:'#38bdf8'}}]}};
+  }
+  c.setOption(opt);window.addEventListener('resize',()=>c.resize());
 }
 
-async function loadRules(){
-  const d = await api('/admin/stats/rules-top?limit=10');
-  if(d.code!==1) return;
-  const names = d.data.map(x=>x.name||('#'+x.rule_id));
-  const calls = d.data.map(x=>x.calls);
-  const r = echarts.init(document.getElementById('rulesChart'));
-  r.setOption({tooltip:{trigger:'axis'}, grid:{left:120,right:30},
-    xAxis:{type:'value',axisLabel:{color:'#94a3b8'}},
-    yAxis:{type:'category',data:names.reverse(),axisLabel:{color:'#94a3b8'}},
-    series:[{type:'bar',data:calls.reverse(),itemStyle:{color:'#34d399'}}]});
-  window.addEventListener('resize',()=>r.resize());
+// ---------- 调用设置 / 映射 / 规则 / 影片 / 更新 ----------
+function chainUI(){
+  content().innerHTML='';
+  const top=el('div',{className:'row'});
+  top.appendChild(btn('+ 新增节点','',()=>editchain(0)));
+  top.appendChild(btn('测试链路','ghost',async()=>{const r=await api('/admin/chain/test','POST',{input:prompt('输入 URL')||''});alert(r.code===1?JSON.stringify(r.data):(r.msg||'失败'));}));
+  content().appendChild(top);
+  (async()=>{
+    const r=await api('/admin/chain/nodes');if(r.code!==1){alert('请先登录');return;}
+    content().appendChild(tableCard('调用 Pipeline 节点（按顺序执行）',['ID','名称','类型','顺序','回退','状态','操作'],
+      r.data.map(n=>[n.id,n.name,n.node_type,n.order,n.fallback,`<span class="pill ${n.enabled===1?'on':'off'}">${n.enabled===1?'启用':'停用'}</span>`,
+        `<button class="sm" onclick="editchain(${n.id})">编辑</button>`])));
+    window.editchain=function(id){renderChainForm(id,r.data);};
+  })();
+}
+function renderChainForm(id,nodes){
+  const n=nodes.find(x=>x.id===id)||{name:'',node_type:'custom',endpoint:'',method:'GET',result_path:'',fallback:'skip',order:0,enabled:1};
+  const c=el('div',{className:'card'});
+  c.innerHTML=`<h3>${id?'编辑':'新增'}节点</h3>
+  <div><label>名称</label><input id="cn_name" value="${n.name}"></div>
+  <div><label>类型</label><select id="cn_type">${['custom','proxy','skip_ad','block_ad'].map(o=>`<option ${n.node_type===o?'selected':''}>${o}</option>`).join('')}</select></div>
+  <div><label>Endpoint（支持 {input_url}）</label><input id="cn_ep" value="${n.endpoint||''}"></div>
+  <div><label>Method</label><input id="cn_m" value="${n.method||'GET'}"></div>
+  <div><label>结果 JSONPath（如 $.data.url）</label><input id="cn_rp" value="${n.result_path||''}"></div>
+  <div><label>回退策略</label><select id="cn_fb">${['skip','abort','fallback'].map(o=>`<option ${n.fallback===o?'selected':''}>${o}</option>`).join('')}</select></div>
+  <div><label>回退地址（fallback 时用）</label><input id="cn_ft" value="${n.fallback_to||''}"></div>
+  <div><label>顺序</label><input id="cn_or" type="number" value="${n.order}"></div>
+  <div class="row" style="margin-top:10px"><button onclick="saveChain(${id})">保存</button><button class="ghost" onclick="chainUI()">取消</button></div>`;
+  content().innerHTML='';content().appendChild(c);
+  window.saveChain=async function(id){const body={name:h('cn_name').value,node_type:h('cn_type').value,endpoint:h('cn_ep').value,method:h('cn_m').value,result_path:h('cn_rp').value,fallback:h('cn_fb').value,fallback_to:h('cn_ft').value,order:+h('cn_or').value};
+    let r; if(id){r=await api('/admin/chain/nodes/'+id,'PUT',body);}else{r=await api('/admin/chain/nodes','POST',body);}alert(msgOk(r)?'已保存':'保存失败');chainUI();};
 }
 
-async function loadSources(){
-  const d = await api('/admin/stats/sources-top?limit=10');
-  if(d.code!==1) return;
-  const names = d.data.map(x=>x.source_name);
-  const eps = d.data.map(x=>x.episodes);
-  const s = echarts.init(document.getElementById('sourcesChart'));
-  s.setOption({tooltip:{trigger:'axis'}, grid:{left:120,right:30},
-    xAxis:{type:'value',axisLabel:{color:'#94a3b8'}},
-    yAxis:{type:'category',data:names.reverse(),axisLabel:{color:'#94a3b8'}},
-    series:[{type:'bar',data:eps.reverse(),itemStyle:{color:'#c084fc'}}]});
-  window.addEventListener('resize',()=>s.resize());
+function mapUI(){
+  content().innerHTML='';
+  (async()=>{const r=await api('/admin/mappings');if(r.code!==1){alert('请先登录');return;}
+    content().appendChild(tableCard('站点映射（预置七大站 + 自定义）',['ID','站点','域名正则','剧名路径','集数路径','预置','启用','操作'],
+      r.data.map(m=>[m.id,m.site_name,m.site_domain,m.name_field,m.episodes_path,(m.is_builtin===1?'是':'否'),`<span class="pill ${m.enabled===1?'on':'off'}">${m.enabled===1?'开':'关'}</span>`,`<button class="sm" onclick="editchain(${m.id})">编辑</button>`])));
+    window.editchain=function(){alert('映射详情编辑请通过 API 进行');};
+  })();
+}
+function rulesUI(){
+  content().innerHTML='';
+  (async()=>{const r=await api('/admin/rules');if(r.code!==1){alert('请先登录');return;}
+    content().appendChild(tableCard('解析规则（JSONPath / Regex / Custom）',['ID','名称','URL 正则','类型','链接方式','状态'],r.data.map(x=>[x.id,x.name,x.url_pattern,x.extractor_type,x.need_proxy===1?'代理':'直连',`<span class="pill ${x.enabled===1?'on':'off'}">${x.enabled===1?'启用':'停用'}</span>`])));
+  })();
+}
+function vodsUI(){
+  content().innerHTML='';
+  const row=el('div',{className:'row'});
+  const kw=el('input',{placeholder:'搜索剧名/别名'});row.appendChild(kw);row.appendChild(btn('搜索','ghost',()=>loadVods(kw.value)));
+  content().appendChild(row);
+  content().appendChild(el('div',{id:'vodTable'}));
+  loadVods('');
+  async function loadVods(k){const r=await api('/admin/vods?page=1&size=30&keyword='+encodeURIComponent(k));if(r.code!==1){alert('请先登录');return;}
+    h('vodTable').innerHTML='';
+    h('vodTable').appendChild(tableCard(`影片共 ${r.data.total} 部`,['ID','剧名','年份','分类','别名','状态'],r.data.items.map(v=>[v.id,v.name,v.year||'-',v.category||'-',v.alias||'-',`<span class="pill ${v.status===1?'on':'off'}">${v.status===1?'启用':'禁用'}</span>`])));
+  }
+}
+function updaterUI(){
+  content().innerHTML='';
+  const c=el('div',{className:'card'});
+  c.innerHTML=`<h3>更新设置</h3>
+  <div><label>GitHub 仓库</label><input id="up_repo" value="https://github.com/ssmhdssmhd/MXGT"></div>
+  <div><label>自动检查</label><select id="up_ac"><option value="1">开</option><option value="0">关</option></select></div>
+  <div class="row" style="margin-top:12px">
+    <button onclick="upCheck()">检查更新</button><button class="ghost" onclick="upSpeed()">测速镜像</button>
+    <button class="ghost" onclick="upDownload()">一键下载更新</button>
+  </div><pre id="up_res" style="margin-top:10px;font-size:12px;color:#94a3b8;overflow:auto"></pre>`;
+  content().appendChild(c);
+  (async()=>{const r=await api('/admin/update/config');if(r.code===1){h('up_repo').value=r.data.repo;h('up_ac').value=r.data.auto_check;}})();
+  window.upCheck=async()=>{const r=await api('/admin/update/check','POST',{});h('up_res').textContent=r.code===1?JSON.stringify(r.data,null,2):(r.msg||'失败');};
+  window.upSpeed=async()=>{h('up_res').textContent='测速中...';const r=await api('/admin/update/mirror-speed','POST',{});h('up_res').textContent=r.code===1?('最快源：'+r.data.fastest+'\n'+JSON.stringify(r.data.results,null,2)):(r.msg||'失败');};
+  window.upDownload=async()=>{const v=prompt('输入要更新到的版本号（如 v0.0.16）');if(!v)return;const r=await api('/admin/update/download','POST',{version:v,assets_url:'https://github.com/ssmhdssmhd/MXGT/releases/download/'+v});alert(r.code===1?r.data.message:(r.msg||'失败'));};
 }
 
-async function loadHour(){
-  const d = await api('/admin/stats/trends?range=1');
-  if(d.code!==1) return;
-  const h = echarts.init(document.getElementById('hourChart'));
-  h.setOption({tooltip:{trigger:'axis'}, xAxis:{type:'category',data:['今日'],axisLabel:{color:'#94a3b8'}},
-    yAxis:{type:'value',axisLabel:{color:'#94a3b8'}},
-    series:[{type:'bar',data:[d.data[0].calls],itemStyle:{color:'#38bdf8'}}]});
-  window.addEventListener('resize',()=>h.resize());
-}
-
-async function loadLogs(){
-  const d = await api('/admin/call-logs?page=1&size=20');
-  if(d.code!==1) return;
-  const rows = d.data.list.map(l=>`<tr>
-    <td>${l.id}</td><td>${l.api}</td><td>${l.rule_id||'-'}</td>
-    <td class="${l.call_status===1?'ok':'fail'}">${l.call_status===1?'成功':'失败'}</td>
-    <td>${l.duration_ms}</td><td>${l.cache_hit===1?'是':'否'}</td>
-    <td>${l.client_ip||'-'}</td><td>${(l.created_at||'').replace('T',' ').slice(0,19)}</td></tr>`).join('');
-  document.querySelector('#logTable tbody').innerHTML = rows;
-}
-
-async function loadAll(){
-  const okv = await loadOverview();
-  if(!okv){ alert('请先登录'); return; }
-  loadTrends(); loadRules(); loadSources(); loadHour(); loadLogs();
-}
-
-if(TOKEN){ loadAll(); } else { doLogin(); }
+// 初始化
+drawNav();
+show(CURRENT.id);
 </script>
 </body>
 </html>

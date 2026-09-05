@@ -102,4 +102,4 @@ func speedTest(ctx context.Context, url string, timeout time.Duration) SpeedResu
 }
 
 // Version 供 UA 使用（运行时由 handler 注入）
-var Version = "v0.0.16"
+var Version = "v0.0.17"
