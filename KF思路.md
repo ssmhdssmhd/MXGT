@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.17
+> 版本：v0.0.18
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions（云端编译）
 > 分发策略：GitHub Actions 云端编译多平台 Go 可执行文件 → 单文件免配置运行 → 更新只替换执行文件
 
@@ -1857,7 +1857,9 @@ GET  /admin/update/logs         → 更新日志
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.17 新增：🗂️ M15 管理后台侧边栏前端已落地——11 个模块单页应用（仪表盘 / 前端设置 / 分析设置 / AI 设置占位 / 匹配设置 / 调用设置 / 映射设置 / 解析规则 / 影片管理 / 更新设置 / 管理员），哈希导航 + 表单保存 + 表格 + ECharts 图表，全部对接既有后端接口；新增 GET /admin/vods 影片列表接口。*
+*本文档随代码迭代同步更新。版本 v0.0.18 新增：🤖 M16 AI 智能视频分析已落地——internal/ai（m3u8 解析→ts 分片、MD5 流式/指纹、ClassifyHeuristic 启发式判定、GenerateCleanM3U8 去广告） + ai_settings 单行表 + ad_fingerprints MD5 指纹库（O(1) 命中）+ ts_analysis_logs 分析日志，/admin/ai/settings · analyze · ts · result/m3u8 · fingerprints(import) · logs 接口，管理后台 AI 设置页已对接。*
+
+*前一版本 v0.0.17 新增：🗂️ M15 管理后台侧边栏前端已落地——11 个模块单页应用（仪表盘 / 前端设置 / 分析设置 / AI 设置占位 / 匹配设置 / 调用设置 / 映射设置 / 解析规则 / 影片管理 / 更新设置 / 管理员），哈希导航 + 表单保存 + 表格 + ECharts 图表，全部对接既有后端接口；新增 GET /admin/vods 影片列表接口。*
 
 *前一版本 v0.0.16 新增：🔄 M14 更新设置已落地——internal/updater（semver 版本比较 v0.0.99→v0.1.0 正确进位 / BenchmarkMirrors 并发测速 / CheckLatest 通过 GitHub API 对比版本 / ParseNotice 公告解析 / Install 下载→备份→覆盖，保留 config.yaml 与数据）、updater_config + update_logs 表、/admin/update/config · mirror-speed · check · download · logs 接口。*
 

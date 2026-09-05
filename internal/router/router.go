@@ -122,6 +122,17 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	// 影片管理（列表 / 搜索 / 分页）
 	adminGroup.GET("/vods", handler.NewVodsHandler(db).List)
 
+	// AI 智能视频分析（m3u8 分片 / MD5 指纹 / 去广告）
+	aih := handler.NewAIHandler(db)
+	adminGroup.GET("/ai/settings", aih.GetSettings)
+	adminGroup.PUT("/ai/settings", aih.UpdateSettings)
+	adminGroup.POST("/ai/analyze", aih.Analyze)
+	adminGroup.GET("/ai/ts", aih.Result)
+	adminGroup.POST("/ai/result/m3u8", aih.CleanM3U8)
+	adminGroup.GET("/ai/fingerprints", aih.Fingerprints)
+	adminGroup.POST("/ai/fingerprints/import", aih.ImportFingerprints)
+	adminGroup.GET("/ai/logs", aih.Logs)
+
 	// 管理后台 UI：/admin-ui → admin/index.html（独立前缀，避免与 /admin API 冲突）
 	e.GET("/admin-ui", func(c echo.Context) error {
 		data, err := fs.ReadFile(web.AdminFS, "admin/index.html")

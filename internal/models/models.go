@@ -273,6 +273,62 @@ type UpdateLog struct {
 // TableName 指定表名
 func (UpdateLog) TableName() string { return "update_logs" }
 
+// AiSetting AI 视频智能分析设置（单行表，id=1）：m3u8 分片分析 / 指纹 / 去广告
+type AiSetting struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Enabled      int8      `gorm:"default:1" json:"enabled"`      // 分析开关
+	AutoSkipAD   int8      `gorm:"default:0" json:"auto_skip_ad"` // 自动去广告
+	Provider     string    `gorm:"size:32" json:"provider"`       // openai / doubao / qwen / custom
+	APIKey       string    `gorm:"size:255" json:"api_key"`
+	Endpoint     string    `gorm:"size:512" json:"endpoint"`
+	Model        string    `gorm:"size:64" json:"model"`
+	SampleRatio  int       `gorm:"default:20" json:"sample_ratio"` // AI 抽样比例 %（0-100）
+	Concurrency  int       `gorm:"default:4" json:"concurrency"`   // 分片并发下载
+	MaxSegments  int       `gorm:"default:0" json:"max_segments"`  // 最多分析分片数（0=不限）
+	HeuristicOn  int8      `gorm:"default:1" json:"heuristic_on"`  // 特征启发式（时长/突变/静音）
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// TableName 指定表名
+func (AiSetting) TableName() string { return "ai_settings" }
+
+// DefaultAiSetting 默认 AI 设置（单行 id=1）
+func DefaultAiSetting() AiSetting {
+	return AiSetting{ID: 1, Enabled: 1, SampleRatio: 20, Concurrency: 4, HeuristicOn: 1}
+}
+
+// AdFingerprint MD5 指纹特征库：同一广告/字幕/插播片段跨视频重复出现时秒级命中
+type AdFingerprint struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	MD5         string    `gorm:"size:32;uniqueIndex;not null" json:"md5"`
+	Verdict     string    `gorm:"size:16;not null" json:"verdict"` // normal/ad/subtitle/interlude/watermark
+	SourceName  string    `gorm:"size:128" json:"source_name"`     // 来源剧名/链接
+	HitCount    int       `gorm:"default:1" json:"hit_count"`      // 命中次数
+	SizeBytes   int64     `json:"size_bytes"`
+	DurationSec float64   `json:"duration_sec"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// TableName 指定表名
+func (AdFingerprint) TableName() string { return "ad_fingerprints" }
+
+// TsAnalysisLog 单次 m3u8 分析日志
+type TsAnalysisLog struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	M3U8URL     string    `gorm:"size:1024" json:"m3u8_url"`
+	Total       int       `gorm:"default:0" json:"total"`
+	Analyzed    int       `gorm:"default:0" json:"analyzed"`
+	ADs         int       `gorm:"default:0" json:"ads"`
+	CleanCount  int       `gorm:"default:0" json:"clean_count"`
+	Status      string    `gorm:"size:16" json:"status"` // success / failed / running
+	Message     string    `gorm:"size:512" json:"message"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// TableName 指定表名
+func (TsAnalysisLog) TableName() string { return "ts_analysis_logs" }
+
 // 七大站预置映射数据（官方站点，is_builtin=1）
 var builtinSiteMappings = []SiteMapping{
 	{SiteCode: "tencent", SiteName: "腾讯视频", SiteDomain: `(v\.|video\.)qq\.com`, NameField: "$.vod_name", AliasField: "$.vod_actor", CoverField: "$.vod_pic", YearField: "$.vod_year", RegionField: "$.vod_area", CategoryField: "$.vod_class", RemarkField: "$.vod_content", EpisodesPath: "$.vod_play_from[0].vod_play_list[0].urls", IsBuiltin: 1, Enabled: 1, Priority: 70},
@@ -312,5 +368,8 @@ func AutoMigrate(db interface {
 		&ChainNode{},
 		&UpdaterConfig{},
 		&UpdateLog{},
+		&AiSetting{},
+		&AdFingerprint{},
+		&TsAnalysisLog{},
 	)
 }

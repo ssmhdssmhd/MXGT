@@ -202,8 +202,29 @@ const loaders={
     window.saveAnalysis=async()=>{const body={enabled:+h('a_enabled').value,priority:h('a_priority').value,unknown_mode:h('a_unknown').value,ai_enabled:+h('a_ai_enabled').value,ai_provider:h('a_provider').value,ai_api_key:h('a_apikey').value,ai_endpoint:h('a_endpoint').value};const r=await api('/admin/analysis/settings','PUT',body);alert(msgOk(r)?'已保存':'保存失败');};
     window.testAnalysis=async()=>{const r=await api('/admin/analysis/test','POST',{url:h('t_url').value});h('t_res').textContent=r.code===1?JSON.stringify(r.data):(r.msg||'失败');};
   },
-  // 4 AI 设置（M16 落地）
-  ai:function(){content().innerHTML='';const c=el('div',{className:'card'});c.innerHTML='<h3>🤖 AI 智能视频分析</h3><p class="dim" style="padding:12px 0">该模块为 M16 里程碑内容（m3u8 分片解析、MD5 指纹、去广告/去插播、内置播放器），将在 v0.0.17+ 版本提供。';content().appendChild(c);},
+  // 4 AI 设置（M16）
+  ai:function(){
+    content().innerHTML='';
+    (async()=>{const d=await api('/admin/ai/settings');if(d.code!==1){alert('请先登录');return;}const s=d.data;
+      const card=el('div',{className:'card'});
+      card.innerHTML=`<h3>🤖 AI 智能视频分析（ts 分片 / MD5 指纹 / 去广告）</h3>
+      <div><label>启用分析</label><select id="ai_en"><option value="1" ${s.enabled===1?'selected':''}>开</option><option value="0" ${s.enabled===0?'selected':''}>关</option></select></div>
+      <div><label>自动去广告</label><select id="ai_skip"><option value="1" ${s.auto_skip_ad===1?'selected':''}>开</option><option value="0" ${s.auto_skip_ad===0?'selected':''}>关</option></select></div>
+      <div><label>启发式检测（时长异常）</label><select id="ai_heu"><option value="1" ${s.heuristic_on===1?'selected':''}>开</option><option value="0" ${s.heuristic_on===0?'selected':''}>关</option></select></div>
+      <div><label>并发下载</label><input id="ai_conc" type="number" value="${s.concurrency}"></div>
+      <div><label>AI Provider</label><input id="ai_prov" value="${s.provider||''}"></div>
+      <div><label>AI Endpoint</label><input id="ai_ep" value="${s.endpoint||''}"></div>
+      <div><label>AI Key</label><input id="ai_key" type="password" value="${s.api_key||''}"></div>
+      <div><label>AI Model</label><input id="ai_model" value="${s.model||''}"></div>
+      <div class="row" style="margin-top:12px"><button onclick="saveAi()">保存设置</button>
+        <input id="ai_m3u8" placeholder="粘贴 m3u8 地址" style="flex:1">
+        <button class="ghost" onclick="runAi()">分析 m3u8</button></div>
+      <pre id="ai_res" style="margin-top:10px;font-size:12px;color:#94a3b8;overflow:auto;max-height:300px"></pre>`;
+      content().appendChild(card);
+    })();
+    window.saveAi=async()=>{const body={enabled:+h('ai_en').value,auto_skip_ad:+h('ai_skip').value,heuristic_on:+h('ai_heu').value,concurrency:+h('ai_conc').value,provider:h('ai_prov').value,endpoint:h('ai_ep').value,api_key:h('ai_key').value,model:h('ai_model').value};const r=await api('/admin/ai/settings','PUT',body);alert(msgOk(r)?'已保存':'保存失败');};
+    window.runAi=async()=>{const url=h('ai_m3u8').value;if(!url){alert('请输入 m3u8');return;}h('ai_res').textContent='分析中，按分片并发下载+MD5…';const r=await api('/admin/ai/analyze','POST',{m3u8:url,source:'手动'});h('ai_res').textContent=r.code===1?JSON.stringify(r.data,null,2):(r.msg||'失败');};
+  },
   // 5 匹配设置
   matching:function(){
     content().innerHTML='';

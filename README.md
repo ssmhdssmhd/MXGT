@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.17
+> 版本：v0.0.18
 
 ## ✨ 特性
 
@@ -19,6 +19,7 @@
 - 🔌 **调用 Pipeline**：链式串联多节点（proxy / 去插播 / 去广告 / 自定义 HTTP），支持排序、独立启停、三种回退策略与链路测试
 - 🔄 **自动更新**：GitHub 多镜像并发测速选最快源，检查更新（semver 对比）+ 一键下载安装（备份旧版 / 保留配置），更新日志记录
 - 🖥️ **管理后台 SPA**：11 个模块侧边栏单页（仪表盘 / 前端 / 分析 / AI / 匹配 / 调用 / 映射 / 规则 / 影片 / 更新 / 管理员），全部对接后端接口
+- 🤖 **AI 视频智能分析**：m3u8 解析 → ts 分片并发下载 + MD5 指纹库（O(1) 秒级命中）+ 启发式判定（时长异常），去广告 m3u8 动态生成
 - 📦 **多存储**：数据库支持 SQLite（默认零配置）/ MySQL；缓存支持内存（默认）/ Redis，接口化可扩展
 - 🔐 **管理后台**：JWT 登录 + 解析规则 CRUD + 采集源管理 CRUD（后台配置即可接入新源站）
 - 🔌 **跨域 / 防盗链**：Echo CORS + `/api/proxy/stream` 代理转发（带 Referer，支持 Range 拖动进度条）
@@ -112,6 +113,14 @@ docker compose down           # 停止
 | POST | `/admin/update/download` | 一键下载并替换可执行文件（备份旧版） | JWT |
 | GET | `/admin/update/logs` | 最近更新日志 | JWT |
 | GET | `/admin/vods` | 影片列表（分页/搜索） | JWT |
+| GET | `/admin/ai/settings` | AI 分析设置读取 | JWT |
+| PUT | `/admin/ai/settings` | AI 分析设置更新 | JWT |
+| POST | `/admin/ai/analyze` | 分析 m3u8（ts 分片 + MD5 + 判定） | JWT |
+| GET | `/admin/ai/ts` | 查看某次分析的 ts 列表 | JWT |
+| POST | `/admin/ai/result/m3u8` | 生成去广告 m3u8 | JWT |
+| GET | `/admin/ai/fingerprints` | MD5 指纹特征库列表 | JWT |
+| POST | `/admin/ai/fingerprints/import` | 导入指纹 | JWT |
+| GET | `/admin/ai/logs` | 最近 AI 分析日志 | JWT |
 | GET | `/admin-ui` | 管理后台 SPA（11 模块侧边栏） | - |
 | GET | `/api.php/provide/vod/?ac=list` | 苹果 CMS v10 分类列表 | 无 |
 | GET | `/api.php/provide/vod/?ac=detail&ids=1` | 苹果 CMS v10 详情 | 无 |
@@ -311,6 +320,11 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.18
+- 新增：🤖 M16 AI 智能视频分析——internal/ai（m3u8 解析→ts 分片 / MD5 流式 + 指纹库 O(1) 命中 / 启发式判定 / 去广告 m3u8 生成）
+- 新增：ai_settings 单行表 + ad_fingerprints MD5 指纹库 + ts_analysis_logs 分析日志，`/admin/ai/*` 接口
+- 新增：管理后台 AI 设置页（设置/分析 m3u8）
 
 ### v0.0.17
 - 新增：🗂️ M15 管理后台侧边栏前端——11 模块 SPA（仪表盘 / 前端设置 / 分析设置 / AI 设置 / 匹配设置 / 调用设置 / 映射设置 / 解析规则 / 影片管理 / 更新设置 / 管理员），全量对接后端接口
