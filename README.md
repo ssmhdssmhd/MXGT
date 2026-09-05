@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.13
+> 版本：v0.0.14
 
 ## ✨ 特性
 
@@ -15,6 +15,7 @@
 - 📋 **调用日志**：resolve / proxy / cms 自动记录（状态 / 耗时 / 缓存命中 / IP），定期自动清理
 - 🗺️ **视频抓取映射**：预置腾讯/爱奇艺/优酷/芒果/搜狐/咪咕/B站七大站字段映射，JSONPath 提取可后台测试
 - 🎯 **剧名匹配**：Levenshtein 相似度 + 别名表 + 年份/标点规范化；多源同剧自动合并到同一 vod，集数按来源区分
+- 🧠 **匹配策略**：AI/规则双通道（rule / ai / auto）可配回退与相似度阈值；支持直接资源走去插播决策
 - 📦 **多存储**：数据库支持 SQLite（默认零配置）/ MySQL；缓存支持内存（默认）/ Redis，接口化可扩展
 - 🔐 **管理后台**：JWT 登录 + 解析规则 CRUD + 采集源管理 CRUD（后台配置即可接入新源站）
 - 🔌 **跨域 / 防盗链**：Echo CORS + `/api/proxy/stream` 代理转发（带 Referer，支持 Range 拖动进度条）
@@ -90,6 +91,11 @@ docker compose down           # 停止
 | GET | `/admin/stats/rules-top` | 解析规则调用 TOP | JWT |
 | GET | `/admin/stats/sources-top` | 采集源入库量 TOP | JWT |
 | GET | `/admin/call-logs` | 最近调用明细（分页） | JWT |
+| GET | `/admin/analysis/settings` | 分析引擎设置读取 | JWT |
+| PUT | `/admin/analysis/settings` | 分析引擎设置更新（开关/优先级/未知处理） | JWT |
+| GET | `/admin/matching/settings` | 匹配策略设置读取（AI/规则双通道） | JWT |
+| PUT | `/admin/matching/settings` | 匹配策略设置更新（mode/回退/阈值/直接资源去插播） | JWT |
+| POST | `/admin/matching/test` | 测试匹配策略（按剧名匹配已入库影片 / 直接资源去插播决策） | JWT |
 | GET | `/admin-ui` | 管理后台仪表盘前端（ECharts） | - |
 | GET | `/api.php/provide/vod/?ac=list` | 苹果 CMS v10 分类列表 | 无 |
 | GET | `/api.php/provide/vod/?ac=detail&ids=1` | 苹果 CMS v10 详情 | 无 |
@@ -289,6 +295,11 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.14
+- 新增：🎯 M12 匹配策略——matching_settings 单行表（mode=rule/ai/auto 双通道 + fallback 回退 + fuzzy_threshold 模糊阈值 + auto_create 自动入库 + direct_action 直接资源去插播）
+- 新增：matcher 双通道策略引擎（规则匹配 + AI 自动识别），OpenAI 兼容 AI 匹配客户端（openai/doubao/custom 可配）
+- 新增：`POST /admin/matching/test` 一键测试（按剧名匹配已入库影片 / 直接资源去插播决策）+ `/admin/matching/settings` CRUD
 
 ### v0.0.13
 - 新增：🐳 M10 部署——docker-compose.yml（一键 `docker compose up -d`，命名卷持久化 SQLite 数据，环境变量覆盖管理员账号），Dockerfile 多阶段构建

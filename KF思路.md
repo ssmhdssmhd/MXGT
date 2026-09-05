@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.13
+> 版本：v0.0.14
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions（云端编译）
 > 分发策略：GitHub Actions 云端编译多平台 Go 可执行文件 → 单文件免配置运行 → 更新只替换执行文件
 
@@ -1857,7 +1857,9 @@ GET  /admin/update/logs         → 更新日志
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.13 新增：🐳 M10 部署已落地——docker-compose.yml（docker compose up -d 一键启动 / 命名卷持久化 SQLite / 环境变量覆盖管理员账号）+ Dockerfile 多阶段构建（云编译 + 轻量运行镜像）。*
+*本文档随代码迭代同步更新。版本 v0.0.14 新增：🎯 M12 匹配策略已落地——matching_settings 单行表（mode=rule/ai/auto + fallback 回退 + fuzzy_threshold 阈值 + auto_create + direct_action 直接资源去插播）、matcher 双通道策略引擎（规则匹配 + AI 自动识别，含权/别名/相似度打分）、OpenAI 兼容 AI 匹配客户端（openai/doubao/custom 可配）、POST /admin/matching/test 一键测试、/admin/matching/settings CRUD。*
+
+*前一版本 v0.0.13 新增：🐳 M10 部署已落地——docker-compose.yml（docker compose up -d 一键启动 / 命名卷持久化 SQLite / 环境变量覆盖管理员账号）+ Dockerfile 多阶段构建（云编译 + 轻量运行镜像）。*
 
 *前一版本 v0.0.12 新增：📊 M9 仪表盘已落地——call_logs 调用日志表 + resolve/proxy/cms.* 自动记录（状态/耗时/缓存命中/IP，定期自动清理）、统计接口 /admin/stats/overview · trends · rules-top · sources-top + /admin/call-logs 分页、ECharts 仪表盘前端 /admin-ui（管理后台静态资源 web/admin 内嵌）。*
 

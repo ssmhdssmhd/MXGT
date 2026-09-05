@@ -89,6 +89,18 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	adminGroup.GET("/stats/sources-top", stats.SourcesTop)
 	adminGroup.GET("/call-logs", stats.CallLogs)
 
+	// 分析引擎（URL 资源类型识别）
+	analysis := handler.NewAnalysisHandler(db)
+	adminGroup.POST("/analysis/test", analysis.Test)
+	adminGroup.GET("/analysis/settings", analysis.GetSettings)
+	adminGroup.PUT("/analysis/settings", analysis.UpdateSettings)
+
+	// 匹配策略（AI/规则双通道 + 阈值 + 直接资源去插播）
+	matching := handler.NewMatchingHandler(db)
+	adminGroup.GET("/matching/settings", matching.GetSettings)
+	adminGroup.PUT("/matching/settings", matching.UpdateSettings)
+	adminGroup.POST("/matching/test", matching.Test)
+
 	// 管理后台 UI：/admin-ui → admin/index.html（独立前缀，避免与 /admin API 冲突）
 	e.GET("/admin-ui", func(c echo.Context) error {
 		data, err := fs.ReadFile(web.AdminFS, "admin/index.html")

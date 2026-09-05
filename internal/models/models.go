@@ -141,6 +141,54 @@ type CallLog struct {
 // TableName 指定表名
 func (CallLog) TableName() string { return "call_logs" }
 
+// AnalysisSetting 分析引擎设置（单行表，id=1）：自动识别 URL 资源类型
+type AnalysisSetting struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Enabled      int8      `gorm:"default:1" json:"enabled"` // 总开关
+	Priority     string    `gorm:"size:32;default:official_first" json:"priority"` // official_first / direct_first / ai_first
+	AIEnabled    int8      `gorm:"default:0" json:"ai_enabled"`
+	AIProvider   string    `gorm:"size:32" json:"ai_provider"` // openai / doubao / custom
+	AIAPIKey     string    `gorm:"size:255" json:"ai_api_key"`
+	AIEndpoint   string    `gorm:"size:512" json:"ai_endpoint"`
+	UnknownMode  string    `gorm:"size:32;default:reject" json:"unknown_mode"` // reject / direct / rule
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// TableName 指定表名
+func (AnalysisSetting) TableName() string { return "analysis_settings" }
+
+// DefaultAnalysisSetting 默认分析设置
+func DefaultAnalysisSetting() AnalysisSetting {
+	return AnalysisSetting{ID: 1, Enabled: 1, Priority: "official_first", UnknownMode: "reject"}
+}
+
+// MatchingSetting 匹配策略设置（单行表，id=1）：AI 自动识别 + 指定规则匹配双通道
+type MatchingSetting struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	Mode           string    `gorm:"size:16;default:rule" json:"mode"`    // rule / ai / auto（auto=AI+规则双通道）
+	Fallback       string    `gorm:"size:16;default:rule" json:"fallback"` // 首选通道失败后的回退：rule / ai
+	FuzzyThreshold int       `gorm:"default:85" json:"fuzzy_threshold"`    // 模糊匹配相似度阈值 0-100
+	AutoCreate     int8      `gorm:"default:1" json:"auto_create"`         // 匹配成功是否自动入库 vods/episodes
+	DirectAction   string    `gorm:"size:16;default:none" json:"direct_action"` // 直接资源走去插播：none / skip_ad / block_ad
+	AIEnabled      int8      `gorm:"default:0" json:"ai_enabled"`          // 是否启用 AI 自动识别匹配
+	AIProvider     string    `gorm:"size:32" json:"ai_provider"`           // openai / doubao / custom
+	AIAPIKey       string    `gorm:"size:255" json:"ai_api_key"`
+	AIEndpoint     string    `gorm:"size:512" json:"ai_endpoint"`
+	AIModel        string    `gorm:"size:64" json:"ai_model"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// TableName 指定表名
+func (MatchingSetting) TableName() string { return "matching_settings" }
+
+// DefaultMatchingSetting 默认匹配设置（id=1 单行）
+func DefaultMatchingSetting() MatchingSetting {
+	return MatchingSetting{
+		ID: 1, Mode: "rule", Fallback: "ai", FuzzyThreshold: 85,
+		AutoCreate: 1, DirectAction: "none",
+	}
+}
+
 // 七大站预置映射数据（官方站点，is_builtin=1）
 var builtinSiteMappings = []SiteMapping{
 	{SiteCode: "tencent", SiteName: "腾讯视频", SiteDomain: `(v\.|video\.)qq\.com`, NameField: "$.vod_name", AliasField: "$.vod_actor", CoverField: "$.vod_pic", YearField: "$.vod_year", RegionField: "$.vod_area", CategoryField: "$.vod_class", RemarkField: "$.vod_content", EpisodesPath: "$.vod_play_from[0].vod_play_list[0].urls", IsBuiltin: 1, Enabled: 1, Priority: 70},
@@ -175,5 +223,7 @@ func AutoMigrate(db interface {
 		&FrontendSetting{},
 		&SiteMapping{},
 		&CallLog{},
+		&AnalysisSetting{},
+		&MatchingSetting{},
 	)
 }
