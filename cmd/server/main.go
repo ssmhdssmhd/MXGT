@@ -13,7 +13,7 @@ import (
 )
 
 // version 程序版本（构建时可用 -ldflags "-X main.version=vX.Y.Z" 覆盖）
-var version = "v0.0.12"
+var version = "v0.0.13"
 
 func main() {
 	// 运行文件夹：所有用户环境（config / data / logs...）都建立在此目录内

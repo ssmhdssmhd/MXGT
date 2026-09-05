@@ -1,7 +1,7 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.12
+> 版本：v0.0.13
 
 ## ✨ 特性
 
@@ -49,12 +49,16 @@
 go run ./cmd/server
 ```
 
-### 方式三：Docker
+### 方式三：Docker（docker-compose）
 
 ```bash
-docker build -t mxgt .
-docker run -p 8080:8080 mxgt
+docker compose up -d          # 后台启动（自动构建 + 映射 8080）
+docker compose down           # 停止
 ```
+
+数据持久化在命名卷 `mxgt-data`（`/app/data`，SQLite 在此），重建容器数据不丢失。管理员账号可用环境变量 `MXGT_ADMIN_USER` / `MXGT_ADMIN_PASSWORD` 覆盖。
+
+如需自定义端口，修改 `docker-compose.yml` 的 `ports: - "8080:8080"`。
 
 ## 📡 API
 
@@ -285,6 +289,9 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.13
+- 新增：🐳 M10 部署——docker-compose.yml（一键 `docker compose up -d`，命名卷持久化 SQLite 数据，环境变量覆盖管理员账号），Dockerfile 多阶段构建
 
 ### v0.0.12
 - 新增：📊 M9 仪表盘——call_logs 调用日志表 + resolve/proxy/cms 自动记录（状态/耗时/缓存命中/IP，定期清理）

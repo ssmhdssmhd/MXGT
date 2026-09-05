@@ -76,4 +76,4 @@ func (h *ProxyHandler) Stream(c echo.Context) error {
 }
 
 // proxyVersion 版本号占位（构建时由 ldflags 注入，见 cmd/server）
-const proxyVersion = "v0.0.12"
+const proxyVersion = "v0.0.13"

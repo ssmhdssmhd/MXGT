@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.12
+> 版本：v0.0.13
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions（云端编译）
 > 分发策略：GitHub Actions 云端编译多平台 Go 可执行文件 → 单文件免配置运行 → 更新只替换执行文件
 
@@ -1857,7 +1857,9 @@ GET  /admin/update/logs         → 更新日志
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.12 新增：📊 M9 仪表盘已落地——call_logs 调用日志表 + resolve/proxy/cms.* 自动记录（状态/耗时/缓存命中/IP，定期自动清理）、统计接口 /admin/stats/overview · trends · rules-top · sources-top + /admin/call-logs 分页、ECharts 仪表盘前端 /admin-ui（管理后台静态资源 web/admin 内嵌）。*
+*本文档随代码迭代同步更新。版本 v0.0.13 新增：🐳 M10 部署已落地——docker-compose.yml（docker compose up -d 一键启动 / 命名卷持久化 SQLite / 环境变量覆盖管理员账号）+ Dockerfile 多阶段构建（云编译 + 轻量运行镜像）。*
+
+*前一版本 v0.0.12 新增：📊 M9 仪表盘已落地——call_logs 调用日志表 + resolve/proxy/cms.* 自动记录（状态/耗时/缓存命中/IP，定期自动清理）、统计接口 /admin/stats/overview · trends · rules-top · sources-top + /admin/call-logs 分页、ECharts 仪表盘前端 /admin-ui（管理后台静态资源 web/admin 内嵌）。*
 
 *前一版本 v0.0.11 新增：🎭 M8 前端设置 & 视频抓取映射已落地——frontend_settings 单行表（伪装路径 play_path / 参数别名 / 皮肤 / 备案号）CRUD + 后端动态注册伪装路由（如 /mx.php，默认 / 同时可用）、site_mappings 站点映射表 + 腾讯/爱奇艺/优酷/芒果/搜狐/咪咕/B站七大站预置数据、POST /admin/mapping/test 字段映射 JSONPath 提取测试接口、公开 GET /api/settings。*
 
