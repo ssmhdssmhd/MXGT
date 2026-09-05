@@ -1,7 +1,7 @@
 # MXGT — 开发者思路文档
 
 > 项目定位：视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.18
+> 版本：v0.0.19
 > 技术栈：Go + Echo + GORM + MySQL + Redis + Docker + GitHub Actions（云端编译）
 > 分发策略：GitHub Actions 云端编译多平台 Go 可执行文件 → 单文件免配置运行 → 更新只替换执行文件
 
@@ -1857,7 +1857,9 @@ GET  /admin/update/logs         → 更新日志
 
 ---
 
-*本文档随代码迭代同步更新。版本 v0.0.18 新增：🤖 M16 AI 智能视频分析已落地——internal/ai（m3u8 解析→ts 分片、MD5 流式/指纹、ClassifyHeuristic 启发式判定、GenerateCleanM3U8 去广告） + ai_settings 单行表 + ad_fingerprints MD5 指纹库（O(1) 命中）+ ts_analysis_logs 分析日志，/admin/ai/settings · analyze · ts · result/m3u8 · fingerprints(import) · logs 接口，管理后台 AI 设置页已对接。*
+*本文档随代码迭代同步更新。版本 v0.0.19 新增：🌟 核心两条功能链路打通 + 后台全面现代化。① 新增统一播放入口 `GET /api/play?url=&title=&ep=`（internal/service/play_service.go）真正串联「官方 / 直链 / 未知」三种分发：功能一（官方链接）→ 抓映射剧名集数 → 用资源站搜索接口搜对应资源 → 替换为可播放链接 → 走调用 Pipeline 去插播/去广告 → 返回；功能二（可直接播放链接 .m3u8/.mp4/.flv）→ 去插播/去广告 → 返回最终链接；② chaining pipeline 的 skip_ad/block_ad 节点现支持配置外部去广告/去插播接口（endpoint 带 {input_url}）。③ 管理后台全面升级为 Vue3 + Element Plus 现代化组件化单文件（web/admin/index.html，CDN 免构建、仍 go:embed 单文件分发），补齐解析规则/采集源/映射 增删改、新增「播放测试」模块直连核心链路、AI 指纹库/分析日志、Pipeline 链路测试等；侧边栏 15 模块。*
+
+*前一版本 v0.0.18 新增：🤖 M16 AI 智能视频分析已落地——internal/ai（m3u8 解析→ts 分片、MD5 流式/指纹、ClassifyHeuristic 启发式判定、GenerateCleanM3U8 去广告） + ai_settings 单行表 + ad_fingerprints MD5 指纹库（O(1) 命中）+ ts_analysis_logs 分析日志，/admin/ai/settings · analyze · ts · result/m3u8 · fingerprints(import) · logs 接口，管理后台 AI 设置页已对接。*
 
 *前一版本 v0.0.17 新增：🗂️ M15 管理后台侧边栏前端已落地——11 个模块单页应用（仪表盘 / 前端设置 / 分析设置 / AI 设置占位 / 匹配设置 / 调用设置 / 映射设置 / 解析规则 / 影片管理 / 更新设置 / 管理员），哈希导航 + 表单保存 + 表格 + ECharts 图表，全部对接既有后端接口；新增 GET /admin/vods 影片列表接口。*
 

@@ -4,373 +4,762 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MXGT 管理后台</title>
+<!-- Vue3 + Element Plus 现代化组件化后台（CDN 单文件，go:embed 内嵌，无需构建） -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue/dist/index.iife.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;background:#0f172a;color:#e2e8f0;display:flex}
-#sbar{width:210px;min-height:100vh;background:#0b1220;border-right:1px solid #1e293b;position:fixed;top:0;bottom:0;overflow-y:auto}
-#sbar .brand{padding:18px;font-size:18px;font-weight:700;color:#38bdf8;border-bottom:1px solid #1e293b}
-#sbar nav a{display:flex;align-items:center;gap:10px;padding:12px 18px;color:#94a3b8;text-decoration:none;font-size:14px;border-left:3px solid transparent}
-#sbar nav a:hover{background:#1e293b;color:#e2e8f0}
-#sbar nav a.active{background:#1e293b;color:#38bdf8;border-left-color:#38bdf8}
-#main{flex:1;margin-left:210px;padding:20px 24px;min-width:0}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
-header h1{font-size:18px;color:#38bdf8}
-#loginBox{display:flex;gap:8px;align-items:center}
-input,select,textarea{padding:6px 10px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:13px}
-input:focus,select:focus,textarea:focus{outline:2px solid #38bdf8}
-label{display:block;font-size:12px;color:#94a3b8;margin:8px 0 4px}
-button{padding:6px 14px;border-radius:6px;border:none;background:#38bdf8;color:#0f172a;font-weight:600;cursor:pointer;font-size:13px}
-button:hover{background:#0ea5e9}
-button.ghost{background:#1e293b;color:#94a3b8;border:1px solid #334155}
-button.danger{background:#f87171;color:#0f172a}
-button.sm{padding:3px 9px;font-size:12px}
-.card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:16px}
-.card h3{font-size:14px;color:#94a3b8;margin-bottom:10px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #1e293b}
-th{color:#94a3b8;font-weight:500;white-space:nowrap}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
-.grid3 .card .num{font-size:26px;font-weight:700;color:#38bdf8;margin-top:6px}
+:root{--brand:#409eff}
+html,body,#app{height:100%;margin:0;background:#f2f3f8}
+.app-container{height:100vh;display:flex}
+.main-wrap{flex:1;display:flex;flex-direction:column;min-width:0}
+.main-head{height:56px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 20px;box-shadow:0 1px 4px rgba(0,0,0,.06);z-index:5}
+.main-body{flex:1;overflow:auto;padding:20px}
+.panel{background:#fff;border-radius:8px;padding:18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.logo-title{font-weight:700;font-size:17px;color:#fff;padding:18px 20px;display:flex;align-items:center;gap:8px}
+.brand-bg{background:linear-gradient(135deg,#409eff,#0ea5e9)}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.vl{color:#c0c4cc}
+.stat-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.05);display:flex;flex-direction:column;gap:6px}
+.stat-card .num{font-size:26px;font-weight:700;color:#409eff}
+.stat-card .lbl{color:#909399;font-size:13px}
+.stat-card .sub{color:#67c23a;font-size:12px}
 .charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.chart{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;height:300px}
-.chart h3{font-size:14px;color:#94a3b8;margin-bottom:8px}
-.ok{color:#4ade80}.fail{color:#f87171}.dim{color:#64748b}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
-#content{display:block}
-.nav-hint{color:#38bdf8;cursor:pointer;font-size:13px;margin-left:10px}
-.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;background:#1e293b;border:1px solid #334155}
-.pill.on{background:#164e3a;color:#4ade80;border-color:#166534}
-.pill.off{background:#4c1d1d;color:#f87171;border-color:#7f1d1d}
+.chart{background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.05);height:300px}
+.chart h4{margin:0 0 8px;color:#606266;font-size:14px}
+.login-card{max-width:420px;margin:12vh auto}
+.mono{font-family:Consolas,Menlo,monospace}
+.step-list .el-timeline-item__content{font-size:12px}
 </style>
 </head>
 <body>
-<div id="sbar">
-  <div class="brand">MXGT 后台</div>
-  <nav id="nav"></nav>
-</div>
-<div id="main">
-  <header>
-    <h1 id="pageTitle">仪表盘</h1>
-    <div id="loginBox">
-      <span id="userBox" class="dim"></span>
-      <input id="user" placeholder="用户名" value="admin" size="8">
-      <input id="pass" type="password" placeholder="密码" value="admin123" size="10">
-      <button onclick="doLogin()">登录</button>
+<div id="app">
+  <!-- 登录 -->
+  <el-container v-if="!token" class="app-container" style="justify-content:center">
+    <el-card style="width:400px" class="login-card">
+      <template #header>
+        <div style="text-align:center;font-weight:700;font-size:18px;color:#409eff">MXGT 管理后台</div>
+      </template>
+      <el-form :model="loginForm" label-width="70px">
+        <el-form-item label="用户名"><el-input v-model="loginForm.username" placeholder="admin" clearable/></el-form-item>
+        <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password placeholder="admin123" @keyup.enter="doLogin"/></el-form-item>
+        <el-button type="primary" style="width:100%" :loading="loginLoading" @click="doLogin">登 录</el-button>
+      </el-form>
+    </el-card>
+  </el-container>
+
+  <!-- 主界面 -->
+  <el-container v-else class="app-container">
+    <el-aside width="218px" class="brand-bg" style="display:flex;flex-direction:column">
+      <div class="logo-title">🚀 MXGT 后台</div>
+      <el-menu :default-active="current" @select="onMenu" style="flex:1;border:none;background:transparent" text-color="#cbd5e1" active-text-color="#fff">
+        <el-menu-item v-for="m in menus" :key="m.key" :index="m.key">
+          <el-icon><component :is="m.icon"/></el-icon><span>{{m.label}}</span>
+        </el-menu-item>
+      </el-menu>
+      <div style="padding:14px 20px;color:#93c5fd;font-size:12px">核心功能链路已打通</div>
+    </el-aside>
+    <div class="main-wrap">
+      <div class="main-head">
+        <div style="font-size:15px;font-weight:600">{{currentTitle}}</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <el-tag size="small" type="info">{{version}}</el-tag>
+          <el-tag size="small">{{username}}</el-tag>
+          <el-button size="small" @click="logout">退出</el-button>
+        </div>
+      </div>
+      <div class="main-body">
+        <!-- 仪表盘 -->
+        <template v-if="current==='dash'"><dash-view/></template>
+        <!-- 播放测试（核心功能入口） -->
+        <template v-else-if="current==='play'"><play-view/></template>
+        <!-- 前端设置 -->
+        <template v-else-if="current==='front'"><front-view/></template>
+        <!-- 分析设置 -->
+        <template v-else-if="current==='analysis'"><analysis-view/></template>
+        <!-- AI 设置 -->
+        <template v-else-if="current==='ai'"><ai-view/></template>
+        <!-- 匹配设置 -->
+        <template v-else-if="current==='matching'"><matching-view/></template>
+        <!-- 调用设置 -->
+        <template v-else-if="current==='chain'"><chain-view/></template>
+        <!-- 解析规则 -->
+        <template v-else-if="current==='rules'"><rules-view/></template>
+        <!-- 采集源 -->
+        <template v-else-if="current==='sources'"><sources-view/></template>
+        <!-- 映射设置 -->
+        <template v-else-if="current==='mapping'"><mapping-view/></template>
+        <!-- 影片管理 -->
+        <template v-else-if="current==='vods'"><vods-view/></template>
+        <!-- 更新设置 -->
+        <template v-else-if="current==='updater'"><updater-view/></template>
+        <!-- 管理 -->
+        <template v-else-if="current==='admin'"><admin-view/></template>
+      </div>
     </div>
-  </header>
-  <div id="content"></div>
+  </el-container>
 </div>
 
 <script>
-let TOKEN = localStorage.getItem('mxgt_token') || '';
-const MENU = [
-  {id:'dash',   label:'仪表盘',      icon:'📊'},
-  {id:'front',  label:'前端设置',    icon:'🎭'},
-  {id:'analysis',label:'分析设置',   icon:'🧠'},
-  {id:'ai',     label:'AI 设置',     icon:'🤖'},
-  {id:'matching',label:'匹配设置',   icon:'🎯'},
-  {id:'chaining',label:'调用设置',   icon:'🔌'},
-  {id:'mapping', label:'映射设置',   icon:'🗺️'},
-  {id:'rules',  label:'解析规则',    icon:'⚙️'},
-  {id:'vods',   label:'影片管理',    icon:'📼'},
-  {id:'updater',label:'更新设置',    icon:'🔄'},
-  {id:'admin',  label:'管理员',      icon:'🔑'},
-];
-let CURRENT={id:'dash'};
-let E = Object.create(null); // 图表实例缓存
+const { createApp, ref, reactive, onMounted, onBeforeUnmount, nextTick, h } = Vue;
+const { ElMessage, ElMessageBox } = ElementPlus;
 
-// ---------- 基础工具 ----------
-async function api(path,method='GET',body=null){
-  const opt={method,headers:{'Authorization':'Bearer '+TOKEN}};
-  if(body){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(body);}
-  const r=await fetch(path,opt);
-  try{return await r.json();}catch(e){return {code:0,msg:'网络错误'};}
-}
-async function doLogin(){
-  const r=await fetch('/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({username:document.getElementById('user').value,password:document.getElementById('pass').value})});
-  const d=await r.json();
-  if(d.code===1){TOKEN=d.data.token;localStorage.setItem('mxgt_token',TOKEN);show(CURRENT.id);}
-  else alert(d.msg||'登录失败');
-}
-const h=document.getElementById.bind(document);
-function el(tag,attrs){const n=document.createElement(tag);Object.assign(n,attrs||{});return n;}
-function btn(label,cls,on){const b=el('button',{className:cls,textContent:label});b.onclick=on;return b;}
-function txt(text){const p=el('p',{textContent:text});p.style.cssText='color:#94a3b8;font-size:13px;padding:8px 0';return p;}
-function msgOk(r){return r&&r.code===1;}
-
-// ---------- 渲染 ----------
-function drawNav(){
-  h('nav').innerHTML='';
-  MENU.forEach(m=>{
-    const a=el('a',{href:'#',className:m.id===CURRENT.id?'active':'',innerHTML:`${m.icon} ${m.label}`});
-    a.onclick=e=>{e.preventDefault();show(m.id);};
-    h('nav').appendChild(a);
-  });
-}
-function show(id){
-  const m=MENU.find(x=>x.id===id);if(!m)return;
-  CURRENT.id=id;h('pageTitle').textContent=m.label;drawNav();
-  h('userBox').textContent=TOKEN?'已登录':'未登录';
-  content().innerHTML='';
-  const fn=loaders[id];if(fn)fn();
-}
-const content=()=>h('content');
-function tableCard(title,cols,rows){
-  const c=el('div',{className:'card'});
-  const th=el('h3',{textContent:title});c.appendChild(th);
-  const t=el('table');const thead=el('thead');const tr=el('tr');
-  cols.forEach(x=>{const thd=el('th',{textContent:x});tr.appendChild(thd);});thead.appendChild(tr);t.appendChild(thead);
-  const tb=el('tbody');rows.forEach(r=>{const trd=el('tr');r.forEach(cd=>{const td=el('td');td.innerHTML=cd;trd.appendChild(td);});tb.appendChild(trd);});t.appendChild(tb);
-  c.appendChild(t);return c;
-}
-
-// ---------- 模块加载器 ----------
-const loaders={
-  // 1 仪表盘
-  dash:function(){
-    const ct=content();
-    ct.appendChild(el('div',{id:'cards',className:'grid3'}));
-    const ch=el('div',{className:'charts'});
-    [['trendChart','近7天调用趋势'],['rulesChart','解析规则 TOP'],['sourcesChart','采集源入库 TOP'],['hourChart','今日调用（小时）']].forEach(x=>{
-      const d=el('div',{className:'chart'});const hh=el('h3',{textContent:x[1]});const d2=el('div',{style:'height:230px',id:x[0]});d.appendChild(hh);d.appendChild(d2);ch.appendChild(d);});
-    ct.appendChild(ch);
-    ct.appendChild(tableCard('最近调用记录',['ID','接口','规则','状态','耗时(ms)','缓存','IP','时间'],[]));
-    if(!TOKEN){alert('请先登录');return;}
-    (async()=>{
-      const o=await api('/admin/stats/overview');
-      if(o.code===1){const d=o.data;
-        const c=el('div');c.style.display='flex';c.style.flexWrap='wrap';c.style.gap='14px';
-        const k=[['今日调用',d.today_calls],['累计调用',d.total_calls],['成功率',d.success_rate.toFixed?d.success_rate.toFixed(1)+'%':(d.success_rate||0)+'%'],['缓存命中',d.cache_hit_rate.toFixed?d.cache_hit_rate.toFixed(1)+'%':(d.cache_hit_rate||0)+'%'],['活跃规则',d.active_rules],['活跃源',d.active_sources],['影片',d.vods],['集数',d.episodes]];
-        k.forEach(x=>{const card=el('div',{className:'card'});card.innerHTML=`<div class="label" style="color:#94a3b8;font-size:12px">${x[0]}</div><div class="num">${x[1]}</div>`;c.appendChild(card);});
-        h('cards').innerHTML='';h('cards').appendChild(c);
-      }
-      const tr=await api('/admin/stats/trends?range=7');
-      if(tr.code===1){echart('trendChart',{x:tr.data.map(d=>d.date),s1:tr.data.map(d=>d.calls),s2:tr.data.map(d=>d.avg_ms)},'bar');}
-      const rl=await api('/admin/stats/rules-top?limit=10');
-      if(rl.code===1)echart('rulesChart',{x:rl.data.map(d=>d.name||'#'+d.rule_id),s1:rl.data.map(d=>d.calls)},'h');
-      const sr=await api('/admin/stats/sources-top?limit=10');
-      if(sr.code===1)echart('sourcesChart',{x:sr.data.map(d=>d.source_name),s1:sr.data.map(d=>d.episodes)},'h');
-      const hh=await api('/admin/stats/trends?range=1');
-      if(hh.code===1&&hh.data[0])echart('hourChart',{x:['今日'],s1:[hh.data[0].calls]},'bar');
-      const lg=await api('/admin/call-logs?page=1&size=12');
-      if(lg.code===1){const rows=lg.data.list.map(l=>`<tr><td>${l.id}</td><td>${l.api}</td><td>${l.rule_id||'-'}</td><td class="${l.call_status===1?'ok':'fail'}">${l.call_status===1?'成功':'失败'}</td><td>${l.duration_ms}</td><td>${l.cache_hit===1?'是':'否'}</td><td>${l.client_ip||'-'}</td><td>${(l.created_at||'').replace('T',' ').slice(0,19)}</td></tr>`).join('');
-        content().lastChild.querySelector('tbody').innerHTML=rows; }
-    })();
+// ---------- 全局 API 封装 ----------
+const api = {
+  base: (location.protocol==='https:'?'https:':'http:')+'//'+location.host,
+  token: localStorage.getItem('mxgt_token')||'',
+  async req(method, url, body) {
+    const opt = { method, headers: {'Content-Type':'application/json'} };
+    if (this.token) opt.headers['Authorization'] = 'Bearer '+this.token;
+    if (body!==undefined) opt.body = JSON.stringify(body);
+    const r = await fetch(this.base+url, opt);
+    let data = null;
+    const ct = r.headers.get('content-type')||'';
+    if (ct.includes('application/json')) data = await r.json(); else data = await r.text();
+    if (!r.ok && r.status===401 && !url.startsWith('/admin/login')) {
+      ElMessage.warning('登录已过期'); location.reload(); throw new Error('unauthorized');
+    }
+    return data;
   },
-  // 2 前端设置
-  front:function(){
-    content().innerHTML='';
-    (async()=>{
-      const d=await api('/admin/settings');if(d.code!==1){alert('请先登录');return;}
-      const s=d.data;
-      const f=(label,val)=>`<div><label>${label}</label><input class="f" data-k="${label}" value="${(val==null?'':val)}"></div>`;
-      const card=el('div',{className:'card'});
-      card.innerHTML=`<h3>前端设置</h3>
-        ${f('play_path',s.play_path)}${f('url_param',s.url_param)}${f('alias_params',s.alias_params)}
-        ${f('skin',s.skin)}${f('player_type',s.player_type)}${f('api_base',s.api_base)}${f('footer_text',s.footer_text)}
-        ${f('beian',s.beian)}${f_s('cross_origin',s.cross_origin)}${f('cache_ttl',s.cache_ttl)}`;
-      card.appendChild(btn('保存','',async()=>{const body={};card.querySelectorAll('.f').forEach(i=>{const k=i.dataset.k;body[k]=isNaN(+i.value)?i.value:+i.value;});const r=await api('/admin/settings','PUT',body);alert(msgOk(r)?'已保存':'保存失败');}));
-      content().appendChild(card);
-      function f_s(k,v){return `<div><label>${k}</label><select class="f" data-k="${k}"><option value="1" ${v===1?'selected':''}>开</option><option value="0" ${v===0?'selected':''}>关</option></select></div>`;}
-    })();
-  },
-  // 3 分析设置
-  analysis:function(){
-    content().innerHTML='';
-    (async()=>{
-      const d=await api('/admin/analysis/settings');if(d.code!==1){alert('请先登录');return;}
-      const s=d.data,card=el('div',{className:'card'});
-      card.innerHTML=`<h3>分析引擎设置</h3>
-      <div><label>启用</label><select id="a_enabled"><option value="1" ${s.enabled===1?'selected':''}>开</option><option value="0" ${s.enabled===0?'selected':''}>关</option></select></div>
-      <div><label>优先级</label><select id="a_priority">${['official_first','direct_first','ai_first'].map(o=>`<option ${s.priority===o?'selected':''}>${o}</option>`).join('')}</select></div>
-      <div><label>未知类型处理</label><select id="a_unknown">${['reject','direct','rule'].map(o=>`<option ${s.unknown_mode===o?'selected':''}>${o}</option>`).join('')}</select></div>
-      <div><label>AI 辅助分析</label><select id="a_ai_enabled"><option value="1" ${s.ai_enabled===1?'selected':''}>开</option><option value="0" ${s.ai_enabled===0?'selected':''}>关</option></select></div>
-      <div><label>AI Provider</label><input id="a_provider" value="${s.ai_provider||''}"></div>
-      <div><label>AI API Key</label><input id="a_apikey" type="password" value="${s.ai_api_key||''}"></div>
-      <div><label>AI Endpoint</label><input id="a_endpoint" value="${s.ai_endpoint||''}"></div>
-      <div class="row" style="margin-top:12px">
-        <button onclick="saveAnalysis()">保存</button>
-        <input id="t_url" placeholder="粘贴 URL 一键测试" style="flex:1">
-        <button class="ghost" onclick="testAnalysis()">测试</button>
-        <span id="t_res" class="dim"></span>
-      </div>`;
-      content().appendChild(card);
-    })();
-    window.saveAnalysis=async()=>{const body={enabled:+h('a_enabled').value,priority:h('a_priority').value,unknown_mode:h('a_unknown').value,ai_enabled:+h('a_ai_enabled').value,ai_provider:h('a_provider').value,ai_api_key:h('a_apikey').value,ai_endpoint:h('a_endpoint').value};const r=await api('/admin/analysis/settings','PUT',body);alert(msgOk(r)?'已保存':'保存失败');};
-    window.testAnalysis=async()=>{const r=await api('/admin/analysis/test','POST',{url:h('t_url').value});h('t_res').textContent=r.code===1?JSON.stringify(r.data):(r.msg||'失败');};
-  },
-  // 4 AI 设置（M16）
-  ai:function(){
-    content().innerHTML='';
-    (async()=>{const d=await api('/admin/ai/settings');if(d.code!==1){alert('请先登录');return;}const s=d.data;
-      const card=el('div',{className:'card'});
-      card.innerHTML=`<h3>🤖 AI 智能视频分析（ts 分片 / MD5 指纹 / 去广告）</h3>
-      <div><label>启用分析</label><select id="ai_en"><option value="1" ${s.enabled===1?'selected':''}>开</option><option value="0" ${s.enabled===0?'selected':''}>关</option></select></div>
-      <div><label>自动去广告</label><select id="ai_skip"><option value="1" ${s.auto_skip_ad===1?'selected':''}>开</option><option value="0" ${s.auto_skip_ad===0?'selected':''}>关</option></select></div>
-      <div><label>启发式检测（时长异常）</label><select id="ai_heu"><option value="1" ${s.heuristic_on===1?'selected':''}>开</option><option value="0" ${s.heuristic_on===0?'selected':''}>关</option></select></div>
-      <div><label>并发下载</label><input id="ai_conc" type="number" value="${s.concurrency}"></div>
-      <div><label>AI Provider</label><input id="ai_prov" value="${s.provider||''}"></div>
-      <div><label>AI Endpoint</label><input id="ai_ep" value="${s.endpoint||''}"></div>
-      <div><label>AI Key</label><input id="ai_key" type="password" value="${s.api_key||''}"></div>
-      <div><label>AI Model</label><input id="ai_model" value="${s.model||''}"></div>
-      <div class="row" style="margin-top:12px"><button onclick="saveAi()">保存设置</button>
-        <input id="ai_m3u8" placeholder="粘贴 m3u8 地址" style="flex:1">
-        <button class="ghost" onclick="runAi()">分析 m3u8</button></div>
-      <pre id="ai_res" style="margin-top:10px;font-size:12px;color:#94a3b8;overflow:auto;max-height:300px"></pre>`;
-      content().appendChild(card);
-    })();
-    window.saveAi=async()=>{const body={enabled:+h('ai_en').value,auto_skip_ad:+h('ai_skip').value,heuristic_on:+h('ai_heu').value,concurrency:+h('ai_conc').value,provider:h('ai_prov').value,endpoint:h('ai_ep').value,api_key:h('ai_key').value,model:h('ai_model').value};const r=await api('/admin/ai/settings','PUT',body);alert(msgOk(r)?'已保存':'保存失败');};
-    window.runAi=async()=>{const url=h('ai_m3u8').value;if(!url){alert('请输入 m3u8');return;}h('ai_res').textContent='分析中，按分片并发下载+MD5…';const r=await api('/admin/ai/analyze','POST',{m3u8:url,source:'手动'});h('ai_res').textContent=r.code===1?JSON.stringify(r.data,null,2):(r.msg||'失败');};
-  },
-  // 5 匹配设置
-  matching:function(){
-    content().innerHTML='';
-    (async()=>{const d=await api('/admin/matching/settings');if(d.code!==1){alert('请先登录');return;}const s=d.data;
-      const card=el('div',{className:'card'});
-      card.innerHTML=`<h3>匹配策略设置（AI/规则双通道）</h3>
-      <div><label>模式</label><select id="m_mode">${['rule','ai','auto'].map(o=>`<option ${s.mode===o?'selected':''}>${o}</option>`).join('')}</select></div>
-      <div><label>回退通道</label><select id="m_fb">${['rule','ai'].map(o=>`<option ${s.fallback===o?'selected':''}>${o}</option>`).join('')}</select></div>
-      <div><label>模糊匹配阈值</label><input id="m_th" type="number" value="${s.fuzzy_threshold}"></div>
-      <div><label>自动入库</label><select id="m_ac"><option value="1" ${s.auto_create===1?'selected':''}>开</option><option value="0" ${s.auto_create===0?'selected':''}>关</option></select></div>
-      <div><label>直接资源去插播</label><select id="m_da">${['none','skip_ad','block_ad'].map(o=>`<option ${s.direct_action===o?'selected':''}>${o}</option>`).join('')}</select></div>
-      <div><label>AI 匹配启用</label><select id="m_aie"><option value="1" ${s.ai_enabled===1?'selected':''}>开</option><option value="0" ${s.ai_enabled===0?'selected':''}>关</option></select></div>
-      <div><label>AI Endpoint</label><input id="m_aep" value="${s.ai_endpoint||''}"></div>
-      <div><label>AI Key</label><input id="m_aek" type="password" value="${s.ai_api_key||''}"></div>
-      <div><label>AI Model</label><input id="m_aem" value="${s.ai_model||''}"></div>
-      <div class="row" style="margin-top:12px"><button onclick="saveMatch()">保存</button>
-        <input id="m_name" placeholder="测试匹配的剧名" style="flex:1">
-        <button class="ghost" onclick="testMatch()">测试匹配</button></div>
-      <pre id="m_res" style="margin-top:10px;font-size:12px;color:#94a3b8;overflow:auto"></pre>`;
-      content().appendChild(card);
-    })();
-    window.saveMatch=async()=>{const body={mode:h('m_mode').value,fallback:h('m_fb').value,fuzzy_threshold:+h('m_th').value,auto_create:+h('m_ac').value,direct_action:h('m_da').value,ai_enabled:+h('m_aie').value,ai_endpoint:h('m_aep').value,ai_api_key:h('m_aek').value,ai_model:h('m_aem').value};const r=await api('/admin/matching/settings','PUT',body);alert(msgOk(r)?'已保存':'保存失败');};
-    window.testMatch=async()=>{const r=await api('/admin/matching/test','POST',{name:h('m_name').value});h('m_res').textContent=r.code===1?JSON.stringify(r.data,null,2):(r.msg||'失败');};
-  },
-  // 6 调用设置
-  chaining:function(){ chainUI(); },
-  // 7 映射设置
-  mapping:function(){ mapUI(); },
-  // 8 解析规则
-  rules:function(){ rulesUI(); },
-  // 9 影片管理
-  vods:function(){ vodsUI(); },
-  // 10 更新设置
-  updater:function(){ updaterUI(); },
-  // 11 管理员
-  admin:function(){
-    content().innerHTML='';
-    (async()=>{const hh=await api('/api/health');
-      const c=el('div',{className:'card'});
-      c.innerHTML=`<h3>🔑 管理员</h3>
-      <p style="padding:6px 0">默认账号：admin / admin123（可用环境变量 MXGT_ADMIN_USER / MXGT_ADMIN_PASSWORD 覆盖）</p>
-      <p style="padding:6px 0;color:#94a3b8">系统状态：${hh.code===1?JSON.stringify(hh.data):'获取失败'}</p>
-      <div class="row" style="margin-top:8px"><button class="ghost" onclick="delToken()">退出登录</button></div>`;
-      content().appendChild(c);
-      content().appendChild(tableCard('最近调用日志',['接口','状态','耗时','时间'],[]));
-      const lg=await api('/admin/call-logs?page=1&size=10');
-      if(lg.code===1)content().lastChild.querySelector('tbody').innerHTML=lg.data.list.map(l=>`<tr><td>${l.api}</td><td class="${l.call_status===1?'ok':'fail'}">${l.call_status===1?'成功':'失败'}</td><td>${l.duration_ms}</td><td>${(l.created_at||'').replace('T',' ').slice(0,19)}</td></tr>`).join('');
-    })();
-    window.delToken=()=>{localStorage.removeItem('mxgt_token');TOKEN='';alert('已退出');show('dash');};
-  },
+  get(url){ return this.req('GET', url); },
+  post(url, body){ return this.req('POST', url, body); },
+  put(url, body){ return this.req('PUT', url, body); },
+  del(url){ return this.req('DELETE', url); }
 };
 
-function echart(eleId,o,type){
-  if(E[eleId]){E[eleId].dispose();}
-  const c=echarts.init(h(eleId));E[eleId]=c;
-  const base={tooltip:{trigger:'axis'},grid:{left:50,right:50,top:20,bottom:30}};
-  let opt;
-  if(type==='h'){
-    opt={...base,...{grid:{left:140,right:30},xAxis:{type:'value',axisLabel:{color:'#94a3b8'}},yAxis:{type:'category',data:o.x.slice().reverse(),axisLabel:{color:'#94a3b8'}},series:[{type:'bar',data:o.s1.slice().reverse(),itemStyle:{color:'#34d399'}}]}};
-  }else if(type==='line'){
-    opt={...base,...{legend:{textStyle:{color:'#94a3b8'}},xAxis:{type:'category',data:o.x,axisLabel:{color:'#94a3b8'}},yAxis:{type:'value',axisLabel:{color:'#94a3b8'}},series:[{type:'line',data:o.s1,itemStyle:{color:'#fbbf24'}}]}};
-  }else{
-    opt={...base,...{legend:{textStyle:{color:'#94a3b8'}},xAxis:{type:'category',data:o.x,axisLabel:{color:'#94a3b8'}},yAxis:{type:'value',axisLabel:{color:'#94a3b8'}},series:[{name:'调用量',type:'bar',data:o.s1,itemStyle:{color:'#38bdf8'}}]}};
+function okData(res){ return res && res.code===1 ? res.data : null; }
+
+// ---------- 品牌首页 ----------
+const App = {
+  setup() {
+    const token = ref(api.token);
+    const username = ref(localStorage.getItem('mxgt_user')||'admin');
+    const current = ref('dash');
+    const version = ref('');
+    const loginForm = reactive({username:'admin', password:'admin123'});
+    const loginLoading = ref(false);
+
+    const menus = [
+      {key:'dash',   label:'仪表盘',   icon:'Odometer'},
+      {key:'play',   label:'播放测试', icon:'VideoPlay'},
+      {key:'front',  label:'前端设置', icon:'Monitor'},
+      {key:'analysis',label:'分析设置',icon:'Cpu'},
+      {key:'ai',     label:'AI 设置',  icon:'MagicStick'},
+      {key:'matching',label:'匹配设置',icon:'Aim'},
+      {key:'chain',  label:'调用设置', icon:'Link'},
+      {key:'rules',  label:'解析规则', icon:'Document'},
+      {key:'sources',label:'采集源',   icon:'FolderOpened'},
+      {key:'mapping',label:'映射设置', icon:'MapLocation'},
+      {key:'vods',   label:'影片管理', icon:'Film'},
+      {key:'updater',label:'更新设置', icon:'Refresh'},
+      {key:'admin',  label:'管理员',   icon:'User'},
+    ];
+    const titleMap = Object.fromEntries(menus.map(m=>[m.key,m.label]));
+    const currentTitle = ref('仪表盘');
+
+    async function doLogin(){
+      loginLoading.value = true;
+      try {
+        const res = await api.post('/admin/login', loginForm);
+        if (res && res.code===1) {
+          api.token = res.data.token;
+          localStorage.setItem('mxgt_token', res.data.token);
+          localStorage.setItem('mxgt_user', res.data.username);
+          token.value = api.token; username.value = res.data.username;
+          ElMessage.success('登录成功');
+          loadVersion();
+        } else { ElMessage.error(res.msg||'登录失败'); }
+      } finally { loginLoading.value = false; }
+    }
+    function logout(){ api.token=''; localStorage.removeItem('mxgt_token'); token.value=''; }
+    function onMenu(k){ current.value = k; currentTitle.value = titleMap[k]||''; }
+
+    async function loadVersion(){
+      try { const r = await api.get('/api/health'); version.value = r && r.version ? r.version : ''; } catch(e){}
+    }
+    onMounted(()=>{ if(token.value) loadVersion(); });
+
+    return { token, username, current, version, loginForm, loginLoading, menus, currentTitle, doLogin, logout, onMenu };
   }
-  c.setOption(opt);window.addEventListener('resize',()=>c.resize());
+};
+
+// ---------- 通用：ECharts 容器 ----------
+function useChart(domId, build){
+  const inst = { e:null, init(dom, data){ if(!this.e){ this.e=echarts.init(dom);} this.e.setOption(build(data)); } };
+  return inst;
 }
 
-// ---------- 调用设置 / 映射 / 规则 / 影片 / 更新 ----------
-function chainUI(){
-  content().innerHTML='';
-  const top=el('div',{className:'row'});
-  top.appendChild(btn('+ 新增节点','',()=>editchain(0)));
-  top.appendChild(btn('测试链路','ghost',async()=>{const r=await api('/admin/chain/test','POST',{input:prompt('输入 URL')||''});alert(r.code===1?JSON.stringify(r.data):(r.msg||'失败'));}));
-  content().appendChild(top);
-  (async()=>{
-    const r=await api('/admin/chain/nodes');if(r.code!==1){alert('请先登录');return;}
-    content().appendChild(tableCard('调用 Pipeline 节点（按顺序执行）',['ID','名称','类型','顺序','回退','状态','操作'],
-      r.data.map(n=>[n.id,n.name,n.node_type,n.order,n.fallback,`<span class="pill ${n.enabled===1?'on':'off'}">${n.enabled===1?'启用':'停用'}</span>`,
-        `<button class="sm" onclick="editchain(${n.id})">编辑</button>`])));
-    window.editchain=function(id){renderChainForm(id,r.data);};
-  })();
-}
-function renderChainForm(id,nodes){
-  const n=nodes.find(x=>x.id===id)||{name:'',node_type:'custom',endpoint:'',method:'GET',result_path:'',fallback:'skip',order:0,enabled:1};
-  const c=el('div',{className:'card'});
-  c.innerHTML=`<h3>${id?'编辑':'新增'}节点</h3>
-  <div><label>名称</label><input id="cn_name" value="${n.name}"></div>
-  <div><label>类型</label><select id="cn_type">${['custom','proxy','skip_ad','block_ad'].map(o=>`<option ${n.node_type===o?'selected':''}>${o}</option>`).join('')}</select></div>
-  <div><label>Endpoint（支持 {input_url}）</label><input id="cn_ep" value="${n.endpoint||''}"></div>
-  <div><label>Method</label><input id="cn_m" value="${n.method||'GET'}"></div>
-  <div><label>结果 JSONPath（如 $.data.url）</label><input id="cn_rp" value="${n.result_path||''}"></div>
-  <div><label>回退策略</label><select id="cn_fb">${['skip','abort','fallback'].map(o=>`<option ${n.fallback===o?'selected':''}>${o}</option>`).join('')}</select></div>
-  <div><label>回退地址（fallback 时用）</label><input id="cn_ft" value="${n.fallback_to||''}"></div>
-  <div><label>顺序</label><input id="cn_or" type="number" value="${n.order}"></div>
-  <div class="row" style="margin-top:10px"><button onclick="saveChain(${id})">保存</button><button class="ghost" onclick="chainUI()">取消</button></div>`;
-  content().innerHTML='';content().appendChild(c);
-  window.saveChain=async function(id){const body={name:h('cn_name').value,node_type:h('cn_type').value,endpoint:h('cn_ep').value,method:h('cn_m').value,result_path:h('cn_rp').value,fallback:h('cn_fb').value,fallback_to:h('cn_ft').value,order:+h('cn_or').value};
-    let r; if(id){r=await api('/admin/chain/nodes/'+id,'PUT',body);}else{r=await api('/admin/chain/nodes','POST',body);}alert(msgOk(r)?'已保存':'保存失败');chainUI();};
-}
+// ---------- 仪表盘 ----------
+const DashView = {
+  setup(){
+    const stat = ref({today_calls:0, cache_hit:0, rules:0, sources:0});
+    const calls = ref([]);
+    const trendEl = ref(null); const trendChart = useChart();
+    const load = async ()=>{
+      const ov = okData(await api.get('/admin/stats/overview'));
+      if (ov) stat.value = {today_calls:ov.today_calls||0, cache_hit:ov.cache_hit||0, rules:ov.rules||0, sources:ov.sources||0};
+      const cl = okData(await api.get('/admin/call-logs?page=1&size=15'));
+      if (cl) calls.value = Array.isArray(cl)?cl:(cl.list||[]);
+      const tr = okData(await api.get('/admin/stats/trends?range=7'));
+      if (tr) drawTrend(tr);
+    };
+    function drawTrend(tr){
+      nextTick(()=>{
+        const dom = trendEl.value; if(!dom) return;
+        if(!trendChart.e) trendChart.e = echarts.init(dom);
+        const xs=[]; const ys=[];
+        (Array.isArray(tr)?tr:(tr.points||tr.trend||[])).forEach(p=>{ xs.push(p.time||p.hour||''); ys.push(p.count||p.calls||0); });
+        trendChart.e.setOption({
+          tooltip:{trigger:'axis'}, grid:{left:40,right:20,top:30,bottom:30},
+          xAxis:{type:'category', data:xs}, yAxis:{type:'value'},
+          series:[{type:'line', smooth:true, areaStyle:{opacity:.15}, data:ys, itemStyle:{color:'#409eff'}}]
+        });
+      });
+    }
+    onMounted(load);
+    return { stat, calls, trendEl, load };
+  },
+  template:`
+  <div>
+    <div class="stat-cards">
+      <div class="stat-card"><span class="lbl">今日调用</span><span class="num">{{stat.today_calls}}</span></div>
+      <div class="stat-card"><span class="lbl">缓存命中率</span><span class="num" style="color:#f59e0b">{{stat.cache_hit}}</span></div>
+      <div class="stat-card"><span class="lbl">解析规则</span><span class="num" style="color:#67c23a">{{stat.rules}}</span></div>
+      <div class="stat-card"><span class="lbl">采集源</span><span class="num" style="color:#f87171">{{stat.sources}}</span></div>
+    </div>
+    <div class="charts">
+      <div class="chart"><h4>调用量趋势（近7日）</h4><div ref="trendEl" style="width:100%;height:250px"></div></div>
+      <div class="chart"><h4>最近调用记录</h4>
+        <el-table :data="calls" size="small" max-height="250">
+          <el-table-column prop="api" label="接口" width="110"></el-table-column>
+          <el-table-column prop="target_url" label="目标" show-overflow-tooltip></el-table-column>
+          <el-table-column prop="duration_ms" label="耗时" width="80"></el-table-column>
+          <el-table-column prop="created_at" label="时间" width="150"></el-table-column>
+        </el-table>
+      </div>
+    </div>
+  </div>`
+};
 
-function mapUI(){
-  content().innerHTML='';
-  (async()=>{const r=await api('/admin/mappings');if(r.code!==1){alert('请先登录');return;}
-    content().appendChild(tableCard('站点映射（预置七大站 + 自定义）',['ID','站点','域名正则','剧名路径','集数路径','预置','启用','操作'],
-      r.data.map(m=>[m.id,m.site_name,m.site_domain,m.name_field,m.episodes_path,(m.is_builtin===1?'是':'否'),`<span class="pill ${m.enabled===1?'on':'off'}">${m.enabled===1?'开':'关'}</span>`,`<button class="sm" onclick="editchain(${m.id})">编辑</button>`])));
-    window.editchain=function(){alert('映射详情编辑请通过 API 进行');};
-  })();
-}
-function rulesUI(){
-  content().innerHTML='';
-  (async()=>{const r=await api('/admin/rules');if(r.code!==1){alert('请先登录');return;}
-    content().appendChild(tableCard('解析规则（JSONPath / Regex / Custom）',['ID','名称','URL 正则','类型','链接方式','状态'],r.data.map(x=>[x.id,x.name,x.url_pattern,x.extractor_type,x.need_proxy===1?'代理':'直连',`<span class="pill ${x.enabled===1?'on':'off'}">${x.enabled===1?'启用':'停用'}</span>`])));
-  })();
-}
-function vodsUI(){
-  content().innerHTML='';
-  const row=el('div',{className:'row'});
-  const kw=el('input',{placeholder:'搜索剧名/别名'});row.appendChild(kw);row.appendChild(btn('搜索','ghost',()=>loadVods(kw.value)));
-  content().appendChild(row);
-  content().appendChild(el('div',{id:'vodTable'}));
-  loadVods('');
-  async function loadVods(k){const r=await api('/admin/vods?page=1&size=30&keyword='+encodeURIComponent(k));if(r.code!==1){alert('请先登录');return;}
-    h('vodTable').innerHTML='';
-    h('vodTable').appendChild(tableCard(`影片共 ${r.data.total} 部`,['ID','剧名','年份','分类','别名','状态'],r.data.items.map(v=>[v.id,v.name,v.year||'-',v.category||'-',v.alias||'-',`<span class="pill ${v.status===1?'on':'off'}">${v.status===1?'启用':'禁用'}</span>`])));
-  }
-}
-function updaterUI(){
-  content().innerHTML='';
-  const c=el('div',{className:'card'});
-  c.innerHTML=`<h3>更新设置</h3>
-  <div><label>GitHub 仓库</label><input id="up_repo" value="https://github.com/ssmhdssmhd/MXGT"></div>
-  <div><label>自动检查</label><select id="up_ac"><option value="1">开</option><option value="0">关</option></select></div>
-  <div class="row" style="margin-top:12px">
-    <button onclick="upCheck()">检查更新</button><button class="ghost" onclick="upSpeed()">测速镜像</button>
-    <button class="ghost" onclick="upDownload()">一键下载更新</button>
-  </div><pre id="up_res" style="margin-top:10px;font-size:12px;color:#94a3b8;overflow:auto"></pre>`;
-  content().appendChild(c);
-  (async()=>{const r=await api('/admin/update/config');if(r.code===1){h('up_repo').value=r.data.repo;h('up_ac').value=r.data.auto_check;}})();
-  window.upCheck=async()=>{const r=await api('/admin/update/check','POST',{});h('up_res').textContent=r.code===1?JSON.stringify(r.data,null,2):(r.msg||'失败');};
-  window.upSpeed=async()=>{h('up_res').textContent='测速中...';const r=await api('/admin/update/mirror-speed','POST',{});h('up_res').textContent=r.code===1?('最快源：'+r.data.fastest+'\n'+JSON.stringify(r.data.results,null,2)):(r.msg||'失败');};
-  window.upDownload=async()=>{const v=prompt('输入要更新到的版本号（如 v0.0.16）');if(!v)return;const r=await api('/admin/update/download','POST',{version:v,assets_url:'https://github.com/ssmhdssmhd/MXGT/releases/download/'+v});alert(r.code===1?r.data.message:(r.msg||'失败'));};
-}
+// ---------- 播放测试（核心功能）----------
+const PlayView = {
+  setup(){
+    const form = reactive({ url:'', title:'', ep:1 });
+    const res = ref(null);
+    const loading = ref(false);
+    const test = async ()=>{
+      if(!form.url){ ElMessage.warning('请输入链接'); return; }
+      loading.value=true;
+      try{
+        const r = await api.get('/api/play?url='+encodeURIComponent(form.url)+'&title='+encodeURIComponent(form.title)+'&ep='+form.ep);
+        if (r && r.code===1){ res.value=r.data; ElMessage.success('处理成功'); }
+        else ElMessage.error(r.msg||'处理失败');
+      } finally { loading.value=false; }
+    };
+    return { form, res, loading, test };
+  },
+  template:`
+  <div>
+    <div class="panel">
+      <h3 style="margin:0 0 12px;color:#303133">🎬 播放测试（核心功能链路）</h3>
+      <el-form label-width="70px">
+        <el-form-item label="链接">
+          <el-input v-model="form.url" placeholder="https://v.qq.com/... 或 https://xxx/index.m3u8 / a.mp4" clearable/>
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="剧名"><el-input v-model="form.title" placeholder="官方链接生效"/></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="集数"><el-input-number v-model="form.ep" :min="1"/></el-form-item></el-col>
+        </el-row>
+        <el-button type="primary" :loading="loading" @click="test">识别 + 匹配 + 去广告 处理</el-button>
+      </el-form>
+    </div>
+    <div class="panel" v-if="res">
+      <h3 style="margin:0 0 12px;color:#303133">处理结果</h3>
+      <el-descriptions :column="1" border size="small">
+        <el-descriptions-item label="模式"><el-tag size="small" type="info">{{res.mode}}</el-tag></el-descriptions-item>
+        <el-descriptions-item label="类型">{{res.type}}</el-descriptions-item>
+        <el-descriptions-item v-if="res.source" label="来源">{{res.source}}</el-descriptions-item>
+        <el-descriptions-item label="最终链接">
+          <el-link class="mono" type="primary" :href="res.url" target="_blank" style="word-break:break-all">{{res.url}}</el-link>
+        </el-descriptions-item>
+        <el-descriptions-item v-if="res.cleaned" label="AI 去广告"><el-tag type="success" size="small">已剔除广告分片</el-tag></el-descriptions-item>
+      </el-descriptions>
+      <div class="panel" style="margin-top:12px" v-if="res.clean_m3u8">
+        <div style="font-weight:600;color:#303133;margin-bottom:8px">去广告后的干净 m3u8</div>
+        <pre class="mono" style="background:#f6f8fa;padding:10px;border-radius:6px;max-height:220px;overflow:auto;font-size:12px">{{res.clean_m3u8}}</pre>
+      </div>
+      <div class="panel" style="margin-top:12px">
+        <div style="font-weight:600;color:#303133;margin-bottom:8px">处理链路</div>
+        <el-steps direction="vertical" v-if="res.steps && res.steps.length">
+          <el-step v-for="(s,i) in res.steps" :key="i" :title="s"></el-step>
+        </el-steps>
+        <div v-else class="vl">无额外处理步骤</div>
+      </div>
+    </div>
+  </div>`
+};
 
-// 初始化
-drawNav();
-show(CURRENT.id);
+// ---------- 前端设置 ----------
+const FrontView = {
+  setup(){
+    const form = reactive({});
+    const load = async ()=>{ const d=okData(await api.get('/admin/settings')); if(d) Object.assign(form,d); };
+    const save = async ()=>{ const r=await api.put('/admin/settings',form); (r&&r.code===1)?ElMessage.success('已保存'):ElMessage.error(r.msg); };
+    onMounted(load);
+    return { form, save };
+  },
+  template:`
+  <div class="panel">
+    <h3 style="margin:0 0 12px;color:#303133">🎨 前端设置</h3>
+    <el-form :model="form" label-width="130px" style="max-width:700px">
+      <el-form-item label="播放页路径"><el-input v-model="form.play_path" placeholder="/"/></el-form-item>
+      <el-form-item label="URL 参数名"><el-input v-model="form.url_param" placeholder="url"/></el-form-item>
+      <el-form-item label="别名参数"><el-input v-model="form.alias_params" placeholder="video,src,link"/></el-form-item>
+      <el-form-item label="播放器类型">
+        <el-select v-model="form.player_type"><el-option label="dplayer" value="dplayer"/><el-option label="hls.js" value="hls.js"/></el-select>
+      </el-form-item>
+      <el-form-item label="LOGO"><el-input v-model="form.logo_url"/></el-form-item>
+      <el-form-item label="页脚"><el-input v-model="form.footer_text"/></el-form-item>
+      <el-form-item label="备案号"><el-input v-model="form.beian"/></el-form-item>
+      <el-form-item label="缓存 TTL(秒)"><el-input-number v-model="form.cache_ttl" :min="0"/></el-form-item>
+      <el-button type="primary" @click="save">保存设置</el-button>
+    </el-form>
+  </div>`
+};
+
+// ---------- 分析设置 ----------
+const AnalysisView = {
+  setup(){
+    const form = reactive({});
+    const testUrl = ref(''); const testRes = ref(null);
+    const load = async ()=>{ const d=okData(await api.get('/admin/analysis/settings')); if(d) Object.assign(form,d); };
+    const save = async ()=>{ const r=await api.put('/admin/analysis/settings',form); (r&&r.code===1)?ElMessage.success('已保存'):ElMessage.error(r.msg); };
+    const test = async ()=>{ if(!testUrl.value){ElMessage.warning('请输入URL');return;} const r=await api.post('/admin/analysis/test',{url:testUrl.value}); testRes.value=r.data||r; };
+    onMounted(load);
+    return { form, testUrl, testRes, load, save, test };
+  },
+  template:`
+  <div class="panel">
+    <h3 style="margin:0 0 12px;color:#303133">🧠 分析设置（自动识别官方 / 直链 / 未知）</h3>
+    <el-form :model="form" label-width="120px" style="max-width:600px">
+      <el-form-item label="启用"><el-switch v-model="form.enabled" :active-value="1" :inactive-value="0"/></el-form-item>
+      <el-form-item label="优先级">
+        <el-select v-model="form.priority"><el-option label="官方优先" value="official_first"/><el-option label="直链优先" value="direct_first"/><el-option label="AI优先" value="ai_first"/></el-select>
+      </el-form-item>
+      <el-form-item label="未知类型"><el-select v-model="form.unknown_mode"><el-option label="拒绝" value="reject"/><el-option label="当直链" value="direct"/><el-option label="走规则" value="rule"/></el-select></el-form-item>
+      <el-button type="primary" @click="save">保存</el-button>
+    </el-form>
+    <el-divider/>
+    <h4 style="color:#303133">一键测试</h4>
+    <div class="toolbar">
+      <el-input v-model="testUrl" placeholder="粘贴 URL 测试类型" style="width:420px"/>
+      <el-button type="primary" @click="test">识别</el-button>
+    </div>
+    <el-descriptions v-if="testRes" :column="2" border size="small">
+      <el-descriptions-item label="类型"><el-tag type="info">{{testRes.type}}</el-tag></el-descriptions-item>
+      <el-descriptions-item label="站点">{{testRes.site_name||'-'}}</el-descriptions-item>
+      <el-descriptions-item label="site_code">{{testRes.site_code||'-'}}</el-descriptions-item>
+      <el-descriptions-item label="直链类型">{{testRes.directive||'-'}}</el-descriptions-item>
+    </el-descriptions>
+  </div>`
+};
+
+// ---------- AI 设置 ----------
+const AiView = {
+  setup(){
+    const form = reactive({});
+    const m3u8 = ref(''); const analyzeLog = ref(null); const logs = ref([]); const fps = ref([]);
+    const load = async ()=>{ const d=okData(await api.get('/admin/ai/settings')); if(d) Object.assign(form,d); loadLogs(); loadFps(); };
+    const save = async ()=>{ const r=await api.put('/admin/ai/settings',form); (r&&r.code===1)?ElMessage.success('已保存'):ElMessage.error(r.msg); };
+    const analyze = async ()=>{ if(!m3u8.value){ElMessage.warning('请输入 m3u8');return;} const r=await api.post('/admin/ai/analyze',{m3u8:m3u8.value}); if(r&&r.code===1){analyzeLog.value=r.data;ElMessage.success('分析完成，剔除 '+r.data.bad+' 个广告分片');} };
+    const cleanM3U8 = async ()=>{ if(!m3u8.value){ElMessage.warning('请输入 m3u8');return;} const r=await api.post('/admin/ai/result/m3u8',{m3u8:m3u8.value}); if(r&&r.code===1){navigator.clipboard.writeText(r.data);ElMessage.success('已复制干净 m3u8');} };
+    const loadLogs = async ()=>{ const d=okData(await api.get('/admin/ai/logs')); logs.value=d||[]; };
+    const loadFps = async ()=>{ const d=okData(await api.get('/admin/ai/fingerprints')); fps.value=d||[]; };
+    onMounted(load);
+    return { form, m3u8, analyzeLog, logs, fps, save, analyze, cleanM3U8 };
+  },
+  template:`
+  <div>
+    <div class="panel">
+      <h3 style="margin:0 0 12px;color:#303133">🤖 AI 设置（m3u8 广告识别 / 去广告）</h3>
+      <el-form :model="form" label-width="120px" style="max-width:620px">
+        <el-form-item label="启用"><el-switch v-model="form.enabled" :active-value="1" :inactive-value="0"/></el-form-item>
+        <el-form-item label="自动去广告"><el-switch v-model="form.auto_skip_ad" :active-value="1" :inactive-value="0"/></el-form-item>
+        <el-form-item label="算法"><el-select v-model="form.provider"><el-option label="openaicompat" value="openaicompat"/><el-option label="doubao" value="doubao"/><el-option label="qwen" value="qwen"/></el-select></el-form-item>
+        <el-form-item label="API Key"><el-input v-model="form.api_key" show-password/></el-form-item>
+        <el-form-item label="采样比例%"><el-input-number v-model="form.sample_ratio" :min="0" :max="100"/></el-form-item>
+        <el-form-item label="并发"><el-input-number v-model="form.concurrency" :min="1"/></el-form-item>
+        <el-form-item label="启发式"><el-switch v-model="form.heuristic_on" :active-value="1" :inactive-value="0"/></el-form-item>
+        <el-button type="primary" @click="save">保存</el-button>
+      </el-form>
+    </div>
+    <div class="panel">
+      <h3 style="margin:0 0 12px;color:#303133">m3u8 分析 / 去广告</h3>
+      <div class="toolbar">
+        <el-input v-model="m3u8" placeholder="输入 m3u8 链接" style="width:480px"/>
+        <el-button type="primary" @click="analyze">分析</el-button>
+        <el-button @click="cleanM3U8">生成干净 m3u8</el-button>
+      </div>
+      <el-descriptions v-if="analyzeLog" :column="4" border size="small" style="margin-bottom:12px">
+        <el-descriptions-item label="总数">{{analyzeLog.total}}</el-descriptions-item>
+        <el-descriptions-item label="广告">{{analyzeLog.bad}}</el-descriptions-item>
+        <el-descriptions-item label="干净">{{analyzeLog.clean}}</el-descriptions-item>
+        <el-descriptions-item label="来源"><el-tag size="small">{{analyzeLog.source.slice(0,30)}}</el-tag></el-descriptions-item>
+      </el-descriptions>
+      <el-table :data="logs" size="small">
+        <el-table-column prop="id" label="ID" width="60"></el-table-column>
+        <el-table-column prop="m3u8_url" label="m3u8" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="ads" label="广告" width="70"></el-table-column>
+        <el-table-column prop="clean_count" label="干净" width="70"></el-table-column>
+        <el-table-column prop="status" label="状态" width="80"></el-table-column>
+        <el-table-column prop="created_at" label="时间" width="150"></el-table-column>
+      </el-table>
+    </div>
+    <div class="panel">
+      <h3 style="margin:0 0 12px;color:#303133">MD5 指纹库</h3>
+      <el-table :data="fps" size="small">
+        <el-table-column prop="md5" label="MD5" width="260"></el-table-column>
+        <el-table-column prop="verdict" label="判定" width="100"><template #default="s"><el-tag size="small">{{s.row.verdict}}</el-tag></template></el-table-column>
+        <el-table-column prop="hit_count" label="命中" width="70"></el-table-column>
+        <el-table-column prop="source_name" label="来源" show-overflow-tooltip></el-table-column>
+      </el-table>
+    </div>
+  </div>`
+};
+
+// ---------- 匹配设置 ----------
+const MatchingView = {
+  setup(){
+    const form = reactive({});
+    const testBox = reactive({src:'', target:'', alias:''});
+    const testRes = ref(null);
+    const load = async ()=>{ const d=okData(await api.get('/admin/matching/settings')); if(d) Object.assign(form,d); };
+    const save = async ()=>{ const r=await api.put('/admin/matching/settings',form); (r&&r.code===1)?ElMessage.success('已保存'):ElMessage.error(r.msg); };
+    const test = async ()=>{ const r=await api.post('/admin/matching/test',testBox); testRes.value=r.data||r; };
+    onMounted(load);
+    return { form, testBox, testRes, save, test };
+  },
+  template:`
+  <div class="panel">
+    <h3 style="margin:0 0 12px;color:#303133">🎯 匹配设置（AI/规则双通道）</h3>
+    <el-form :model="form" label-width="120px" style="max-width:620px">
+      <el-form-item label="模式"><el-select v-model="form.mode"><el-option value="rule" label="规则"/><el-option value="ai" label="AI"/><el-option value="auto" label="双通道"/></el-select></el-form-item>
+      <el-form-item label="模糊阈值"><el-input-number v-model="form.fuzzy_threshold" :min="0" :max="100"/></el-form-item>
+      <el-form-item label="自动入库"><el-switch v-model="form.auto_create" :active-value="1" :inactive-value="0"/></el-form-item>
+      <el-form-item label="直链动作"><el-select v-model="form.direct_action"><el-option value="none" label="直接播放"/><el-option value="skip_ad" label="去广告"/><el-option value="block_ad" label="去插播"/></el-select></el-form-item>
+      <el-button type="primary" @click="save">保存</el-button>
+    </el-form>
+    <el-divider/>
+    <h4 style="color:#303133">剧名匹配测试</h4>
+    <el-form :model="testBox" label-width="80px" style="max-width:620px">
+      <el-form-item label="源剧名"><el-input v-model="testBox.src"/></el-form-item>
+      <el-form-item label="目标剧名"><el-input v-model="testBox.target"/></el-form-item>
+      <el-form-item label="别名"><el-input v-model="testBox.alias" placeholder="逗号分隔"/></el-form-item>
+      <el-button type="primary" @click="test">匹配</el-button>
+    </el-form>
+    <el-descriptions v-if="testRes" :column="2" border size="small" style="margin-top:12px">
+      <el-descriptions-item label="结果">{{testRes.matched?'✅ 匹配':'❌ 未匹配'}}</el-descriptions-item>
+      <el-descriptions-item label="通道">{{testRes.channel}}</el-descriptions-item>
+      <el-descriptions-item label="相似度">{{testRes.score}}</el-descriptions-item>
+      <el-descriptions-item label="原因">{{testRes.reason||'-'}}</el-descriptions-item>
+    </el-descriptions>
+  </div>`
+};
+
+// ---------- 调用设置（Pipeline）----------
+const ChainView = {
+  setup(){
+    const nodes = ref([]);
+    const dialog = reactive({show:false, isEdit:false, id:0, form:{}});
+    const testInput = ref(''); const chainRes = ref(null);
+    const load = async ()=>{ const d=okData(await api.get('/admin/chain/nodes')); nodes.value=d||[]; };
+    const openAdd = ()=>{ Object.assign(dialog,{show:true,isEdit:false,id:0,form:{name:'',node_type:'custom',endpoint:'',method:'GET',result_path:'$.data.url',fallback:'skip',order:10,enabled:1}}); };
+    const openEdit = (row)=>{ Object.assign(dialog,{show:true,isEdit:true,id:row.id,form:{...row}}); };
+    const save = async ()=>{
+      const f=dialog.form;
+      if(dialog.isEdit){ const r=await api.put('/admin/chain/nodes/'+dialog.id,f); (r&&r.code===1)?ElMessage.success('已更新'):ElMessage.error(r.msg); }
+      else { const r=await api.post('/admin/chain/nodes',f); (r&&r.code===1)?ElMessage.success('已创建'):ElMessage.error(r.msg); }
+      dialog.show=false; load();
+    };
+    const del = async (row)=>{ await ElMessageBox.confirm('确认删除节点 '+row.name+'?','删除'); const r=await api.del('/admin/chain/nodes/'+row.id); (r&&r.code===1)?ElMessage.success('已删除'):ElMessage.error(r.msg); load(); };
+    const chainTest = async ()=>{ if(!testInput.value){ElMessage.warning('请输入输入链接');return;} const r=await api.post('/admin/chain/test',{input:testInput.value}); chainRes.value=r.data||r; };
+    onMounted(load);
+    return { nodes, dialog, testInput, chainRes, load, openAdd, openEdit, save, del, chainTest };
+  },
+  template:`
+  <div>
+    <div class="panel">
+      <div class="toolbar">
+        <h3 style="margin:0;color:#303133">🔌 调用设置（Pipeline 链式节点）</h3>
+        <el-button type="primary" size="small" @click="openAdd">新增节点</el-button>
+      </div>
+      <el-table :data="nodes" size="small">
+        <el-table-column prop="order" label="顺序" width="70"></el-table-column>
+        <el-table-column prop="name" label="名称"></el-table-column>
+        <el-table-column prop="node_type" label="类型" width="110"><template #default="s"><el-tag size="small">{{s.row.node_type}}</el-tag></template></el-table-column>
+        <el-table-column prop="endpoint" label="接口地址" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="fallback" label="回退" width="80"></el-table-column>
+        <el-table-column label="启用" width="70"><template #default="s"><el-tag :type="s.row.enabled?'success':'info'" size="small">{{s.row.enabled?'开':'关'}}</el-tag></template></el-table-column>
+        <el-table-column label="操作" width="150">
+          <template #default="s"><el-button size="small" @click="openEdit(s.row)">编辑</el-button><el-button size="small" type="danger" plain @click="del(s.row)">删除</el-button></template>
+      </el-table-column>
+      </el-table>
+    </div>
+    <div class="panel">
+      <h3 style="margin:0 0 12px;color:#303133">链路测试</h3>
+      <div class="toolbar"><el-input v-model="testInput" placeholder="输入资源链接" style="width:460px"/><el-button type="primary" @click="chainTest">执行整条链路</el-button></div>
+      <el-timeline v-if="chainRes && chainRes.steps" class="step-list">
+        <el-timeline-item v-for="(s,i) in chainRes.steps" :key="i" :timestamp="'节点 '+s.order+' · '+s.type" placement="top">
+          <div>{{s.name}}</div>
+          <div class="vl mono" style="word-break:break-all">{{s.output}}</div>
+        </el-timeline-item>
+      </el-timeline>
+    </div>
+    <!-- 节点对话框 -->
+    <el-dialog v-model="dialog.show" :title="dialog.isEdit?'编辑节点':'新增节点'" width="520px">
+      <el-form :model="dialog.form" label-width="80px">
+        <el-form-item label="名称"><el-input v-model="dialog.form.name"/></el-form-item>
+        <el-form-item label="类型"><el-select v-model="dialog.form.node_type"><el-option value="custom" label="通用HTTP"/><el-option value="proxy" label="代理"/><el-option value="skip_ad" label="去广告"/><el-option value="block_ad" label="去插播"/></el-select></el-form-item>
+        <el-form-item label="接口地址"><el-input v-model="dialog.form.endpoint" placeholder="https://...?url={input_url}"/></el-form-item>
+        <el-form-item label="方法"><el-select v-model="dialog.form.method"><el-option label="GET" value="GET"/><el-option label="POST" value="POST"/></el-select></el-form-item>
+        <el-form-item label="结果路径"><el-input v-model="dialog.form.result_path" placeholder="$.data.url"/></el-form-item>
+        <el-form-item label="回退"><el-select v-model="dialog.form.fallback"><el-option value="skip" label="跳过继续"/><el-option value="abort" label="终止"/><el-option value="fallback" label="兜底"/></el-select></el-form-item>
+        <el-form-item label="顺序"><el-input-number v-model="dialog.form.order" :min="0"/></el-form-item>
+        <el-form-item label="启用"><el-switch v-model="dialog.form.enabled" :active-value="1" :inactive-value="0"/></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="dialog.show=false">取消</el-button><el-button type="primary" @click="save">保存</el-button></template>
+    </el-dialog>
+  </div>`
+};
+
+// ---------- 解析规则 ----------
+const RulesView = {
+  setup(){
+    const rules = ref([]);
+    const dialog = reactive({show:false, isEdit:false, id:0, form:{}});
+    const load = async ()=>{ const d=okData(await api.get('/admin/rules')); rules.value=d||[]; };
+    const openAdd = ()=>{ Object.assign(dialog,{show:true,isEdit:false,id:0,form:{name:'',url_pattern:'',extractor_type:'regex',rule_config:'',target_field:'url',need_proxy:0,priority:0,enabled:1}}); };
+    const openEdit = (r)=>{ Object.assign(dialog,{show:true,isEdit:true,id:r.id,form:{...r}}); };
+    const save = async ()=>{
+      const f=dialog.form;
+      if(dialog.isEdit){ const r=await api.put('/admin/rules/'+dialog.id,f); (r&&r.code===1)?ElMessage.success('已更新'):ElMessage.error(r.msg); }
+      else { const r=await api.post('/admin/rules',f); (r&&r.code===1)?ElMessage.success('已创建'):ElMessage.error(r.msg); }
+      dialog.show=false; load();
+    };
+    const del = async (r)=>{ await ElMessageBox.confirm('确认删除规则?','删除'); const x=await api.del('/admin/rules/'+r.id); (x&&x.code===1)?ElMessage.success('已删除'):ElMessage.error(x.msg); load(); };
+    onMounted(load);
+    return { rules, dialog, openAdd, openEdit, save, del };
+  },
+  template:`
+  <div class="panel">
+    <div class="toolbar"><h3 style="margin:0;color:#303133">⚙️ 解析规则</h3><el-button type="primary" size="small" @click="openAdd">新增规则</el-button></div>
+    <el-table :data="rules" size="small">
+      <el-table-column prop="name" label="名称"></el-table-column>
+      <el-table-column prop="url_pattern" label="URL 匹配" show-overflow-tooltip></el-table-column>
+      <el-table-column prop="extractor_type" label="类型" width="100"><template #default="s"><el-tag size="small">{{s.row.extractor_type}}</el-tag></template></el-table-column>
+      <el-table-column prop="priority" label="优先级" width="90"></el-table-column>
+      <el-table-column prop="enabled" label="启用" width="70"><template #default="s"><el-tag :type="s.row.enabled?'success':'info'" size="small">{{s.row.enabled?'开':'关'}}</el-tag></template></el-table-column>
+      <el-table-column label="操作" width="150"><template #default="s"><el-button size="small" @click="openEdit(s.row)">编辑</el-button><el-button size="small" type="danger" plain @click="del(s.row)">删除</el-button></template></el-table-column>
+    </el-table>
+    <el-dialog v-model="dialog.show" :title="dialog.isEdit?'编辑规则':'新增规则'" width="540px">
+      <el-form :model="dialog.form" label-width="90px">
+        <el-form-item label="名称"><el-input v-model="dialog.form.name"/></el-form-item>
+        <el-form-item label="URL 正则"><el-input v-model="dialog.form.url_pattern" placeholder="(distribute|play)\.my\.test"/></el-form-item>
+        <el-form-item label="提取器"><el-select v-model="dialog.form.extractor_type"><el-option value="jsonpath" label="jsonpath"/><el-option value="regex" label="regex"/><el-option value="custom" label="custom"/></el-select></el-form-item>
+        <el-form-item label="规则配置"><el-input v-model="dialog.form.rule_config" type="textarea" :rows="3" placeholder='{"regex":"...","group":1}'/></el-form-item>
+        <el-form-item label="目标字段"><el-input v-model="dialog.form.target_field"/></el-form-item>
+        <el-form-item label="需代理"><el-switch v-model="dialog.form.need_proxy" :active-value="1" :inactive-value="0"/></el-form-item>
+        <el-form-item label="优先级"><el-input-number v-model="dialog.form.priority"/></el-form-item>
+        <el-form-item label="启用"><el-switch v-model="dialog.form.enabled" :active-value="1" :inactive-value="0"/></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="dialog.show=false">取消</el-button><el-button type="primary" @click="save">保存</el-button></template>
+    </el-dialog>
+  </div>`
+};
+
+// ---------- 采集源 ----------
+const SourcesView = {
+  setup(){
+    const sources = ref([]);
+    const dialog = reactive({show:false, isEdit:false, id:0, form:{}});
+    const syncKw = ref('');
+    const load = async ()=>{ const d=okData(await api.get('/admin/sources')); sources.value=d||[]; };
+    const openAdd = ()=>{ Object.assign(dialog,{show:true,isEdit:false,id:0,form:{name:'',source_type:'api',fetch_url:'',method:'GET',priority:0,enabled:1,extract_rules:'{"item":"$.data"}'}}); };
+    const openEdit = (r)=>{ Object.assign(dialog,{show:true,isEdit:true,id:r.id,form:{...r}}); };
+    const save = async ()=>{
+      const f=dialog.form;
+      if(dialog.isEdit){ const r=await api.put('/admin/sources/'+dialog.id,f); (r&&r.code===1)?ElMessage.success('已更新'):ElMessage.error(r.msg); }
+      else { const r=await api.post('/admin/sources',f); (r&&r.code===1)?ElMessage.success('已创建'):ElMessage.error(r.msg); }
+      dialog.show=false; load();
+    };
+    const del = async (r)=>{ await ElMessageBox.confirm('确认删除采集源?','删除'); const x=await api.del('/admin/sources/'+r.id); (x&&x.code===1)?ElMessage.success('已删除'):ElMessage.error(x.msg); load(); };
+    const sync = async ()=>{ const r=await api.post('/admin/sync',{keyword:syncKw.value}); (r&&r.code===1)?ElMessage.success('采集完成'):ElMessage.error(r.msg); load(); };
+    onMounted(load);
+    return { sources, dialog, syncKw, openAdd, openEdit, save, del, sync };
+  },
+  template:`
+  <div class="panel">
+    <div class="toolbar"><h3 style="margin:0;color:#303133">📡 采集源</h3><el-button type="primary" size="small" @click="openAdd">新增采集源</el-button><el-divider direction="vertical"/><el-input v-model="syncKw" placeholder="关键词" style="width:200px"/><el-button size="small" type="warning" @click="sync">同步采集</el-button></div>
+    <el-table :data="sources" size="small">
+      <el-table-column prop="name" label="名称"></el-table-column>
+      <el-table-column prop="source_type" label="类型" width="80"><template #default="s"><el-tag size="small">{{s.row.source_type}}</el-tag></template></el-table-column>
+      <el-table-column prop="fetch_url" label="搜索接口" show-overflow-tooltip></el-table-column>
+      <el-table-column prop="method" label="方法" width="70"></el-table-column>
+      <el-table-column prop="enabled" label="启用" width="70"><template #default="s"><el-tag :type="s.row.enabled?'success':'info'" size="small">{{s.row.enabled?'开':'关'}}</el-tag></template></el-table-column>
+      <el-table-column label="操作" width="150"><template #default="s"><el-button size="small" @click="openEdit(s.row)">编辑</el-button><el-button size="small" type="danger" plain @click="del(s.row)">删除</el-button></template></el-table-column>
+    </el-table>
+    <el-dialog v-model="dialog.show" :title="dialog.isEdit?'编辑采集源':'新增采集源'" width="560px">
+      <el-form :model="dialog.form" label-width="90px">
+        <el-form-item label="名称"><el-input v-model="dialog.form.name"/></el-form-item>
+        <el-form-item label="类型"><el-select v-model="dialog.form.source_type"><el-option value="api" label="JSON API"/><el-option value="html" label="HTML"/><el-option value="custom" label="自定义"/></el-select></el-form-item>
+        <el-form-item label="搜索接口"><el-input v-model="dialog.form.fetch_url" placeholder="支持 {keyword} 占位符"/></el-form-item>
+        <el-form-item label="方法"><el-select v-model="dialog.form.method"><el-option value="GET" label="GET"/><el-option value="POST" label="POST"/></el-select></el-form-item>
+        <el-form-item label="提取规则"><el-input v-model="dialog.form.extract_rules" type="textarea" :rows="3" placeholder='{"item":"$.video_list"}'/></el-form-item>
+        <el-form-item label="优先级"><el-input-number v-model="dialog.form.priority"/></el-form-item>
+        <el-form-item label="启用"><el-switch v-model="dialog.form.enabled" :active-value="1" :inactive-value="0"/></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="dialog.show=false">取消</el-button><el-button type="primary" @click="save">保存</el-button></template>
+    </el-dialog>
+  </div>`
+};
+
+// ---------- 映射设置 ----------
+const MappingView = {
+  setup(){
+    const maps = ref([]);
+    const testRaw = reactive({site_code:'', raw_data:''});
+    const testRes = ref(null);
+    const load = async ()=>{ const d=okData(await api.get('/admin/mappings')); maps.value=d||[]; };
+    const test = async ()=>{ if(!testRaw.raw_data){ElMessage.warning('请输入原始数据');return;} const r=await api.post('/admin/mapping/test',testRaw); testRes.value=r.data||r; };
+    onMounted(load);
+    return { maps, testRaw, testRes, load, test };
+  },
+  template:`
+  <div>
+    <div class="panel">
+      <h3 style="margin:0 0 12px;color:#303133">🗺️ 站点映射（七大站预置 + 自定义）</h3>
+      <el-table :data="maps" size="small">
+        <el-table-column prop="site_code" label="编码" width="110"></el-table-column>
+        <el-table-column prop="site_name" label="站点"></el-table-column>
+        <el-table-column prop="site_domain" label="域名正则" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="name_field" label="剧名路径" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="episodes_path" label="集数路径" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="is_builtin" label="预置" width="70"><template #default="s"><el-tag :type="s.row.is_builtin?'warning':'info'" size="small">{{s.row.is_builtin?'内置':'自定义'}}</el-tag></template></el-table-column>
+        <el-table-column prop="enabled" label="启用" width="70"><template #default="s"><el-tag :type="s.row.enabled?'success':'info'" size="small">{{s.row.enabled?'开':'关'}}</el-tag></template></el-table-column>
+      </el-table>
+    </div>
+    <div class="panel">
+      <h3 style="margin:0 0 12px;color:#303133">字段映射测试</h3>
+      <el-form :model="testRaw" label-width="120px" style="max-width:760px">
+        <el-form-item label="站点编码"><el-select v-model="testRaw.site_code" placeholder="选站点"><el-option v-for="m in maps" :key="m.site_code" :label="m.site_name" :value="m.site_code"/></el-select></el-form-item>
+        <el-form-item label="原始数据(JSON)"><el-input v-model="testRaw.raw_data" type="textarea" :rows="5" placeholder='{"vod_name":"庆余年","vod_play_from":[...]}'/></el-form-item>
+        <el-button type="primary" @click="test">解析</el-button>
+      </el-form>
+      <el-descriptions v-if="testRes" :column="2" border size="small" style="margin-top:12px">
+        <el-descriptions-item label="剧名">{{testRes.name}}</el-descriptions-item>
+        <el-descriptions-item label="集数">{{testRes.episodes_count}}</el-descriptions-item>
+      </el-descriptions>
+    </div>
+  </div>`
+};
+
+// ---------- 影片管理 ----------
+const VodsView = {
+  setup(){
+    const vods = ref([]); const kw = ref(''); const page = ref(1); const total = ref(0);
+    const load = async ()=>{ const r=await api.get('/admin/vods?page='+page.value+'&size=20&keyword='+encodeURIComponent(kw.value)); const d=okData(r); if(d){ vods.value = Array.isArray(d)?d:(d.list||d.items||[]); total.value = d.total||vods.value.length; } };
+    const search = ()=>{ page.value=1; load(); };
+    onMounted(load);
+    return { vods, kw, page, total, load, search };
+  },
+  template:`
+  <div class="panel">
+    <div class="toolbar"><h3 style="margin:0;color:#303133">📼 影片管理</h3><el-input v-model="kw" placeholder="搜索剧名" style="width:220px" @keyup.enter="search"/><el-button type="primary" size="small" @click="search">搜索</el-button></div>
+    <el-table :data="vods" size="small">
+      <el-table-column prop="name" label="剧名" min-width="160"></el-table-column>
+      <el-table-column prop="category" label="分类" width="120"></el-table-column>
+      <el-table-column prop="year" label="年份" width="70"></el-table-column>
+      <el-table-column prop="region" label="地区" width="90"></el-table-column>
+      <el-table-column prop="vod_id" label="来源ID" show-overflow-tooltip></el-table-column>
+      <el-table-column label="集数" width="80"><template #default="s">{{s.row.episodes? s.row.episodes.length : 0}}</template></el-table-column>
+    </el-table>
+    <el-pagination style="margin-top:12px" layout="prev, pager, next, total" :total="total" :page-size="20" v-model:current-page="page" @current-change="load"/>
+  </div>`
+};
+
+// ---------- 更新设置 ----------
+const UpdaterView = {
+  setup(){
+    const form = reactive({});
+    const logs = ref([]);
+    const load = async ()=>{ const d=okData(await api.get('/admin/update/config')); if(d) Object.assign(form,d); const lg=okData(await api.get('/admin/update/logs')); logs.value=lg||[]; };
+    const save = async ()=>{ const r=await api.put('/admin/update/config',form); (r&&r.code===1)?ElMessage.success('已保存'):ElMessage.error(r.msg); };
+    const check = async ()=>{ const r=await api.post('/admin/update/check',{}); if(r&&r.code===1){ ElMessage.success(r.data.has_update?'发现新版本 '+r.data.remote:'已是最新 '+r.data.current);} };
+    const speed = async ()=>{ const r=await api.post('/admin/update/mirror-speed',{}); (r&&r.code===1)?ElMessage.success('测速完成'):ElMessage.error(r.msg); };
+    const dl = async ()=>{ const r=await api.post('/admin/update/download',{}); (r&&r.code===1)?ElMessage.success('已下载，请重启服务'):ElMessage.error(r.msg); };
+    onMounted(load);
+    return { form, logs, save, check, speed, dl };
+  },
+  template:`
+  <div>
+    <div class="panel">
+      <h3 style="margin:0 0 12px;color:#303133">🔄 更新设置</h3>
+      <el-form :model="form" label-width="120px" style="max-width:620px">
+        <el-form-item label="仓库地址"><el-input v-model="form.repo"/></el-form-item>
+        <el-form-item label="启动检查"><el-switch v-model="form.auto_check" :active-value="1" :inactive-value="0"/></el-form-item>
+        <div class="toolbar"><el-button type="primary" @click="save">保存</el-button><el-button @click="speed">测速镜像</el-button><el-button type="warning" @click="check">检查更新</el-button><el-button type="danger" @click="dl">一键下载更新</el-button></div>
+      </el-form>
+    </div>
+    <div class="panel">
+      <h3 style="margin:0 0 12px;color:#303133">更新日志</h3>
+      <el-table :data="logs" size="small">
+        <el-table-column prop="version" label="版本" width="100"><template #default="s"><el-tag size="small">{{s.row.version}}</el-tag></template></el-table-column>
+        <el-table-column prop="status" label="状态" width="90"></el-table-column>
+        <el-table-column prop="message" label="信息"></el-table-column>
+        <el-table-column prop="created_at" label="时间" width="160"></el-table-column>
+      </el-table>
+    </div>
+  </div>`
+};
+
+// ---------- 管理员 ----------
+const AdminView = {
+  setup(){
+    const health = ref(null);
+    const info = [
+      {label:'服务地址', val: location.protocol+'//'+location.host},
+      {label:'管理页面', val: location.protocol+'//'+location.host+'/admin-ui'},
+      {label:'统一播放入口', val: '/api/play?url=&title=&ep='},
+      {label:'苹果CMS', val: '/api.php/provide/vod/?ac=list'},
+      {label:'解析接口', val: '/api/resolve?url='},
+    ];
+    const load = async ()=>{ const r=await api.get('/api/health'); if(r&&r.code===1) health.value=r; };
+    onMounted(load);
+    return { info, health };
+  },
+  template:`
+  <div class="panel">
+    <h3 style="margin:0 0 12px;color:#303133">🔑 系统信息</h3>
+    <el-descriptions :column="1" border size="small" style="max-width:640px">
+      <el-descriptions-item v-for="it in info" :key="it.label" :label="it.label"><span class="mono">{{it.val}}</span></el-descriptions-item>
+      <el-descriptions-item label="版本"><el-tag type="success">{{health && health.version}}</el-tag></el-descriptions-item>
+      <el-descriptions-item label="Go 运行时">{{health && health.runtime}}</el-descriptions-item>
+      <el-descriptions-item label="数据库">{{health && health.db}}</el-descriptions-item>
+      <el-descriptions-item label="缓存">{{health && health.cache}}</el-descriptions-item>
+    </el-descriptions>
+    <div class="vl" style="margin-top:12px;font-size:12px">默认账号 admin / admin123（可用环境变量 MXGT_ADMIN_USER / MXGT_ADMIN_PASSWORD 覆盖）</div>
+  </div>`
+};
+
+// ---------- 注册组件 ----------
+App.components = {
+  DashView, PlayView, FrontView, AnalysisView, AiView, MatchingView, ChainView,
+  RulesView, SourcesView, MappingView, VodsView, UpdaterView, AdminView
+};
+createApp(App).use(ElementPlus).mount('#app');
 </script>
 </body>
 </html>

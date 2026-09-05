@@ -126,8 +126,13 @@ func (p *Pipeline) runNode(ctx context.Context, current string, n Node) (string,
 		// 代理节点：实际由后端 /api/proxy/stream 转发；这里输出原样（proxy 由播放端发起）
 		return current, nil
 	case NodeSkipAd, NodeBlockAd:
-		// 去插播/去广告：依赖 M16 AI 智能分析模块，此处先透传
-		return current, nil
+		// 去插播/去广告：若配置了外部接口（endpoint 带 {input_url}）则调用该接口；
+		// 未配置时由统一播放入口(PlayService)的 AI 去广告模块负责，此处透传。
+		if n.Endpoint == "" {
+			return current, nil
+		}
+		url := strings.ReplaceAll(n.Endpoint, "{input_url}", current)
+		return p.httpCall(ctx, n, url)
 	case NodeCustom:
 		// 通用 HTTP 节点：替换 {input_url}，请求后按 result_path 提取
 		if n.Endpoint == "" {

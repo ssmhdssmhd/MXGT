@@ -1,11 +1,13 @@
 # MXGT
 
 > 视频资源聚合 + 苹果 CMS v10 对接 + JSON 解析路由 + 在线播放页的综合后台
-> 版本：v0.0.18
+> 版本：v0.0.19
 
 ## ✨ 特性
 
 - 🖥️ **在线播放页**：`?url=xxx` 动态渲染（DPlayer + hls.js），API 地址不硬编码（query / localStorage / 同域 三层兜底）
+- 🌟 **核心两条功能链路打通**：统一播放入口 `GET /api/play?url=&title=&ep=`——功能一（官方链接）抓映射剧名集数→用资源站搜索接口搜对应资源→替换为可播放链接→去插播/去广告→返回；功能二（可直接播放链接 .m3u8/.mp4/.flv）直接去广告/去插播→返回最终链接，自动按「官方/直链/未知」分发
+- 🖥️ **管理后台现代化**：后台升级为 Vue3 + Element Plus 组件化单文件（CDN 免构建、go:embed 内嵌），覆盖 15 模块并补齐解析规则/采集源/映射增删改、播放测试、AI 指纹库/分析日志、Pipeline 链路测试
 - 🛰️ **JSON 解析路由**：可配置**多条解析规则**（对接多个源站），支持 JSONPath / Regex / Custom 三种提取器，按优先级依次匹配
 - 🔀 **多提取器**：`jsonpath` / `regex` / `custom` 接口化注册，新增提取器只需实现 `Extractor` 接口
 - 📡 **多源采集器**：`api` / `html` / `custom` 采集器接口化注册，支持**对接多个采集源**；`POST /admin/sync` 一键采集 → 剧名模糊匹配 → 自动合并入库
@@ -71,6 +73,7 @@ docker compose down           # 停止
 |---|---|---|---|
 | GET | `/api/health` | 健康检查（版本 / db / cache） | 无 |
 | GET | `/api/resolve?url=xxx` | 解析源站 URL → 真实视频链接 | 无 |
+| GET | `/api/play?url=&title=&ep=` | 🌟 统一播放入口：自动按「官方/直链/未知」分发，官方=搜资源替换链接、直链=去广告/去插播，返回最终链接 | 无 |
 | GET | `/api/proxy/stream?url=xxx` | 视频流代理（防盗链 / 跨域） | 无 |
 | POST | `/admin/login` | 登录，返回 JWT（默认 admin/admin123，可用环境变量覆盖） | 无 |
 | GET | `/admin/rules` | 解析规则列表（多条） | JWT |
@@ -139,6 +142,25 @@ docker compose down           # 停止
     "proxy": false,
     "rule_id": 1,
     "cache_hit": false
+  }
+}
+```
+
+🌐 `/api/play` 统一播放入口返回格式（核心两条功能链路的统一输出）：
+
+```json
+{
+  "code": 1,
+  "msg": "ok",
+  "data": {
+    "url": "https://xxx/clean/index.m3u8",
+    "type": "hls",
+    "mode": "direct",
+    "source": "源A-苹果CMS",
+    "title": "庆余年",
+    "cleaned": true,
+    "clean_m3u8": "#EXTM3U\n#EXT-X-VERSION:3\n... (去广告后的干净流)",
+    "steps": ["识别为可播放直链: hls", "调用节点[去广告]", "AI 去广告: 剔除广告分片，生成干净流"]
   }
 }
 ```
@@ -320,6 +342,11 @@ internal/
 - [KF思路.md](KF思路.md)：开发者思路文档（总体架构 / 管理后台 / AI 分析 / 部署分发 / 里程碑）
 
 ## 📝 更新日志
+
+### v0.0.19
+- 新增：🌟 核心两条功能链路打通——统一播放入口 `GET /api/play?url=&title=&ep=`（internal/service/play_service.go）自动按「官方/直链/未知」分发：功能一（官方链接）抓映射剧名集数→用资源站搜索接口搜对应资源→替换为可播放链接→去插播/去广告→返回；功能二（可直接播放链接 .m3u8/.mp4/.flv）直接去广告/去插播→返回最终链接
+- 新增：chaining pipeline 的 skip_ad/block_ad 节点支持配置外部去广告/去插播接口（endpoint 带 {input_url}）
+- 升级：管理后台现代化——Vue3 + Element Plus 组件化单文件（CDN 免构建、go:embed 内嵌），15 模块，补齐解析规则/采集源/映射增删改 + 播放测试（直连核心链路）+ AI 指纹库/分析日志 + Pipeline 链路测试
 
 ### v0.0.18
 - 新增：🤖 M16 AI 智能视频分析——internal/ai（m3u8 解析→ts 分片 / MD5 流式 + 指纹库 O(1) 命中 / 启发式判定 / 去广告 m3u8 生成）

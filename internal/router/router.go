@@ -38,6 +38,8 @@ func New(db *gorm.DB, c cache.Cache, cfg *config.Config, version string) *echo.E
 	api := e.Group("/api")
 	api.GET("/health", handler.NewHealthHandler(db, c, version).Check)
 	api.GET("/resolve", handler.NewResolveHandler(db, resolveSvc).Resolve)
+	// 统一播放入口（核心两种功能：官方链接搜资源替换 / 直链去广告去插播）
+	api.GET("/play", handler.NewPlayHandler(service.NewPlayService(db, resolveSvc)).Play)
 	api.GET("/proxy/stream", handler.NewProxyHandler(db).Stream)
 
 	// 对外：苹果 CMS v10 兼容输出（ac=list / detail / search / play）
