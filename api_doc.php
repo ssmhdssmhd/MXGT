@@ -684,14 +684,74 @@ $apiBase = $basePath . '/mx.php?action=';
                             </table>
                         </div>
                         <div class="api-section">
-                            <div class="api-section-title">📦 其他接口（4个）</div>
+                            <div class="api-section-title">🗂️ 资源站规则（独立规则库，12个）</div>
+                            <table class="param-table">
+                                <thead><tr><th>接口路径</th><th>说明</th><th>方法</th></tr></thead>
+                                <tbody>
+                                    <tr><td><code>resource_rules/list</code></td><td>资源站规则列表</td><td>GET</td></tr>
+                                    <tr><td><code>resource_rules/get</code></td><td>获取单条资源站规则</td><td>GET</td></tr>
+                                    <tr><td><code>resource_rules/add</code></td><td>添加资源站规则</td><td>POST</td></tr>
+                                    <tr><td><code>resource_rules/update</code></td><td>更新资源站规则</td><td>POST</td></tr>
+                                    <tr><td><code>resource_rules/delete</code></td><td>删除资源站规则</td><td>POST</td></tr>
+                                    <tr><td><code>resource_rules/toggle</code></td><td>启用/禁用资源站规则</td><td>POST</td></tr>
+                                    <tr><td><code>resource_rules/clear</code></td><td>清空资源站规则</td><td>POST</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="api-section">
+                            <div class="api-section-title">🤖 AI 自动学习（8个）</div>
+                            <table class="param-table">
+                                <thead><tr><th>接口路径</th><th>说明</th><th>方法</th></tr></thead>
+                                <tbody>
+                                    <tr><td><code>ai_autolearn/config</code></td><td>AI自动学习配置</td><td>GET</td></tr>
+                                    <tr><td><code>ai_autolearn/config/save</code></td><td>保存AI自动学习配置</td><td>POST</td></tr>
+                                    <tr><td><code>ai_autolearn/status</code></td><td>AI自动学习状态</td><td>GET</td></tr>
+                                    <tr><td><code>ai_autolearn/run</code></td><td>执行AI自动学习</td><td>POST</td></tr>
+                                    <tr><td><code>ai_autolearn/logs</code></td><td>AI自动学习日志</td><td>GET</td></tr>
+                                    <tr><td><code>ai_autolearn/cleanup</code></td><td>清理失效规则</td><td>POST</td></tr>
+                                    <tr><td><code>ai_autolearn/trigger</code></td><td>懒触发自动学习+清理</td><td>GET</td></tr>
+                                    <tr><td><code>ai_autolearn/sites</code></td><td>生效资源站列表</td><td>GET</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="api-section">
+                            <div class="api-section-title">📢 公告管理（4个）</div>
+                            <table class="param-table">
+                                <thead><tr><th>接口路径</th><th>说明</th><th>方法</th></tr></thead>
+                                <tbody>
+                                    <tr><td><code>announcement/list</code></td><td>公告列表</td><td>GET</td></tr>
+                                    <tr><td><code>announcement/save</code></td><td>批量保存公告</td><td>POST</td></tr>
+                                    <tr><td><code>announcement/add</code></td><td>新增公告</td><td>POST</td></tr>
+                                    <tr><td><code>announcement/refresh</code></td><td>拉取远程公告</td><td>POST</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="api-section">
+                            <div class="api-section-title">🕷️ 嗅探设置（4个）</div>
+                            <table class="param-table">
+                                <thead><tr><th>接口路径</th><th>说明</th><th>方法</th></tr></thead>
+                                <tbody>
+                                    <tr><td><code>sniffer/config</code></td><td>嗅探配置</td><td>GET</td></tr>
+                                    <tr><td><code>sniffer/config/save</code></td><td>保存嗅探配置</td><td>POST</td></tr>
+                                    <tr><td><code>sniffer/perf_stats</code></td><td>嗅探性能统计</td><td>GET</td></tr>
+                                    <tr><td><code>sniffer/perf_stats/reset</code></td><td>重置嗅探性能统计</td><td>POST</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="api-section">
+                            <div class="api-section-title">📦 其他接口（8个）</div>
                             <table class="param-table">
                                 <thead><tr><th>接口路径</th><th>说明</th><th>方法</th></tr></thead>
                                 <tbody>
                                     <tr><td><code>info</code></td><td>系统信息</td><td>GET</td></tr>
+                                    <tr><td><code>info/version</code></td><td>版本信息（带懒触发）</td><td>GET</td></tr>
                                     <tr><td><code>version</code></td><td>版本信息</td><td>GET</td></tr>
                                     <tr><td><code>api/v2</code></td><td>v2统一接口</td><td>GET/POST</td></tr>
                                     <tr><td><code>kz/cache</code></td><td>缓存型M3U8解析</td><td>GET</td></tr>
+                                    <tr><td><code>official/list</code></td><td>官方替换渠道列表</td><td>GET</td></tr>
+                                    <tr><td><code>official/platforms</code></td><td>官方平台列表</td><td>GET</td></tr>
+                                    <tr><td><code>parse_test</code></td><td>M3U8解析测试工具</td><td>GET</td></tr>
+                                    <tr><td><code>placeholder_ts</code></td><td>占位TS切片</td><td>GET</td></tr>
                                 </tbody>
                             </table>
                         </div>

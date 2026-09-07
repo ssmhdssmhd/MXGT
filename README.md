@@ -9,9 +9,15 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.14.2（2026-09-07）
+## 当前版本 v5.14.3（2026-09-07）
 
-> 发布版本号标识提升至 v5.14.2（version_code 51402），无业务逻辑改动，功能与 v5.14.1 一致。
+> 接口去重 + API 文档补全：删除后台私有重复别名 `notice/*` 与 `ad_signatures/*`，并补全 `api_doc.php` 完整接口索引。功能与 v5.14.2 一致。
+
+### 🔧 接口去重与 API 文档补全
+
+- **接口去重**：移除重复别名公告接口（`notice/*`，保留规范名 `announcement/*`）与特征码接口（`ad_signatures/*`，保留规范名 `signatures/*`）；保留公有解析别名 `jx / parse/parse / moxi/api` 以免破坏外部已引用链接。
+- **API 文档**：`api_doc.php`「完整接口索引」新增「资源站规则 / AI自动学习 / 公告管理 / 嗅探设置」四分类，并补充 `info/version`、`official/list`、`official/platforms`、`parse_test`、`placeholder_ts`，列全所有规范接口。
+- 验证：`php -l mx.php / api_doc.php` 全部通过。
 
 ### 🆕 新增后台两个独立页面：域名发现 + 资源站规则
 

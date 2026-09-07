@@ -4893,7 +4893,6 @@ try {
             break;
 
         case 'announcement/list':
-        case 'notice/list':
             $announcementFile = __DIR__ . '/gg.txt';
             $announcements = [];
             $lastModified = null;
@@ -4932,7 +4931,6 @@ try {
             break;
 
         case 'announcement/save':
-        case 'notice/save':
             $input = getInputJson();
             $announcements = $input['announcements'] ?? $input['list'] ?? [];
             $content = '';
@@ -4972,7 +4970,6 @@ try {
             break;
 
         case 'announcement/add':
-        case 'notice/add':
             $input = getInputJson();
             $text = $input['text'] ?? $input['content'] ?? '';
             $date = $input['date'] ?? date('Y-m-d');
@@ -5008,7 +5005,6 @@ try {
             break;
 
         case 'announcement/refresh':
-        case 'notice/refresh':
             $remoteUrls = [
                 'https://raw.githubusercontent.com/ssmhdssmhd/qcb/main/gg.txt',
                 'https://cdn.jsdelivr.net/gh/ssmhdssmhd/qcb@main/gg.txt',
@@ -5191,7 +5187,6 @@ try {
             break;
 
         case 'signatures/list':
-        case 'ad_signatures/list':
             $domain = $_GET['domain'] ?? '';
             $type = $_GET['type'] ?? null;
             if (empty($domain)) {
@@ -5240,7 +5235,6 @@ try {
             break;
 
         case 'signatures/add':
-        case 'ad_signatures/add':
             $domain = $_GET['domain'] ?? $_POST['domain'] ?? '';
             $type = $_GET['type'] ?? $_POST['type'] ?? '';
             $value = $_GET['value'] ?? $_POST['value'] ?? '';
@@ -5273,7 +5267,6 @@ try {
             break;
 
         case 'signatures/delete':
-        case 'ad_signatures/delete':
             $id = $_GET['id'] ?? $_POST['id'] ?? 0;
             if (empty($id)) {
                 sendJsonResponse(['success' => false, 'message' => '缺少 id 参数'], 400);
@@ -5301,7 +5294,6 @@ try {
             break;
 
         case 'signatures/stats':
-        case 'ad_signatures/stats':
             $domain = $_GET['domain'] ?? null;
             if (!$useDb) {
                 sendJsonResponse([
@@ -5328,7 +5320,6 @@ try {
             break;
 
         case 'signatures/clean':
-        case 'ad_signatures/clean':
             $minConfidence = isset($_GET['min_confidence']) ? (int)$_GET['min_confidence'] : 30;
             if (!$useDb) {
                 sendJsonResponse([

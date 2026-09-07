@@ -1,13 +1,26 @@
 <?php
 return array (
-  'version' => 'v5.14.2',
+  'version' => 'v5.14.3',
   'branch' => 'main',
-  'build' => '20260907-v5-14-2-release',
-  'version_code' => 51402,
-  'commit' => 'v5.14.2-release',
+  'build' => '20260907-v5-14-3-release',
+  'version_code' => 51403,
+  'commit' => 'v5.14.3-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.14.3' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【接口去重 + API文档补全】删除 notice/* 与 ad_signatures/* 重复别名，补全 API 文档接口索引',
+      'changes' =>
+      array (
+        0 => '【接口去重】mx.php 移除重复别名公告接口 notice/list、notice/save、notice/add、notice/refresh（保留规范名 announcement/*，前端/文档均使用该写法）',
+        1 => '【接口去重】mx.php 移除重复别名特征码接口 ad_signatures/list、add、delete、stats、clean（保留规范名 signatures/*）；全局确认无残留引用',
+        2 => '【API文档-索引】api_doc.php「完整接口索引」新增「资源站规则 / AI自动学习 / 公告管理 / 嗅探设置」四分类，并在「其他接口」补充 info/version、official/list、official/platforms、parse_test、placeholder_ts，列全所有规范接口',
+        3 => '【保留别名】按约定保留公有解析别名 jx、parse/parse、moxi/api 以避免破坏外部已引用链接，仅清理后台私有别名',
+        4 => '【验证】php -l mx.php / api_doc.php 全部 No syntax errors detected',
+      ),
+    ),
     'v5.14.2' =>
     array (
       'date' => '2026-09-07',
