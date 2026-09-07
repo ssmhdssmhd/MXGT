@@ -24,11 +24,11 @@ return array (
   'dedup_retention_days' => 7,
   'min_learn_count_to_track' => 1,
   'access_key' => '',
-  'last_run_time' => '2026-08-13 22:03:53',
+  'last_run_time' => '2026-09-07 19:56:43',
   'auto_trigger_on_request' => true,
   'auto_cleanup_stale_rules' => true,
   'stale_rule_days' => 30,
   'cleanup_health_timeout' => 6,
   'cleanup_interval_hours' => 24,
-  'last_cleanup_time' => '2026-08-13 22:05:20',
+  'last_cleanup_time' => '2026-09-07 19:55:44',
 );
