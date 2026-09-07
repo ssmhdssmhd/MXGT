@@ -1,13 +1,27 @@
 <?php
 return array (
-  'version' => 'v5.15.2',
+  'version' => 'v5.15.3',
   'branch' => 'main',
-  'build' => '20260907-v5-15-2-admonitor-placeholder',
-  'version_code' => 51502,
-  'commit' => 'v5.15.2-release',
+  'build' => '20260907-v5-15-3-rule-auto-api-picker',
+  'version_code' => 51503,
+  'commit' => 'v5.15.3-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.15.3' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【资源站规则自动获取 + 外置播放修复 + 接口选择器】输入资源站链接自动抓取分析配置规则，每 2 小时自动同步；加密/fMP4 流保留 EXT-X-KEY/MAP 修复外置播放无画面；侧边栏新增接口选择（独立/组合调用）',
+      'changes' =>
+      array (
+        0 => '【新增-规则自动获取】新建 gz/ResourceRuleAutoFetcher.php：输入资源站采集链接（如 https://www.example.com/api.php/provide/vod/），自动拉取视频列表→逐个解析 M3U8 深度分析广告特征→自动汇总 5 类规则（时长/不连续/序列/文件名/关键词）写入 resource_site_rules（跨视频命中≥2 次才写入，同站同类型去重）；后台「资源站规则」页新增「自动获取」卡片（链接+站名+分析数+结果明细）与「一键同步全部资源站」',
+        2 => '【新增-每2小时自动同步】resource_rules/sync 支持一键同步全部启用资源站；后台打开规则页时检测距上次同步≥2 小时自动后台异步触发；新增 sync/status 与 sync/config/save（开关+间隔可调，默认 2 小时）；gx.php 新增 resource_rules_sync 任务（可单跑/并入 all），自动维护页新增「⚡ 一键更新维护规则」按钮',
+        3 => '【修复-外置播放无画面】M3U8Parser 新增 #EXT-X-KEY（METHOD/URI/IV/KEYFORMAT）与 #EXT-X-MAP 解析，逐片段记录密钥/init segment 状态；OutputGenerator 输出时按密钥轮换重发 EXT-X-KEY、fMP4 流输出 EXT-X-MAP、占位黑屏 TS 显式 METHOD=NONE（未加密不再被旧 key 解密导致黑屏）。修复加密流/CMAF 流经去广告后外置播放器「进度条动但不显示画面」',
+        4 => '【新增-接口选择器】后台侧边栏「接口工具」新增「接口选择」页：全局开关 + 独立/组合调用模式 + 接口列表（自定义清洗接口默认 http://域名/api/clean/?url= 置顶，{host} 自动替换本站地址，http/https 均可；内置沫兮/官解/官替/去广告按需启停排序）+ 按当前配置测试调用；开启后 parse 入口按配置顺序逐个尝试，返回首个成功并标注 via 接口',
+        5 => '【接口】新增 resource_rules/auto_fetch、resource_rules/sync、resource_rules/sync/status、resource_rules/sync/config/save、api_picker/config、api_picker/config/save、api_picker/run',
+        6 => '【验证】php -l mx.php/mxadmin.php/gx.php/gz/ResourceRuleAutoFetcher.php/src/M3U8Parser.php/src/OutputGenerator.php 全部通过；KEY 轮换解析输出往返一致；自动规则写入去重（二次运行 0 新增）；接口选择器实测 single 模式经 mxjx 返回 play_url 与 via 标记',
+      ),
+    ),
     'v5.15.2' =>
     array (
       'date' => '2026-09-07',

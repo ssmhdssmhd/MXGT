@@ -4000,7 +4000,66 @@ if (!$_mxGXSecret) {
                 </div>
             </div>
 
-            <!-- ③ 规则表单 -->
+            <!-- ③ 自动获取（输入资源站链接 → 自动抓取 → 自动配置规则） -->
+            <div class="card" style="border:1px solid rgba(124,58,237,.35)">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <span class="step-title"><span class="step-badge primary">⚡</span><span>自动获取规则</span></span>
+                    <span class="section-caption">输入资源站采集链接，自动拉取视频分析广告特征并自动配置 5 类规则；每 2 小时自动同步更新</span>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group" style="grid-column:auto/-1">
+                        <label>资源站采集链接 <span class="req-flag">★</span></label>
+                        <input type="text" id="srAutoApiUrl" placeholder="例如：https://www.example.com/api.php/provide/vod/" style="width:100%">
+                        <div class="form-tip">苹果CMS/通用采集接口（ac=detail 拉取视频列表），http/https 均可。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>资源站名称（留空自动取域名）</label>
+                        <input type="text" id="srAutoSiteName" placeholder="选填">
+                    </div>
+                    <div class="form-group">
+                        <label>分析视频数</label>
+                        <select id="srAutoMaxVideos">
+                            <option value="3">3 个（快速）</option>
+                            <option value="5" selected>5 个（推荐）</option>
+                            <option value="8">8 个（更全面）</option>
+                            <option value="10">10 个（最全）</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="action-bar tight">
+                    <button class="btn btn-primary" onclick="srAutoFetch()" id="srAutoFetchBtn">⚡ 自动抓取并配置规则</button>
+                    <button class="btn btn-success" onclick="srSyncAll()" id="srSyncAllBtn">🔄 一键同步全部资源站</button>
+                </div>
+                <div id="srAutoResult" style="margin-top:14px;display:none"></div>
+            </div>
+
+            <!-- ④ 自动同步设置（每 2 小时） -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <span class="step-title"><span class="step-badge warning">⏰</span><span>自动同步设置</span></span>
+                    <span class="section-caption" id="srSyncStatus">上次同步：-</span>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>启用自动同步</label>
+                        <select id="srSyncEnabled">
+                            <option value="1">✅ 启用</option>
+                            <option value="0">⏸ 停用</option>
+                        </select>
+                        <div class="form-tip">后台打开本页面/自动维护触发时，距上次同步满间隔自动后台执行一次。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>同步间隔（小时）</label>
+                        <input type="number" id="srSyncInterval" value="2" min="1" max="24">
+                        <div class="form-tip">默认每 2 小时自动访问资源站更新一次规则。</div>
+                    </div>
+                </div>
+                <div class="action-bar tight">
+                    <button class="btn btn-secondary" onclick="srSaveSyncConfig()">💾 保存同步设置</button>
+                </div>
+            </div>
+
+            <!-- ⑤ 规则表单 -->
             <div class="card" id="srEditor">
                 <div class="card-title">
                     <span class="step-title"><span class="step-badge success">①</span><span id="srEditorTitle">➕ 新增规则</span></span>
@@ -5324,7 +5383,7 @@ if (!$_mxGXSecret) {
                 <div class="action-bar" style="margin-bottom:16px;flex-wrap:wrap;align-items:center">
                     <div style="font-size:13px;color:var(--text-regular);font-weight:600">任务类型:</div>
                     <select id="gxAction" class="gx-select" style="padding:10px 12px;border:1px solid var(--border-base);border-radius:8px;background:#fff;font-size:13px;min-width:260px">
-                        <option value="all">全部 (7 步一条龙)</option>
+                        <option value="all">全部 (8 步一条龙)</option>
                         <option value="check">① 语法检查 check</option>
                         <option value="migrate">② 数据库迁移 migrate</option>
                         <option value="official_refresh">③ 官替纠偏/刷新 official_refresh</option>
@@ -5332,6 +5391,7 @@ if (!$_mxGXSecret) {
                         <option value="ai_cleanup">⑤ AI 旧样本清理 ai_cleanup</option>
                         <option value="site_check">⑥ 资源站健康巡检 site_check</option>
                         <option value="rule_check">⑦ 域名规则健康检查 rule_check</option>
+                        <option value="resource_rules_sync">⑧ 资源站规则自动同步 resource_rules_sync</option>
                         <option value="status">只看上次执行结果 status</option>
                     </select>
                     <div style="font-size:13px;color:var(--text-regular)">最大处理数:</div>
@@ -5341,6 +5401,7 @@ if (!$_mxGXSecret) {
                     </label>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-left:auto">
                         <button class="btn btn-primary" id="gxStartBtn" onclick="gxStartTask()">▶ 开始执行</button>
+                        <button class="btn btn-success" onclick="gxQuickSyncRules()">⚡ 一键更新维护规则</button>
                         <button class="btn btn-secondary" onclick="gxRefreshProgress()">🔃 刷新进度</button>
                         <button class="btn btn-danger" id="gxStopBtn" style="display:none" onclick="gxStopTask()">⛔ 停止轮询</button>
                     </div>
@@ -6694,6 +6755,82 @@ if (!$_mxGXSecret) {
             </script>
         </div>
 
+        <div class="page" id="page-api_picker">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🎛️ 接口选择</span>
+                        <span class="status-pill purple" id="apiPickerStatusPill">未启用</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">选择不同的解析接口：可独立调用，也可组合按顺序逐个尝试；默认自定义接口 http://域名/api/clean/?url=</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item primary">
+                        <div class="overview-title">🔄 组合调用</div>
+                        <div class="overview-desc">
+                            按下方顺序逐个尝试启用的接口，<strong>第一个成功即返回</strong>，全部失败给出各接口失败原因。适合追求解析成功率。
+                        </div>
+                    </div>
+                    <div class="overview-item success">
+                        <div class="overview-title">🎯 独立调用</div>
+                        <div class="overview-desc">
+                            只使用<strong>第一个启用</strong>的接口，其余忽略。适合指定特定接口（如只用自定义清洗接口）。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 开关 + 模式 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">①</span><span>总开关 & 调用模式</span></span>
+                    <span class="section-caption">开启后解析入口（parse 等）按本配置调用；关闭则走原有默认链路</span>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>接口选择器</label>
+                        <select id="apiPickerEnabled">
+                            <option value="0">⏸ 停用（走默认解析链路）</option>
+                            <option value="1">✅ 启用</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>调用模式</label>
+                        <select id="apiPickerMode">
+                            <option value="combo">🔄 组合调用（按顺序逐个尝试）</option>
+                            <option value="single">🎯 独立调用（仅用第一个启用）</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ③ 接口列表 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">②</span><span>接口列表</span></span>
+                    <span class="section-caption">勾选启用、拖动调整顺序（↑↓ 按钮），组合调用按此顺序尝试</span>
+                </div>
+                <div id="apiPickerList" style="display:flex;flex-direction:column;gap:10px">
+                    <div style="color:#909399;font-size:13px;padding:12px">加载中...</div>
+                </div>
+                <div class="action-bar tight" style="margin-top:14px">
+                    <button class="btn btn-primary" onclick="apiPickerSave()">💾 保存配置</button>
+                    <button class="btn btn-secondary" onclick="apiPickerReset()">↩️ 恢复默认</button>
+                </div>
+            </div>
+
+            <!-- ④ 接口测试 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge warning">③</span><span>按当前配置测试调用</span></span>
+                    <span class="section-caption">输入一个视频链接，按当前保存的配置实际跑一遍</span>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <input type="text" id="apiPickerTestUrl" placeholder="粘贴视频/播放页/m3u8 链接..." style="flex:1;min-width:260px;padding:10px 12px;border:1px solid #dcdfe6;border-radius:8px;font-size:13px">
+                    <button class="btn btn-primary" onclick="apiPickerRun()" id="apiPickerRunBtn">▶ 测试调用</button>
+                </div>
+                <div id="apiPickerRunResult" style="margin-top:14px;display:none"></div>
+            </div>
+        </div>
+
         <div class="page" id="page-ad_monitor">
             <!-- ① 概览与统计 -->
             <div class="card">
@@ -7061,6 +7198,7 @@ if (!$_mxGXSecret) {
             {
                 group: '接口工具',
                 items: [
+                    { page: 'api_picker', icon: '🎛️', text: '接口选择', badge: 'NEW' },
                     { page: 'm3u8_test', icon: '🧪', text: 'M3U8解析测试', badge: 'NEW' },
                     { page: 'ad_monitor', icon: '🛡️', text: '去广告监控', badge: 'NEW' },
                     { page: 'moxi_api', icon: '⚡', text: '沫兮API' },
@@ -7220,7 +7358,7 @@ if (!$_mxGXSecret) {
             if (page === 'database') checkDbStatus();
             if (page === 'sniffer') loadSnifferConfig();
             if (page === 'domain_discovery') { ddRefresh(); }
-            if (page === 'site_rules') { srLoadSites(); }
+            if (page === 'site_rules') { srLoadSites(); srLoadSyncStatus(); }
         }
 
         document.addEventListener('click', (e) => {
@@ -11246,6 +11384,105 @@ if (!$_mxGXSecret) {
             } catch (e) { console.error('加载资源站列表到规则表单失败:', e); }
         }
 
+        /* ===== 资源站规则-自动获取（输入链接自动抓取分析配置） ===== */
+        async function srAutoFetch() {
+            const apiUrl = (document.getElementById('srAutoApiUrl').value || '').trim();
+            if (!apiUrl) { showToast('请输入资源站采集链接', 'error'); return; }
+            const btn = document.getElementById('srAutoFetchBtn');
+            btn.disabled = true; btn.textContent = '⏳ 抓取分析中（约1-2分钟）...';
+            const box = document.getElementById('srAutoResult');
+            box.style.display = 'block';
+            box.innerHTML = '<div style="color:#7c3aed;padding:8px 0">⏳ 正在拉取视频列表并逐个分析广告特征，请稍候...</div>';
+            try {
+                const res = await fetch(API_BASE + '?action=resource_rules/auto_fetch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api_url: apiUrl,
+                        site_name: (document.getElementById('srAutoSiteName').value || '').trim(),
+                        max_videos: parseInt(document.getElementById('srAutoMaxVideos').value) || 5
+                    })
+                });
+                const data = await res.json();
+                if (!data.success) { box.innerHTML = '<div class="status-pill red">❌ ' + escapeHtml(data.message || '自动获取失败') + '</div>'; return; }
+                let html = '<div style="padding:12px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:10px;font-size:13px;line-height:1.9">' +
+                    '✅ 自动获取完成：<strong>' + escapeHtml(data.site_name || data.host || '') + '</strong><br>' +
+                    '  拉取视频 <strong>' + (data.total_videos ?? 0) + '</strong> 个，深度分析 <strong>' + (data.analyzed_videos ?? 0) + '</strong> 个（含广告 <strong>' + (data.ad_videos ?? 0) + '</strong> 个）<br>' +
+                    '  自动写入规则 <strong style="color:#16a34a;font-size:15px">' + (data.rules_added ?? 0) + '</strong> 条（已存在跳过 ' + (data.rules_skipped ?? 0) + ' 条）' +
+                    (data.domains && data.domains.length ? '<br>  涉及域名：<code>' + escapeHtml(data.domains.join(', ')) + '</code>' : '') +
+                    '</div>';
+                if (data.detail && data.detail.length) {
+                    html += '<div style="margin-top:8px"><strong>新增规则明细：</strong></div><div style="margin-top:6px">' +
+                        data.detail.map(d => '<div style="padding:5px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:4px;font-size:12px">🔹 ' + escapeHtml(d) + '</div>').join('') + '</div>';
+                }
+                box.innerHTML = html;
+                srRefresh();
+            } catch (e) {
+                box.innerHTML = '<div class="status-pill red">❌ 自动获取异常: ' + escapeHtml(e.message) + '</div>';
+            } finally {
+                btn.disabled = false; btn.textContent = '⚡ 自动抓取并配置规则';
+            }
+        }
+
+        async function srSyncAll() {
+            if (!confirm('将遍历全部启用资源站，逐个自动抓取分析并更新规则（耗时约1-3分钟），确定继续？')) return;
+            const btn = document.getElementById('srSyncAllBtn');
+            btn.disabled = true; btn.textContent = '⏳ 同步中...';
+            const box = document.getElementById('srAutoResult');
+            box.style.display = 'block';
+            box.innerHTML = '<div style="color:#7c3aed;padding:8px 0">⏳ 正在遍历资源站自动更新规则，请稍候...</div>';
+            try {
+                const res = await fetch(API_BASE + '?action=resource_rules/sync', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                const data = await res.json();
+                if (!data.success) { box.innerHTML = '<div class="status-pill red">❌ ' + escapeHtml(data.message || '同步失败') + '</div>'; return; }
+                let html = '<div style="padding:12px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:10px;font-size:13px;line-height:1.9">' +
+                    '✅ ' + escapeHtml(data.message || '同步完成') + '<br>' +
+                    '  成功 ' + (data.sites_done ?? 0) + ' / 共 ' + (data.sites_total ?? 0) + ' 站，分析视频 ' + (data.videos_analyzed ?? 0) + ' 个，新增规则 <strong>' + (data.rules_added ?? 0) + '</strong> 条' +
+                    '</div>';
+                if (data.details && data.details.length) {
+                    html += '<div style="margin-top:8px">' + data.details.map(d => '<div style="padding:5px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:4px;font-size:12px">🔹 ' + escapeHtml(d) + '</div>').join('') + '</div>';
+                }
+                box.innerHTML = html;
+                srRefresh();
+            } catch (e) {
+                box.innerHTML = '<div class="status-pill red">❌ 同步异常: ' + escapeHtml(e.message) + '</div>';
+            } finally {
+                btn.disabled = false; btn.textContent = '🔄 一键同步全部资源站';
+            }
+        }
+
+        async function srLoadSyncStatus() {
+            try {
+                const res = await fetch(API_BASE + '?action=resource_rules/sync/status&_t=' + Date.now(), { cache: 'no-store' });
+                const data = await res.json();
+                if (!data.success) return;
+                const cfg = data.config || {};
+                const el = document.getElementById('srSyncStatus');
+                if (el) el.textContent = '上次同步：' + (cfg.last_run_time || '从未') + (cfg.last_run_summary ? '（' + (cfg.last_run_summary.message || '') + '）' : '');
+                const en = document.getElementById('srSyncEnabled');
+                if (en) en.value = cfg.enabled ? '1' : '0';
+                const iv = document.getElementById('srSyncInterval');
+                if (iv && cfg.interval_hours) iv.value = cfg.interval_hours;
+            } catch (e) {}
+        }
+
+        async function srSaveSyncConfig() {
+            try {
+                const res = await fetch(API_BASE + '?action=resource_rules/sync/config/save', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled: document.getElementById('srSyncEnabled').value === '1' ? 1 : 0,
+                        interval_hours: parseInt(document.getElementById('srSyncInterval').value) || 2
+                    })
+                });
+                const data = await res.json();
+                showToast(data.message || (data.success ? '已保存' : '保存失败'), data.success ? 'success' : 'error');
+                srLoadSyncStatus();
+            } catch (e) { showToast('保存异常: ' + e.message, 'error'); }
+        }
+
         function srReset() {
             srEditingId = null;
             document.getElementById('srSiteName').selectedIndex = 0;
@@ -14208,6 +14445,138 @@ if (!$_mxGXSecret) {
             }
         }
 
+        // ===== 接口选择器（独立/组合调用不同解析接口） =====
+        let apiPickerConfig = null;
+
+        async function loadApiPicker() {
+            try {
+                const res = await fetch(API_BASE + '?action=api_picker/config&_t=' + Date.now(), { cache: 'no-store' });
+                const data = await res.json();
+                if (!data.success) { showToast(data.message || '获取配置失败', 'error'); return; }
+                apiPickerConfig = data.config || {};
+                const pill = document.getElementById('apiPickerStatusPill');
+                if (pill) { pill.textContent = apiPickerConfig.enabled ? '✅ 已启用' : '⏸ 未启用'; pill.className = 'status-pill ' + (apiPickerConfig.enabled ? 'green' : 'red'); }
+                document.getElementById('apiPickerEnabled').value = apiPickerConfig.enabled ? '1' : '0';
+                document.getElementById('apiPickerMode').value = (apiPickerConfig.mode || 'combo');
+                renderApiPickerList(apiPickerConfig.interfaces || []);
+            } catch (e) { showToast('获取接口配置异常: ' + e.message, 'error'); }
+        }
+
+        function renderApiPickerList(interfaces) {
+            const box = document.getElementById('apiPickerList');
+            if (!box) return;
+            const descMap = {
+                custom: '自定义清洗接口（{host} 自动替换为本站地址，http/https 均可）',
+                moxi: '内置沫兮解析（官方视频替换）',
+                xiami: '内置官解（虾米全网 VIP）',
+                official: '内置官替（资源站智能匹配）',
+                mxjx: '内置去广告（M3U8 直接清洗）',
+            };
+            box.innerHTML = interfaces.map((it, i) => `
+                <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;flex-wrap:wrap">
+                    <input type="checkbox" data-key="${escapeHtml(it.key)}" class="api-picker-enable" ${it.enabled ? 'checked' : ''} title="启用该接口" style="width:18px;height:18px">
+                    <div style="flex:1;min-width:200px">
+                        <div style="font-weight:600;font-size:14px">${escapeHtml(it.name)} <span class="badge ${it.type === 'custom' ? 'badge-warn' : 'badge-info'}" style="margin-left:6px">${it.type === 'custom' ? '自定义' : '内置'}</span></div>
+                        <div style="font-size:12px;color:#909399;margin-top:2px">${escapeHtml(descMap[it.key] || '')}</div>
+                    </div>
+                    ${it.type === 'custom' ? `
+                        <input type="text" data-key="${escapeHtml(it.key)}" class="api-picker-url" value="${escapeHtml(it.url || '')}" placeholder="http://域名/api/clean/?url=" style="flex:1;min-width:240px;padding:8px 10px;border:1px solid #dcdfe6;border-radius:8px;font-size:12px">` : ''}
+                    <div style="display:flex;gap:6px">
+                        <button class="btn btn-sm btn-secondary" onclick="apiPickerMove(${i},-1)" ${i === 0 ? 'disabled' : ''} title="上移">↑</button>
+                        <button class="btn btn-sm btn-secondary" onclick="apiPickerMove(${i},1)" ${i === interfaces.length - 1 ? 'disabled' : ''} title="下移">↓</button>
+                    </div>
+                </div>`).join('');
+        }
+
+        function apiPickerMove(i, dir) {
+            const interfaces = (apiPickerConfig.interfaces || []).slice();
+            const j = i + dir;
+            if (j < 0 || j >= interfaces.length) return;
+            [interfaces[i], interfaces[j]] = [interfaces[j], interfaces[i]];
+            interfaces.forEach((it, idx) => it.sort = idx + 1);
+            apiPickerConfig.interfaces = interfaces;
+            renderApiPickerList(interfaces);
+        }
+
+        function apiPickerCollect() {
+            const interfaces = (apiPickerConfig.interfaces || []).map(it => ({ ...it }));
+            document.querySelectorAll('.api-picker-enable').forEach(cb => {
+                const f = interfaces.find(x => x.key === cb.getAttribute('data-key'));
+                if (f) f.enabled = cb.checked;
+            });
+            document.querySelectorAll('.api-picker-url').forEach(inp => {
+                const f = interfaces.find(x => x.key === inp.getAttribute('data-key'));
+                if (f) f.url = inp.value.trim();
+            });
+            return interfaces;
+        }
+
+        async function apiPickerSave() {
+            const payload = {
+                enabled: document.getElementById('apiPickerEnabled').value === '1' ? 1 : 0,
+                mode: document.getElementById('apiPickerMode').value,
+                interfaces: apiPickerCollect()
+            };
+            try {
+                const res = await fetch(API_BASE + '?action=api_picker/config/save', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                showToast(data.message || (data.success ? '已保存' : '保存失败'), data.success ? 'success' : 'error');
+                if (data.success) { apiPickerConfig = data.config; loadApiPicker(); }
+            } catch (e) { showToast('保存异常: ' + e.message, 'error'); }
+        }
+
+        async function apiPickerReset() {
+            if (!confirm('恢复默认接口列表（自定义接口默认 http://域名/api/clean/?url= 且停用），确定？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=api_picker/config/save', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: 0, mode: 'combo', interfaces: null })
+                });
+                const data = await res.json();
+                if (data.success) { apiPickerConfig = null; loadApiPicker(); showToast('已恢复默认配置', 'success'); }
+            } catch (e) { showToast('恢复异常: ' + e.message, 'error'); }
+        }
+
+        async function apiPickerRun() {
+            const url = (document.getElementById('apiPickerTestUrl').value || '').trim();
+            if (!url) { showToast('请输入测试链接', 'error'); return; }
+            const btn = document.getElementById('apiPickerRunBtn');
+            const box = document.getElementById('apiPickerRunResult');
+            box.style.display = 'block';
+            box.innerHTML = '<div style="color:#7c3aed;padding:8px 0">⏳ 正在按当前配置调用接口，请稍候（逐个尝试可能较慢）...</div>';
+            try {
+                btn.disabled = true; btn.textContent = '⏳ 调用中...';
+                const res = await fetch(API_BASE + '?action=api_picker/run', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    let html = '<div style="padding:12px 14px;background:rgba(245,108,108,.08);border:1px solid rgba(245,108,108,.35);border-radius:10px;font-size:13px;line-height:1.9">❌ ' + escapeHtml(data.message || '调用失败') + '</div>';
+                    if (data.picker && data.picker.attempts && data.picker.attempts.length) {
+                        html += '<div style="margin-top:8px">' + data.picker.attempts.map(a =>
+                            '<div style="padding:5px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:4px;font-size:12px">🔹 ' + escapeHtml(a.interface + '：' + (a.message || '失败')) + '（' + (a.elapsed_ms ?? '-') + 'ms）</div>').join('') + '</div>';
+                    }
+                    box.innerHTML = html;
+                    return;
+                }
+                let html = '<div style="padding:12px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:10px;font-size:13px;line-height:1.9">' +
+                    '✅ 调用成功（经 <strong>' + escapeHtml(data.via || '-') + '</strong>，耗时 ' + (data.elapsed_ms ?? '-') + 'ms）<br>' +
+                    '播放地址：<br><code style="word-break:break-all;display:inline-block;margin-top:4px">' + escapeHtml(data.play_url || '') + '</code></div>';
+                if (data.picker_attempts && data.picker_attempts.length) {
+                    html += '<div style="margin-top:8px">' + data.picker_attempts.map(a =>
+                        '<div style="padding:5px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:4px;font-size:12px">⏭ ' + escapeHtml(a.interface + '：' + (a.message || '失败')) + '</div>').join('') + '</div>';
+                }
+                box.innerHTML = html;
+            } catch (e) {
+                box.innerHTML = '<div class="status-pill red">❌ 调用异常: ' + escapeHtml(e.message) + '</div>';
+            } finally {
+                btn.disabled = false; btn.textContent = '▶ 测试调用';
+            }
+        }
+
         // ===== 去广告监控（防止误删正片） =====
         async function loadAdMonitor() {
             try {
@@ -15701,6 +16070,7 @@ if (!$_mxGXSecret) {
             if (pageName === 'announcement') loadAnnouncementList();
             if (pageName === 'moxi_api') loadFallbackConfig();
             if (pageName === 'ad_monitor') loadAdMonitor();
+            if (pageName === 'api_picker') loadApiPicker();
             if (pageName === 'dashboard') {
                 updateDashboardStats();
                 renderDashboardRecent();
@@ -16189,6 +16559,41 @@ if (!$_mxGXSecret) {
                 if (!silent) {
                     gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'error', 'gx_progress.php 拉取失败: ' + e.message);
                 }
+            }
+        }
+
+        // ⚡ 一键更新维护规则：直接调用资源站规则自动同步（不需要 gx 密钥，后台实时更新）
+        async function gxQuickSyncRules() {
+            if (!confirm('将遍历全部启用资源站自动抓取分析并更新规则（耗时约1-3分钟），确定执行？')) return;
+            const btn = event && event.currentTarget;
+            const gxLog = document.getElementById('gxLog');
+            const gxLogLine = (t, type, msg) => {
+                const colors = { info:'#909399', ok:'#67c23a', error:'#f56c6c', warn:'#e6a23c' };
+                if (gxLog) gxLog.innerHTML = '<div style="color:' + (colors[type]||colors.info) + ';font-family:monospace;font-size:12px;line-height:1.8;white-space:pre-wrap">[' + t + '] ' + msg + '</div>' + gxLog.innerHTML;
+            };
+            try {
+                if (btn) { btn.disabled = true; btn.textContent = '⏳ 同步维护中...'; }
+                gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'info', '⚡ 开始一键更新维护规则（遍历资源站自动抓取分析配置）…');
+                const r = await fetch(API_BASE + '?action=resource_rules/sync', {
+                    method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'
+                });
+                let data;
+                try { data = await r.json(); } catch(e){ data = {success:false, message:'返回非JSON: ' + await r.text()}; }
+                if (!data.success) {
+                    gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'error', '❌ 同步失败: ' + (data.message || r.status));
+                    showToast('同步失败: ' + (data.message || r.status), 'error');
+                    return;
+                }
+                gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'ok', '✅ ' + (data.message || '同步完成'));
+                if (data.details && data.details.length) {
+                    data.details.forEach(d => gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'info', '  ' + d));
+                }
+                showToast('规则维护完成，新增 ' + (data.rules_added || 0) + ' 条规则', 'success');
+            } catch (e) {
+                gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'error', '❌ 请求异常: ' + e.message);
+                showToast('请求异常: ' + e.message, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '⚡ 一键更新维护规则'; }
             }
         }
 

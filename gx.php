@@ -381,6 +381,7 @@ function gx_includeSafe(string $path): bool {
 // 加载公共 autoload
 gx_includeSafe(GX_ROOT . '/db/autoload.php');
 gx_includeSafe(GX_ROOT . '/gz/AiAutoLearner.php');
+gx_includeSafe(GX_ROOT . '/gz/ResourceRuleAutoFetcher.php');
 gx_includeSafe(GX_ROOT . '/src/UpdateManager.php');
 gx_includeSafe(GX_ROOT . '/db/DataMigration.php');
 gx_includeSafe(GX_ROOT . '/db/DbResourceSiteManager.php');
@@ -1019,6 +1020,32 @@ class GxRunner {
         ];
     }
 
+    /**
+     * 【v5.15.3】资源站规则自动同步：遍历启用资源站 api_urls 自动抓取分析更新规则
+     * （配合后台「资源站规则-自动获取」与每 2 小时自动触发）
+     */
+    public function task_resource_rules_sync(int $maxSites = 8): array {
+        if (!class_exists('ResourceRuleAutoFetcher') || !class_exists('DbResourceSiteManager')) {
+            return ['success'=>false,'message'=>'ResourceRuleAutoFetcher / DbResourceSiteManager 类未加载'];
+        }
+        if (!class_exists('Database')) {
+            return ['success'=>false,'message'=>'Database 类未加载'];
+        }
+        try {
+            $db = Database::getInstance();
+            if (!$db || !method_exists($db, 'tableExists') || !$db->tableExists('resource_site_rules')) {
+                return ['success'=>false,'message'=>'数据库未初始化或缺少 resource_site_rules 表'];
+            }
+            $siteManager = new DbResourceSiteManager();
+            $fetcher = new ResourceRuleAutoFetcher($db, $siteManager);
+            $r = $fetcher->syncFromAllSites(['max_sites'=>$maxSites, 'max_videos'=>3]);
+            $r['_cost_s'] = round(microtime(true)-$this->startAt, 2);
+            return $r;
+        } catch (Throwable $e) {
+            return ['success'=>false,'message'=>'资源站规则同步异常: '.$e->getMessage(),'file'=>$e->getFile(),'line'=>$e->getLine()];
+        }
+    }
+
     public function getSummary(): array {
         $allOk = true; $failed = [];
         foreach ($this->results as $name => $r) {
@@ -1089,6 +1116,7 @@ function gx_status_last_run(): array {
             'official_refresh [--max=8]' => '官替配置刷新 + 匹配抽检',
             'site_check [--max=10]'      => '资源站 API 健康巡检',
             'rule_check [--max=20]'      => '抽样域名规则健康检查',
+            'resource_rules_sync [--max=8]' => '资源站规则自动同步（遍历资源站自动抓取分析配置规则）',
             'status'         => '查看 gx 运行状态 / 上次执行摘要 / cron 示例',
             'reset_key'      => '重置 Web 访问密钥',
         ],
@@ -1227,6 +1255,7 @@ function gx_resolve_step_weights(string $action, int $max): array {
             $w = []; for($i=0;$i<$n;$i++) $w["site_{$i}"] = 1;
             return array_merge(['site_check_prepare'=>1], $w, ['site_check_summary'=>1]);
         case 'rule_check':        return ['rule_check' => 100];
+        case 'resource_rules_sync': return ['resource_rules_sync' => 100];
         case 'all':
         default:
             // all 下 site 默认 8 个站（用户在后台可调 max，这里和 max 参数对齐）
@@ -1240,6 +1269,7 @@ function gx_resolve_step_weights(string $action, int $max): array {
                 'migrate' => 10,
                 'official_refresh' => 25,
                 'ai_learn' => 30,
+                'resource_rules_sync' => 15,
                 // site 合计占 25 份左右，和原设计一致（归一化后等价）
             ] + $siteBlock;
     }
@@ -1334,6 +1364,10 @@ try {
             $r = gx_wrap_with_progress($tracker, 'rule_check', function() use ($runner, $max){ return $runner->task_rule_check($max ?? 20); });
             $runner->addResult('rule_check', $r);
             break;
+        case 'resource_rules_sync':
+            $r = gx_wrap_with_progress($tracker, 'resource_rules_sync', function() use ($runner, $max){ return $runner->task_resource_rules_sync($max ?? 8); });
+            $runner->addResult('resource_rules_sync', $r);
+            break;
         case 'all':
         default:
             // 【v5.10.8】all 流程：site_check 不再走单步' site_check'权重，而是拆 site_check_prepare + site_i + site_check_summary
@@ -1342,6 +1376,7 @@ try {
                 ['name'=>'migrate','type'=>'wrap','fn'=>function() use ($runner){ return $runner->task_migrate(); }],
                 ['name'=>'official_refresh','type'=>'official_refresh','fn'=>function() use ($runner,$max){ return $runner->task_official_refresh($max ?? 8); }],
                 ['name'=>'ai_learn','type'=>'ai_learn','fn'=>function() use ($runner,$force){ return $runner->task_ai_learn($force); }],
+                ['name'=>'resource_rules_sync','type'=>'wrap','fn'=>function() use ($runner,$max){ return $runner->task_resource_rules_sync($max ?? 8); }],
                 ['name'=>'site_check','type'=>'site_check_block','fn'=>function(?GxProgressTracker $t) use ($runner,$max){
                     $maxN = $max ?? 8;
                     $t?->startStep('site_check_prepare', "准备资源站列表（最多{$maxN}个）");

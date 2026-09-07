@@ -645,6 +645,215 @@ function mxf_get_active_fallback_line() {
     return null;
 }
 
+// ============ 接口选择器（侧边栏：独立/组合调用不同解析接口） ============
+
+/** 默认接口列表：builtin=内置解析类型 / custom=自定义清洗接口（默认 http://域名/api/clean/?url= 置顶） */
+function mxf_api_picker_default_interfaces() {
+    return [
+        ['key' => 'custom', 'name' => '自定义清洗接口', 'type' => 'custom', 'enabled' => true, 'sort' => 1, 'url' => '{host}/api/clean/?url='],
+        ['key' => 'moxi', 'name' => '沫兮解析', 'type' => 'builtin', 'enabled' => true, 'sort' => 2, 'url' => ''],
+        ['key' => 'xiami', 'name' => '官解（虾米）', 'type' => 'builtin', 'enabled' => true, 'sort' => 3, 'url' => ''],
+        ['key' => 'official', 'name' => '官替（资源站匹配）', 'type' => 'builtin', 'enabled' => true, 'sort' => 4, 'url' => ''],
+        ['key' => 'mxjx', 'name' => '去广告（M3U8）', 'type' => 'builtin', 'enabled' => true, 'sort' => 5, 'url' => ''],
+    ];
+}
+
+function mxf_load_api_picker_config() {
+    global $rootDir, $useDb, $db;
+    $default = [
+        'enabled' => false,        // 全局开关：开启后 parse 走接口选择器
+        'mode' => 'combo',         // combo=组合调用(按顺序逐个尝试) / single=独立调用(仅用选中的1个)
+        'interfaces' => mxf_api_picker_default_interfaces(),
+        'update_date' => date('Y-m-d H:i:s'),
+    ];
+    if ($useDb && !empty($db)) {
+        try {
+            $row = $db->queryOne('SELECT config_value FROM sys_config WHERE config_key = ?', ['api_picker']);
+            if ($row && !empty($row['config_value'])) {
+                $cfg = json_decode($row['config_value'], true);
+                if (is_array($cfg)) return array_merge($default, $cfg);
+            }
+        } catch (Throwable $e) {}
+    }
+    $file = $rootDir . '/gz/api_picker_config.php';
+    if (file_exists($file)) {
+        $cfg = @include $file;
+        if (is_array($cfg)) return array_merge($default, $cfg);
+    }
+    return $default;
+}
+
+function mxf_save_api_picker_config($config) {
+    global $rootDir, $useDb, $db;
+    $config['update_date'] = date('Y-m-d H:i:s');
+    if ($useDb && !empty($db)) {
+        try {
+            $json = json_encode($config, JSON_UNESCAPED_UNICODE);
+            $exists = $db->queryOne('SELECT id FROM sys_config WHERE config_key = ?', ['api_picker']);
+            if ($exists) {
+                $db->update('sys_config', ['config_value' => $json, 'description' => '接口选择器配置'], 'config_key = ?', ['api_picker']);
+            } else {
+                $db->insert('sys_config', ['config_key' => 'api_picker', 'config_value' => $json, 'description' => '接口选择器配置']);
+            }
+            return true;
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+    $file = $rootDir . '/gz/api_picker_config.php';
+    $dir = dirname($file);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    $content = '<?php' . "\n"
+        . '/**' . "\n"
+        . ' * 接口选择器配置（由后台「接口选择」页面自动维护）' . "\n"
+        . ' * 更新时间: ' . $config['update_date'] . "\n"
+        . ' *' . "\n"
+        . ' * 配置项说明：' . "\n"
+        . ' *   - enabled: 全局开关（关闭后走原有默认解析链路）' . "\n"
+        . ' *   - mode:    combo=组合调用（按顺序逐个尝试）/ single=独立调用（仅用选中的1个）' . "\n"
+        . ' *   - interfaces: 接口列表，按 sort 排序，enabled 启用的才会被调用' . "\n"
+        . ' *     - type: builtin=内置解析类型（fallback/moxi/xiami/official/mxjx）/ custom=自定义清洗接口' . "\n"
+        . ' *     - url:  自定义接口地址模板，{host} 自动替换为当前站点地址，url= 自动拼接资源地址' . "\n"
+        . ' */' . "\n"
+        . 'return ' . var_export($config, true) . ";\n";
+    return @file_put_contents($file, $content) !== false;
+}
+
+/**
+ * 调用自定义清洗接口（默认 http://域名/api/clean/?url=）
+ * @return array ['success'=>bool,'play_url'=>...,'message'=>...]
+ */
+function mxf_call_custom_api($template, $targetUrl) {
+    $template = trim((string)$template);
+    if (empty($template)) {
+        return ['success' => false, 'message' => '自定义接口地址为空'];
+    }
+    // 动态替换 {host} 为当前站点地址
+    if (strpos($template, '{host}') !== false) {
+        $scheme = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $template = str_replace('{host}', $scheme . '://' . $host, $template);
+    }
+    $template = rtrim($template, '?&');
+    $sep = strpos($template, '?') !== false ? '&' : '?';
+    $apiUrl = $template . $sep . 'url=' . urlencode($targetUrl);
+    $ch = @curl_init();
+    if ($ch === false) {
+        return ['success' => false, 'message' => 'curl 初始化失败'];
+    }
+    @curl_setopt_array($ch, [
+        CURLOPT_URL => $apiUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 3,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_USERAGENT => 'Mozilla/5.0 (MXGT ApiPicker)',
+    ]);
+    $body = @curl_exec($ch);
+    $httpCode = intval(@curl_getinfo($ch, CURLINFO_HTTP_CODE));
+    @curl_close($ch);
+    if ($body === false || trim($body) === '') {
+        return ['success' => false, 'message' => '自定义接口无响应(HTTP ' . $httpCode . ')', 'http_code' => $httpCode];
+    }
+    // 直接返回 m3u8 文本
+    if (strpos(trim($body), '#EXTM3U') === 0) {
+        return ['success' => true, 'play_url' => $apiUrl, 'format' => 'm3u8', 'http_code' => $httpCode];
+    }
+    // JSON：兼容 url / play_url / m3u8_url / ad_skip_url / url1
+    $json = json_decode($body, true);
+    if (is_array($json)) {
+        foreach (['url', 'play_url', 'm3u8_url', 'ad_skip_url', 'url1', 'data.url', 'data.m3u8_url'] as $field) {
+            $val = $json;
+            $ok = true;
+            foreach (explode('.', $field) as $part) {
+                if (!isset($val[$part])) { $ok = false; break; }
+                $val = $val[$part];
+            }
+            if ($ok && is_string($val) && $val !== '' && preg_match('/^https?:\/\//i', $val)) {
+                return ['success' => true, 'play_url' => $val, 'format' => 'json:' . $field, 'http_code' => $httpCode];
+            }
+        }
+        return ['success' => false, 'message' => '自定义接口返回 JSON 但无可用播放地址', 'http_code' => $httpCode, 'resp' => mb_substr($body, 0, 300)];
+    }
+    return ['success' => false, 'message' => '自定义接口返回无法识别的内容(HTTP ' . $httpCode . ')', 'http_code' => $httpCode, 'resp' => mb_substr($body, 0, 300)];
+}
+
+/**
+ * 接口选择器主入口：按配置顺序逐个尝试启用的接口，返回第一个成功结果
+ * @return array|null 成功返回统一结果数组；配置未启用返回 null（走默认链路）
+ */
+function mxf_run_api_picker($url, $selfUrl, $officialReplaceMgr = null, $siteManager = null) {
+    $cfg = mxf_load_api_picker_config();
+    if (empty($cfg['enabled'])) {
+        return null;
+    }
+    $mode = ($cfg['mode'] ?? 'combo') === 'single' ? 'single' : 'combo';
+    $interfaces = $cfg['interfaces'] ?? [];
+    if (!is_array($interfaces) || empty($interfaces)) {
+        return null;
+    }
+    usort($interfaces, function($a, $b) {
+        return intval($a['sort'] ?? 0) <=> intval($b['sort'] ?? 0);
+    });
+    $enabled = array_values(array_filter($interfaces, function($it) {
+        return !empty($it['enabled']);
+    }));
+    if (empty($enabled)) {
+        return null;
+    }
+    if ($mode === 'single') {
+        $enabled = [array_shift($enabled)];
+    }
+
+    $attempts = [];
+    foreach ($enabled as $it) {
+        $key = (string)($it['key'] ?? '');
+        $name = (string)($it['name'] ?? $key);
+        $type = (string)($it['type'] ?? 'builtin');
+
+        $startT = microtime(true);
+        if ($type === 'custom') {
+            $res = mxf_call_custom_api((string)($it['url'] ?? ''), $url);
+            $elapsed = round((microtime(true) - $startT) * 1000);
+            if (!empty($res['success'])) {
+                $res['via'] = $name;
+                $res['via_key'] = $key;
+                $res['elapsed_ms'] = $elapsed;
+                $res['original_url'] = $url;
+                $res['is_m3u8'] = stripos($res['play_url'] ?? '', '.m3u8') !== false;
+                return $res;
+            }
+            $attempts[] = ['interface' => $name, 'key' => $key, 'success' => false, 'message' => $res['message'] ?? '失败', 'elapsed_ms' => $elapsed];
+            continue;
+        }
+
+        $parseType = $key;
+        $r = parse_internal_unified($url, $selfUrl, $parseType, $officialReplaceMgr, $siteManager);
+        $elapsed = round((microtime(true) - $startT) * 1000);
+        if (!empty($r['success']) && !empty($r['play_url'])) {
+            $r['via'] = $name;
+            $r['via_key'] = $key;
+            $r['elapsed_ms'] = $elapsed;
+            $r['picker_attempts'] = $attempts;
+            return $r;
+        }
+        $attempts[] = ['interface' => $name, 'key' => $key, 'success' => false, 'message' => $r['message'] ?? '失败', 'elapsed_ms' => $elapsed];
+    }
+
+    $lastMsg = $attempts ? end($attempts)['message'] : '未启用任何接口';
+    return [
+        'success' => false,
+        'code' => 500,
+        'message' => '接口选择器全部失败：' . $lastMsg,
+        'picker' => ['mode' => $mode, 'attempts' => $attempts],
+    ];
+}
+
 /**
  * 调用兜底接口清洗指定 m3u8 地址
  * @return array ['success'=>bool,'play_url'=>...,'api_url'=>...,'http_code'=>...,'content_type'=>...]
@@ -1054,6 +1263,7 @@ try {
         $rootDir . '/src/CacheManager.php',
         $rootDir . '/gz/EnhancedAdRuleEngine.php',
         $rootDir . '/gz/AdMonitor.php',
+        $rootDir . '/gz/ResourceRuleAutoFetcher.php',
         $rootDir . '/gz/DomainRuleManager.php',
         $rootDir . '/gz/ResourceSiteManager.php',
         $rootDir . '/gz/OfficialSiteManager.php',
@@ -1723,7 +1933,15 @@ try {
                 "SELECT * FROM resource_site_rules WHERE {$where} ORDER BY enabled DESC, updated_at DESC",
                 $params
             );
-            sendJsonResponse(['success' => true, 'rules' => $rows]);
+            // 自动同步触发：打开规则页时检测距上次同步是否 ≥2 小时，是则后台异步触发一次
+            $autoTrigger = null;
+            try {
+                $fetcher = new ResourceRuleAutoFetcher($db, $siteManager);
+                $autoTrigger = $fetcher->autoTriggerIfNeeded();
+            } catch (Throwable $e) {
+                $autoTrigger = ['triggered' => false, 'error' => $e->getMessage()];
+            }
+            sendJsonResponse(['success' => true, 'rules' => $rows, 'auto_sync' => $autoTrigger]);
             break;
 
         case 'resource_rules/get':
@@ -1846,6 +2064,112 @@ try {
             $stmt = $db->getPdo()->prepare($sql);
             $stmt->execute($params);
             sendJsonResponse(['success' => true, 'count' => $stmt->rowCount()]);
+            break;
+
+        // ===== 资源站规则自动获取（输入资源站链接 → 自动抓取 → 自动分析 → 自动配置规则）=====
+        case 'resource_rules/auto_fetch':
+            if (!$useDb) {
+                sendJsonResponse(['success' => false, 'message' => '数据库不可用，规则写入需要数据库模式（db/db_config.php）'], 500);
+                break;
+            }
+            $input = getInputJson();
+            $apiUrl = (string)($input['api_url'] ?? ($_GET['api_url'] ?? ''));
+            $fetcher = new ResourceRuleAutoFetcher($db, $siteManager);
+            $result = $fetcher->autoFetchRules($apiUrl, [
+                'site_name'  => (string)($input['site_name'] ?? ''),
+                'max_videos' => (int)($input['max_videos'] ?? 5),
+            ]);
+            sendJsonResponse($result, empty($result['success']) ? 400 : 200);
+            break;
+
+        case 'resource_rules/sync':
+            if (!$useDb) {
+                sendJsonResponse(['success' => false, 'message' => '数据库不可用，规则写入需要数据库模式'], 500);
+                break;
+            }
+            $input = getInputJson();
+            $fetcher = new ResourceRuleAutoFetcher($db, $siteManager);
+            $result = $fetcher->syncFromAllSites([
+                'max_sites'  => (int)($input['max_sites'] ?? ($_GET['max_sites'] ?? 8)),
+                'max_videos' => (int)($input['max_videos'] ?? 3),
+            ]);
+            sendJsonResponse($result, empty($result['success']) ? 400 : 200);
+            break;
+
+        case 'resource_rules/sync/status':
+            $fetcher = new ResourceRuleAutoFetcher($db, $siteManager);
+            sendJsonResponse([
+                'success' => true,
+                'config' => $fetcher->getConfig(),
+            ]);
+            break;
+
+        case 'resource_rules/sync/config/save':
+            $input = getInputJson();
+            $fetcher = new ResourceRuleAutoFetcher($db, $siteManager);
+            $config = $fetcher->saveConfig($input);
+            sendJsonResponse(['success' => true, 'message' => '同步设置已保存', 'config' => $config]);
+            break;
+
+        // ===== 接口选择器（独立/组合调用不同解析接口） =====
+        case 'api_picker/config':
+            sendJsonResponse([
+                'success' => true,
+                'config' => mxf_load_api_picker_config(),
+            ]);
+            break;
+
+        case 'api_picker/config/save':
+            $input = getInputJson();
+            $current = mxf_load_api_picker_config();
+            $current['enabled'] = !empty($input['enabled']);
+            $current['mode'] = ($input['mode'] ?? 'combo') === 'single' ? 'single' : 'combo';
+            if (isset($input['interfaces'])) {
+                if (!is_array($input['interfaces']) || empty($input['interfaces'])) {
+                    // 恢复默认接口列表
+                    $current['interfaces'] = mxf_api_picker_default_interfaces();
+                } else {
+                    $interfaces = [];
+                    foreach ($input['interfaces'] as $it) {
+                        $interfaces[] = [
+                            'key'     => (string)($it['key'] ?? ''),
+                            'name'    => (string)($it['name'] ?? ''),
+                            'type'    => ($it['type'] ?? 'builtin') === 'custom' ? 'custom' : 'builtin',
+                            'enabled' => !empty($it['enabled']),
+                            'sort'    => (int)($it['sort'] ?? 0),
+                            'url'     => (string)($it['url'] ?? ''),
+                        ];
+                    }
+                    $current['interfaces'] = $interfaces;
+                }
+            }
+            $ok = mxf_save_api_picker_config($current);
+            sendJsonResponse([
+                'success' => $ok,
+                'message' => $ok ? '接口选择配置已保存' : '保存失败',
+                'config' => $current,
+            ], $ok ? 200 : 500);
+            break;
+
+        case 'api_picker/run':
+            $input = getInputJson();
+            $apiUrl = (string)($input['url'] ?? ($_GET['url'] ?? ''));
+            if (empty($apiUrl)) {
+                sendJsonResponse(['success' => false, 'message' => '缺少 url 参数'], 400);
+                break;
+            }
+            $scheme = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+            $basePath = dirname($requestUri);
+            $basePath = $basePath === '/' ? '' : $basePath;
+            $selfUrl = $scheme . '://' . $host . $basePath;
+            $result = mxf_run_api_picker($apiUrl, $selfUrl, $officialReplaceMgr ?? null, $siteManager ?? null);
+            if ($result === null) {
+                sendJsonResponse(['success' => false, 'message' => '接口选择器未启用，请先在后台「接口选择」页开启']);
+                break;
+            }
+            sendJsonResponse($result);
             break;
 
         case 'skip':
@@ -5837,6 +6161,15 @@ try {
             $basePath = $basePath === '/' ? '' : $basePath;
             $selfUrl = $scheme . '://' . $host . $basePath;
 
+            // 接口选择器：开启后按配置顺序尝试启用的接口（组合/独立），失败回退默认链路
+            if ($parseType === 'parse' || $parseType === 'auto' || $parseType === '智能') {
+                $pickerResult = mxf_run_api_picker($parseUrl, $selfUrl, $officialReplaceMgr ?? null, $siteManager ?? null);
+                if ($pickerResult !== null) {
+                    sendJsonResponse($pickerResult);
+                    break;
+                }
+            }
+
             $result = parse_internal_unified(
                 $parseUrl,
                 $selfUrl,
@@ -7108,6 +7441,13 @@ try {
                     'monitor/protected/add' => '去广告监控-添加保护片段',
                     'monitor/protected/remove' => '去广告监控-移除保护片段',
                     'monitor/reset' => '去广告监控-重置并升级监控版本',
+                    'resource_rules/auto_fetch' => '资源站规则-输入链接自动抓取分析配置',
+                    'resource_rules/sync' => '资源站规则-一键同步全部资源站(每2小时自动)',
+                    'resource_rules/sync/status' => '资源站规则-同步状态与设置',
+                    'resource_rules/sync/config/save' => '资源站规则-保存自动同步设置',
+                    'api_picker/config' => '接口选择器-获取配置',
+                    'api_picker/config/save' => '接口选择器-保存配置',
+                    'api_picker/run' => '接口选择器-按当前配置测试调用',
                     'official_replace/platforms' => '官替平台列表',
                     'official_replace/platform/add' => '添加官替平台',
                     'official_replace/platform/update' => '更新官替平台',

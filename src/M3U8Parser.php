@@ -265,6 +265,8 @@ class M3U8Parser {
         $pendingAdMarkers = [];
         $pendingCueMarkers = [];
         $pendingScte35 = null;
+        $currentKey = null;   // 最近一次 #EXT-X-KEY（含 METHOD/URI/IV），加密流播放必需
+        $currentMap = null;   // 最近一次 #EXT-X-MAP（fMP4/CMAF init segment）
         $i = 0;
         $totalLines = count($lines);
 
@@ -296,6 +298,39 @@ class M3U8Parser {
 
             if (strpos($line, '#EXT-X-DISCONTINUITY-SEQUENCE:') === 0) {
                 $playlist['discontinuitySequence'] = (int)substr($line, 30);
+                $i++;
+                continue;
+            }
+
+            if (strpos($line, '#EXT-X-KEY:') === 0) {
+                // 加密流密钥：跟踪当前 key 状态，加密/解密依赖它，过滤输出必须保留
+                $attrs = $this->parseAttributes(substr($line, 10));
+                $method = isset($attrs['METHOD']) ? strtoupper($attrs['METHOD']) : 'NONE';
+                $currentKey = [
+                    'method' => $method,
+                    'uri' => isset($attrs['URI']) ? trim($attrs['URI'], '"\'') : '',
+                    'iv' => isset($attrs['IV']) ? $attrs['IV'] : '',
+                    'keyformat' => isset($attrs['KEYFORMAT']) ? $attrs['KEYFORMAT'] : '',
+                    'raw' => $line,
+                    'index' => count($playlist['segments'])
+                ];
+                if ($method === 'NONE') {
+                    // 显式 NONE：终止当前加密，后续片段不再继承旧 key
+                    $currentKey['uri'] = '';
+                }
+                $i++;
+                continue;
+            }
+
+            if (strpos($line, '#EXT-X-MAP:') === 0) {
+                // fMP4/CMAF init segment：跟踪 map 状态
+                $attrs = $this->parseAttributes(substr($line, 11));
+                $currentMap = [
+                    'uri' => isset($attrs['URI']) ? trim($attrs['URI'], '"\'') : '',
+                    'byteRange' => isset($attrs['BYTERANGE']) ? $attrs['BYTERANGE'] : '',
+                    'raw' => $line,
+                    'index' => count($playlist['segments'])
+                ];
                 $i++;
                 continue;
             }
@@ -486,7 +521,9 @@ class M3U8Parser {
                     'discontinuity' => $nextDiscontinuity,
                     'adMarkers' => [],
                     'cueMarkers' => [],
-                    'scte35' => null
+                    'scte35' => null,
+                    'key' => $currentKey !== null ? $currentKey : null,   // 片段生效的密钥（含 METHOD=NONE 显式终止）
+                    'map' => $currentMap !== null ? $currentMap : null    // 片段生效的 init segment（fMP4/CMAF）
                 ];
 
                 if (!empty($pendingAdMarkers)) {

@@ -153,6 +153,8 @@ class OutputGenerator {
         $adTagPrefixes = $opts['adTagPrefixes'] ?? [];
 
         $prevOriginalIndex = -1;
+        $emittedKeySig = null;   // 已输出的密钥签名（method|uri|iv），用于密钥轮换检测
+        $emittedMapSig = null;   // 已输出的 map 签名（uri|byterange）
         for ($i = 0; $i < count($segments); $i++) {
             $segment = $segments[$i];
             $currentOriginalIndex = $segment['originalIndex'] ?? $i;
@@ -163,6 +165,47 @@ class OutputGenerator {
 
             if (!empty($segment['discontinuity']) && $i > 0) {
                 $output .= "#EXT-X-DISCONTINUITY\n";
+            }
+
+            // fMP4/CMAF：输出片段引用的 init segment（EXT-X-MAP），map 变化时重新输出
+            $segMap = !empty($segment['map']) ? $segment['map'] : null;
+            if (!empty($segMap['uri'])) {
+                $mapSig = $segMap['uri'] . '|' . ($segMap['byteRange'] ?? '');
+                if ($mapSig !== $emittedMapSig) {
+                    $mapLine = '#EXT-X-MAP:URI="' . $segMap['uri'] . '"';
+                    if (!empty($segMap['byteRange'])) {
+                        $mapLine .= ',BYTERANGE="' . $segMap['byteRange'] . '"';
+                    }
+                    $output .= $mapLine . "\n";
+                    $emittedMapSig = $mapSig;
+                }
+            }
+
+            // 加密流：输出片段生效的 EXT-X-KEY（含密钥轮换）；占位黑屏 TS 未加密 → 显式 METHOD=NONE
+            $segKey = !empty($segment['key']) ? $segment['key'] : null;
+            $isPlaceholder = strpos($segment['uri'] ?? '', 'placeholder_ts') !== false;
+            if ($isPlaceholder) {
+                if ($emittedKeySig !== 'NONE') {
+                    $output .= "#EXT-X-KEY:METHOD=NONE\n";
+                    $emittedKeySig = 'NONE';
+                }
+            } elseif (!empty($segKey) && !empty($segKey['method']) && strtoupper($segKey['method']) !== 'NONE') {
+                $keySig = strtoupper($segKey['method']) . '|' . ($segKey['uri'] ?? '') . '|' . ($segKey['iv'] ?? '');
+                if ($keySig !== $emittedKeySig) {
+                    $keyLine = '#EXT-X-KEY:METHOD=' . strtoupper($segKey['method']);
+                    if (!empty($segKey['uri'])) {
+                        $keyLine .= ',URI="' . $segKey['uri'] . '"';
+                    }
+                    if (!empty($segKey['iv'])) {
+                        $keyLine .= ',IV=' . $segKey['iv'];
+                    }
+                    $output .= $keyLine . "\n";
+                    $emittedKeySig = $keySig;
+                }
+            } elseif ($emittedKeySig !== null && $emittedKeySig !== 'NONE') {
+                // 片段无加密但此前有加密：显式关闭，避免播放器继续用旧 key 解密导致黑屏
+                $output .= "#EXT-X-KEY:METHOD=NONE\n";
+                $emittedKeySig = 'NONE';
             }
 
             if (!empty($segment['byteRange'])) {

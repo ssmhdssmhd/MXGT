@@ -1,5 +1,46 @@
 # 更新日志
 
+## v5.15.3 (2026-09-07) — 资源站规则自动获取 + 外置播放修复 + 接口选择器
+
+### 输入资源站链接自动抓取分析配置规则（每 2 小时自动同步）；加密/fMP4 流保留 KEY/MAP 修复外置播放无画面；侧边栏新增接口选择（独立/组合调用）
+
+> 本次三个重点：① **资源站规则自动获取** —— 输入资源站采集链接即可自动拉取视频、逐个解析 M3U8 深度分析广告特征，自动汇总 5 类规则写入规则库，每 2 小时自动同步更新，正确率随资源站变化持续优化；② **外置播放无画面修复** —— 根因是加密流（AES-128）与 fMP4/CMAF 流的 `EXT-X-KEY`/`EXT-X-MAP` 标签在去广告输出时被丢弃，播放器解密/解复用失败导致"进度条动但无画面"，现已完整保留并按密钥轮换正确输出；③ **接口选择器** —— 侧边栏可统一选择不同解析接口，独立调用或组合按顺序尝试，默认 `http://域名/api/clean/?url=`。
+
+#### 1. 资源站规则自动获取（[gz/ResourceRuleAutoFetcher.php](file:///workspace/gz/ResourceRuleAutoFetcher.php) + [mx.php](file:///workspace/mx.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+
+- 后台「资源站规则」页新增 **自动获取卡片**：输入资源站采集链接（苹果CMS/通用 `ac=detail` 接口）→ 自动拉取视频列表 → 逐个解析 M3U8 深度分析广告特征 → 自动汇总 **5 类规则**（时长 / 不连续 / 序列 / 文件名 / 关键词）写入 `resource_site_rules`；
+- **智能去重**：跨视频累计命中 ≥2 次才写入（避免单次偶然误报），同站同类型同特征已存在自动跳过，二次运行 0 新增；
+- **一键同步全部资源站**：遍历启用资源站的 `api_urls` 自动抓取分析更新规则；
+- 新接口：`resource_rules/auto_fetch`、`resource_rules/sync`、`resource_rules/sync/status`、`resource_rules/sync/config/save`。
+
+#### 2. 每 2 小时自动同步 + 一键更新维护（[gx.php](file:///workspace/gx.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+
+- 后台打开「资源站规则」页时自动检测：距上次同步 **≥2 小时** 则后台异步触发一次同步（开关与间隔可调，默认 2 小时）；
+- `gx.php` 新增 `resource_rules_sync` 任务：可单独执行（`php gx.php resource_rules_sync`），也可并入 `all` 一条龙（自动维护页任务下拉新增第 ⑧ 步）；
+- 自动维护页新增「**⚡ 一键更新维护规则**」按钮：直接遍历资源站更新规则并输出到彩色日志，无需 gx 密钥。
+
+#### 3. 外置播放无画面修复（[src/M3U8Parser.php](file:///workspace/src/M3U8Parser.php) + [src/OutputGenerator.php](file:///workspace/src/OutputGenerator.php)）
+
+- **根因**：`#EXT-X-KEY`（AES-128 加密）与 `#EXT-X-MAP`（fMP4/CMAF init segment）此前解析时被忽略、输出时被丢弃，加密/CMAF 流经去广告后播放器无法解密/解复用 → **进度条在走但画面全黑**（外置播放器 APK/VLC 尤其明显）；
+- **修复**：解析器逐片段记录 `key`（METHOD/URI/IV/KEYFORMAT）与 `map` 状态；输出器按**密钥轮换**重发 `EXT-X-KEY`、fMP4 流输出 `EXT-X-MAP`、占位黑屏 TS 显式 `METHOD=NONE`（未加密占位不再被旧 key 误解密）；
+- 已验证 KEY 轮换（含 `METHOD=NONE` 显式终止）解析→输出往返一致，内置/外置播放器同步受益。
+
+#### 4. 接口选择器（[mx.php](file:///workspace/mx.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+
+- 后台侧边栏「接口工具」新增「**接口选择**」页：全局开关 + **独立调用 / 组合调用** 模式 + 接口列表；
+- 接口列表：**自定义清洗接口**（默认 `http://域名/api/clean/?url=`，`{host}` 自动替换为本站地址，http/https 均可）置顶 + 内置 沫兮 / 官解（虾米）/ 官替（资源站匹配）/ 去广告（M3U8）按需启停与排序；
+- 开启后 `parse` 等入口按配置顺序逐个尝试，**第一个成功即返回**并标注 `via` 接口与失败尝试明细；页面内置「按当前配置测试调用」；
+- 新接口：`api_picker/config`、`api_picker/config/save`、`api_picker/run`。
+
+#### 5. 验证
+
+- `php -l` 全部通过：`mx.php` / `mxadmin.php` / `gx.php` / `gz/ResourceRuleAutoFetcher.php` / `src/M3U8Parser.php` / `src/OutputGenerator.php`；
+- KEY 轮换解析输出往返一致（含 METHOD=NONE 显式终止）；规则写入去重二次运行 0 新增、命中过滤正确；
+- 接口选择器实测：`single` 模式经「去广告（M3U8）」返回 `play_url` 与 `via` 标记；`api_picker/config` 读写、`resource_rules/sync/status` 正常；
+- 前端内联 JS `node --check` 通过。
+
+---
+
 ## v5.15.2 (2026-09-07) — 去广告实时监控防误删 + 占位模式 + 更新提示修复
 
 ### M3U8 去广告改用等时长黑屏占位不删段（解决卡顿/跳画面）；误删反馈进保护名单自动还原；新增实时监控与监控版本；版本更新提示同版本只弹一次

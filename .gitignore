@@ -94,6 +94,10 @@ gz/rules_*.php
 # ===== 去广告监控运行时数据（自动生成）=====
 gz/monitor_data.php
 
+# ===== 接口选择器 / 资源站规则自动同步 运行时配置（自动生成）=====
+gz/api_picker_config.php
+gz/.resource_rules_state.php
+
 # ===== 后台/在线 HTML 分享打包缓存（自动生成）=====
 .trae-html-share-packages/
 
