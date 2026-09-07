@@ -268,6 +268,30 @@ CREATE TABLE IF NOT EXISTS domain_analysis_stats (
 );
 
 -- ============================================
+-- 13. 资源站规则表
+-- ============================================
+CREATE TABLE IF NOT EXISTS resource_site_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    site_name TEXT NOT NULL,
+    domain TEXT NOT NULL DEFAULT '',
+    rule_name TEXT DEFAULT '',
+    rule_type TEXT DEFAULT '',
+    keyword TEXT DEFAULT '',
+    use_cn_pattern INTEGER DEFAULT 0,
+    ad_threshold INTEGER DEFAULT 80,
+    note TEXT DEFAULT '',
+    match_count INTEGER DEFAULT 0,
+    enabled INTEGER DEFAULT 1,
+    status INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_resource_site_rules_site ON resource_site_rules(domain);
+CREATE INDEX IF NOT EXISTS idx_resource_site_rules_name ON resource_site_rules(rule_name);
+CREATE INDEX IF NOT EXISTS idx_resource_site_rules_domain ON resource_site_rules(domain);
+
+-- ============================================
 -- 初始数据
 -- ============================================
 INSERT OR IGNORE INTO sys_config (config_key, config_value, description) VALUES

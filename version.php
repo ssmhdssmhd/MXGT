@@ -1,13 +1,28 @@
 <?php
 return array (
-  'version' => 'v5.14.0',
+  'version' => 'v5.14.1',
   'branch' => 'main',
-  'build' => '20260907-v5-14-0-glassmorphism-admin-skin',
-  'version_code' => 51400,
-  'commit' => 'v5.14.0-glassmorphism-purple-gradient-admin-redesign',
+  'build' => '20260907-v5-14-1-domain-discovery-and-site-rules',
+  'version_code' => 51401,
+  'commit' => 'v5.14.1-add-domain-discovery-and-resource-site-rules-pages',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.14.1' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【新增后台两个独立页面】侧边栏新增「域名发现」与「资源站规则」，并新增独立的资源站规则库体系',
+      'changes' =>
+      array (
+        0 => '【页面-域名发现】侧边栏「资源管理」新增「🕵️ 域名发现」页：专注添加/管理资源站域名与采集接口，支持编辑、启停、删除、健康检测、搜索、统计速览',
+        1 => '【页面-资源站规则】新增「🗂️ 资源站规则」页：独立规则库，按资源站分组配置时长/不连续/序列/文件名/关键词 5 类广告特征规则，支持增删改、启停、按站筛选、搜索、清空',
+        2 => '【后端-独立规则库】新增 resource_site_rules 数据库表（schema_sqlite.sql / schema_mysql.sql），与域名规则(rules_*.php 文件式)完全独立互不干扰',
+        3 => '【后端-新增接口】mx.php 新增 resource_rules/* 接口组：list / get / add / update / delete / toggle / clear，全部走数据库、占位符绑定、带 $useDb 降级兜底',
+        4 => '【迁移适配】Database.php migrateTables 表清单加入 resource_site_rules；mx.php 初始化时对老库缺失该表自动补建(CREATE TABLE IF NOT EXISTS 幂等)，线上升级无需手动建表',
+        5 => '【前端-触发加载】handleNavClick 增加 domain_discovery / site_rules 两页的数据加载，进入页面即自动刷新，资源站规则表单下拉自动填充已有资源站',
+        6 => '【验证】php -l mxadmin.php / mx.php / db/Database.php 全部通过；本地 PHP 内置服务器实测 resource_rules add/get/update/toggle/delete/clear/list 全链路 CRUD 通过，mxadmin 新页面与菜单渲染正常',
+      ),
+    ),
     'v5.14.0' =>
     array (
       'date' => '2026-09-07',

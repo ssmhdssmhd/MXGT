@@ -668,6 +668,9 @@ try {
             $db = Database::getInstance();
             if (!$db->tableExists('sys_config')) {
                 $db->initTables();
+            } elseif (!$db->tableExists('resource_site_rules')) {
+                // 老库升级：缺失 resource_site_rules 时补建（CREATE TABLE IF NOT EXISTS 幂等）
+                $db->initTables();
             }
             $useDb = true;
         } catch (Throwable $e) {
@@ -1289,6 +1292,147 @@ try {
                 'message' => '已清理 ' . $count . ' 条规则',
                 'cleared_count' => $count
             ]);
+            break;
+
+        // ===== 资源站规则 (resource_site_rules) =====
+        case 'resource_rules/list':
+            if (!$useDb) {
+                sendJsonResponse(['success' => false, 'message' => '数据库不可用'], 500);
+            }
+            $siteName = $_GET['site_name'] ?? '';
+            $where = '1=1';
+            $params = [];
+            if ($siteName !== '') {
+                $where .= ' AND site_name = ?';
+                $params[] = $siteName;
+            }
+            $rows = $db->query(
+                "SELECT * FROM resource_site_rules WHERE {$where} ORDER BY enabled DESC, updated_at DESC",
+                $params
+            );
+            sendJsonResponse(['success' => true, 'rules' => $rows]);
+            break;
+
+        case 'resource_rules/get':
+            if (!$useDb) {
+                sendJsonResponse(['success' => false, 'message' => '数据库不可用'], 500);
+            }
+            $id = (int)($_GET['id'] ?? 0);
+            if ($id <= 0) {
+                sendJsonResponse(['success' => false, 'message' => '缺少 id 参数'], 400);
+            }
+            $rule = $db->queryOne('SELECT * FROM resource_site_rules WHERE id = ?', [$id]);
+            if ($rule === null) {
+                sendJsonResponse(['success' => false, 'message' => '规则不存在'], 404);
+            }
+            sendJsonResponse(['success' => true, 'rule' => $rule]);
+            break;
+
+        case 'resource_rules/add':
+            if (!$useDb) {
+                sendJsonResponse(['success' => false, 'message' => '数据库不可用'], 500);
+            }
+            $input = getInputJson();
+            $siteName = trim((string)($input['site_name'] ?? ''));
+            if ($siteName === '') {
+                sendJsonResponse(['success' => false, 'message' => 'site_name 必填'], 400);
+            }
+            $data = [
+                'site_name'      => $siteName,
+                'domain'         => (string)($input['domain'] ?? ''),
+                'rule_name'      => (string)($input['rule_name'] ?? ''),
+                'rule_type'      => (string)($input['rule_type'] ?? ''),
+                'keyword'        => (string)($input['keyword'] ?? ''),
+                'use_cn_pattern' => (int)($input['use_cn_pattern'] ?? 0),
+                'ad_threshold'   => (int)($input['ad_threshold'] ?? 80),
+                'note'           => (string)($input['note'] ?? ''),
+                'enabled'        => (int)($input['enabled'] ?? 1),
+            ];
+            $newId = $db->insert('resource_site_rules', $data);
+            sendJsonResponse(['success' => true, 'message' => '规则添加成功', 'id' => $newId]);
+            break;
+
+        case 'resource_rules/update':
+            if (!$useDb) {
+                sendJsonResponse(['success' => false, 'message' => '数据库不可用'], 500);
+            }
+            $input = getInputJson();
+            $id = (int)($input['id'] ?? 0);
+            if ($id <= 0) {
+                sendJsonResponse(['success' => false, 'message' => '缺少 id 参数'], 400);
+            }
+            $existing = $db->queryOne('SELECT id FROM resource_site_rules WHERE id = ?', [$id]);
+            if ($existing === null) {
+                sendJsonResponse(['success' => false, 'message' => '规则不存在'], 404);
+            }
+            $data = [
+                'site_name'      => (string)($input['site_name'] ?? ''),
+                'domain'         => (string)($input['domain'] ?? ''),
+                'rule_name'      => (string)($input['rule_name'] ?? ''),
+                'rule_type'      => (string)($input['rule_type'] ?? ''),
+                'keyword'        => (string)($input['keyword'] ?? ''),
+                'use_cn_pattern' => (int)($input['use_cn_pattern'] ?? 0),
+                'ad_threshold'   => (int)($input['ad_threshold'] ?? 80),
+                'note'           => (string)($input['note'] ?? ''),
+                'enabled'        => (int)($input['enabled'] ?? 1),
+                'updated_at'     => date('Y-m-d H:i:s'),
+            ];
+            $db->update('resource_site_rules', $data, 'id = ?', [$id]);
+            sendJsonResponse(['success' => true, 'message' => '规则更新成功']);
+            break;
+
+        case 'resource_rules/delete':
+            if (!$useDb) {
+                sendJsonResponse(['success' => false, 'message' => '数据库不可用'], 500);
+            }
+            $input = getInputJson();
+            $id = (int)($input['id'] ?? 0);
+            if ($id <= 0) {
+                sendJsonResponse(['success' => false, 'message' => '缺少 id 参数'], 400);
+            }
+            $db->delete('resource_site_rules', 'id = ?', [$id]);
+            sendJsonResponse(['success' => true, 'message' => '规则删除成功']);
+            break;
+
+        case 'resource_rules/toggle':
+            if (!$useDb) {
+                sendJsonResponse(['success' => false, 'message' => '数据库不可用'], 500);
+            }
+            $input = getInputJson();
+            $id = (int)($input['id'] ?? 0);
+            if ($id <= 0) {
+                sendJsonResponse(['success' => false, 'message' => '缺少 id 参数'], 400);
+            }
+            $existing = $db->queryOne('SELECT id FROM resource_site_rules WHERE id = ?', [$id]);
+            if ($existing === null) {
+                sendJsonResponse(['success' => false, 'message' => '规则不存在'], 404);
+            }
+            $enabled = isset($input['enabled']) ? (int)$input['enabled'] : 0;
+            $db->update(
+                'resource_site_rules',
+                ['enabled' => $enabled, 'updated_at' => date('Y-m-d H:i:s')],
+                'id = ?',
+                [$id]
+            );
+            sendJsonResponse(['success' => true, 'message' => '规则状态已更新']);
+            break;
+
+        case 'resource_rules/clear':
+            if (!$useDb) {
+                sendJsonResponse(['success' => false, 'message' => '数据库不可用'], 500);
+            }
+            $input = getInputJson();
+            $siteName = (string)($input['site_name'] ?? '');
+            if ($siteName !== '') {
+                $sql = 'DELETE FROM resource_site_rules WHERE site_name = ?';
+                $params = [$siteName];
+            } else {
+                $sql = 'DELETE FROM resource_site_rules';
+                $params = [];
+            }
+            $stmt = $db->getPdo()->prepare($sql);
+            $stmt->execute($params);
+            sendJsonResponse(['success' => true, 'count' => $stmt->rowCount()]);
             break;
 
         case 'skip':

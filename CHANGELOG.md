@@ -1,5 +1,36 @@
 # 更新日志
 
+## v5.14.1 (2026-09-07) — 新增功能页
+
+### 后台新增「域名发现」与「资源站规则」两个独立页面
+
+> 侧边栏「资源管理」分组新增两个独立功能页 + 新增一套独立的资源站规则库。
+
+#### 1. 新页面（[mxadmin.php](file:///workspace/mxadmin.php)）
+
+| 页面 | 功能 |
+|------|------|
+| 🕵️ **域名发现** `page-domain_discovery` | 添加/管理资源站域名与采集接口（名称、官网、采集接口、MacCMS/自定义类型、备注）；编辑、启停、删除、一键健康检测、名称搜索、收录统计 |
+| 🗂️ **资源站规则** `page-site_rules` | 独立规则库，按资源站配置 时长/不连续/序列/文件名/关键词 5 类规则；增删改、启停、按站筛选、搜索、一键清空 |
+
+- `handleNavClick` 增加 `domain_discovery` / `site_rules` 触发加载，进入即自动刷新；
+- 资源站规则表单的资源站下拉自动填充已有资源站。
+
+#### 2. 后端 独立规则库（[mx.php](file:///workspace/mx.php) + [db/Database.php](file:///workspace/db/Database.php) + schema）
+
+- 新增数据库表 `resource_site_rules`（[schema_sqlite.sql](file:///workspace/db/schema_sqlite.sql) / [schema_mysql.sql](file:///workspace/db/schema_mysql.sql)），与域名规则（`rules_*.php` 文件式）完全独立；
+- `Database.php::migrateTables()` 表清单加入 `resource_site_rules`；
+- `mx.php` 初始化对老库缺失该表自动补建（`CREATE TABLE IF NOT EXISTS` 幂等）；
+- 新增接口组 `resource_rules/*`：`list / get / add / update / delete / toggle / clear`，全部走数据库 + 占位符绑定 + `$useDb` 降级兜底。
+
+#### 3. 验证
+
+- `php -l mxadmin.php` / `mx.php` / `db/Database.php` → 全部 `No syntax errors detected`
+- 本地 PHP 内置服务器实测 `resource_rules` 全链路 CRUD（add/get/update/toggle/delete/clear/list + 站点过滤）通过；
+- `mxadmin.php` 新页面、菜单、JS 函数渲染正常。
+
+---
+
 ## v5.14.0 (2026-09-07) — UI 重构
 
 ### 后台整体推倒重写视觉层：深紫→洋红渐变 + 玻璃拟态（Glassmorphism）

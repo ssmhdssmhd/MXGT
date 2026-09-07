@@ -263,6 +263,29 @@ CREATE TABLE IF NOT EXISTS `domain_analysis_stats` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='域名分析统计表';
 
 -- ============================================
+-- 13. 资源站规则表
+-- ============================================
+CREATE TABLE IF NOT EXISTS `resource_site_rules` (
+    `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `site_name` VARCHAR(100) NOT NULL COMMENT '资源站名称',
+    `domain` VARCHAR(191) NOT NULL DEFAULT '' COMMENT '域名',
+    `rule_name` VARCHAR(255) DEFAULT '' COMMENT '规则名',
+    `rule_type` VARCHAR(50) DEFAULT '' COMMENT '规则类型: duration/discontinuity/sequence/filename/keyword',
+    `keyword` VARCHAR(500) DEFAULT '' COMMENT '关键词/特征',
+    `use_cn_pattern` TINYINT(1) DEFAULT 0 COMMENT '是否使用中文规则',
+    `ad_threshold` INT DEFAULT 80 COMMENT '广告判定阈值',
+    `note` VARCHAR(500) DEFAULT '' COMMENT '说明',
+    `match_count` INT DEFAULT 0 COMMENT '命中次数',
+    `enabled` TINYINT(1) DEFAULT 1 COMMENT '是否启用',
+    `status` TINYINT DEFAULT 1 COMMENT '状态: 1启用 0禁用',
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY `idx_resource_site_rules_site` (`domain`),
+    KEY `idx_resource_site_rules_name` (`rule_name`),
+    KEY `idx_resource_site_rules_domain` (`domain`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资源站规则表';
+
+-- ============================================
 -- 初始数据（不包含版本信息，版本由 version.php 管理）
 -- ============================================
 

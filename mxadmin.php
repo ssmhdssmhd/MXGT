@@ -3759,6 +3759,243 @@ if (!$_mxGXSecret) {
             </div>
         </div>
 
+        <div class="page" id="page-domain_discovery">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🕵️ 域名发现</span>
+                        <span class="status-pill green">资源站收录</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">添加 / 管理资源站域名，作为广告规则学习的样本来源</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item success">
+                        <div class="overview-title">🌐 资源站收录</div>
+                        <div class="overview-desc">
+                            在这里添加<strong>资源站域名 / 采集接口</strong>，系统即可去该站拉取视频样本 → 分析广告 → 学习域名规则。<br>
+                            支持 <strong>MacCMS</strong> 与 <strong>自定义采集接口</strong> 两种类型。
+                        </div>
+                    </div>
+                    <div class="overview-item primary">
+                        <div class="overview-title">📡 一键健康检测</div>
+                        <div class="overview-desc">
+                            对已收录资源站进行<strong>连通性检测</strong>，快速定位失效站点并暂停，保持样本源稳定可用。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 统计概览 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>收录概况</span></span>
+                    <span class="section-caption">资源站域名数量与状态速览</span>
+                </div>
+                <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+                    <div class="stat-card">
+                        <div class="stat-value" id="ddTotalSites">0</div>
+                        <div class="stat-label">资源站总数</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-value" id="ddActiveSites">0</div>
+                        <div class="stat-label">正常</div>
+                    </div>
+                    <div class="stat-card danger">
+                        <div class="stat-value" id="ddPausedSites">0</div>
+                        <div class="stat-label">已暂停</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-value" id="ddCheckedSites">0</div>
+                        <div class="stat-label">已检测</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ③ 添加资源站表单 -->
+            <div class="card" id="ddEditorCard">
+                <div class="card-title">
+                    <span class="step-title"><span class="step-badge success">②</span><span id="ddEditorTitle">➕ 添加资源站</span></span>
+                    <span class="section-caption">填写资源站域名与采集接口后点击保存</span>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>资源站名称 <span class="req-flag">★</span></label>
+                        <input type="text" id="ddSiteName" placeholder="例如：量子">
+                        <div class="form-tip">唯一名称，用于区分不同资源站。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>官网地址</label>
+                        <input type="text" id="ddSiteUrl" placeholder="例如：https://example.com">
+                    </div>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>采集接口 <span class="req-flag">★</span></label>
+                        <input type="text" id="ddApiUrl" placeholder="例如：https://example.com/api.php/provide/vod/">
+                        <div class="form-tip">MacCMS 采集接口地址，用于拉取视频列表。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>类型</label>
+                        <select id="ddApiType">
+                            <option value="maccms">MacCMS</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group" style="grid-column:auto/-1">
+                        <label>备注</label>
+                        <input type="text" id="ddNote" placeholder="选填，备注该资源站用途或来源">
+                    </div>
+                </div>
+                <div class="action-bar tight">
+                    <button class="btn btn-primary" onclick="ddSave()" id="ddSaveBtn">💾 保存资源站</button>
+                    <button class="btn btn-secondary" onclick="ddReset()">↩️ 重置</button>
+                </div>
+                <div id="ddMsg" style="margin-top:14px;display:none"></div>
+            </div>
+
+            <!-- ④ 已收录资源站列表 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">③</span><span>已收录资源站</span></span>
+                    <span class="section-caption">共 <span id="ddCount">0</span> 个</span>
+                </div>
+                <div style="margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+                    <button class="btn btn-primary" onclick="ddRefresh()">🔄 刷新</button>
+                    <button class="btn btn-success" onclick="ddHealthCheck()" id="ddHealthBtn">🔍 健康检测</button>
+                    <input type="text" id="ddSearch" placeholder="搜索资源站名称..." style="flex:1;min-width:200px;padding:10px 12px;border:1px solid var(--border-base);border-radius:8px;font-size:14px" oninput="ddRender()">
+                </div>
+                <div id="ddSiteTable"></div>
+            </div>
+        </div>
+
+        <div class="page" id="page-site_rules">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🗂️ 资源站规则</span>
+                        <span class="status-pill blue">独立规则库</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">针对资源站域名的广告特征规则，独立存储，不影响域名规则的自动学习</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item success">
+                        <div class="overview-title">🎯 规则类型</div>
+                        <div class="overview-desc">
+                            支持 <strong>时长规则</strong> / <strong>不连续标记</strong> / <strong>序列跳变</strong> / <strong>文件名特征</strong> / <strong>关键词拦截</strong>。<br>
+                            按资源站分组管理，命中即拦截对应广告片段。
+                        </div>
+                    </div>
+                    <div class="overview-item primary">
+                        <div class="overview-title">⚙️ 独立存储</div>
+                        <div class="overview-desc">
+                            存入数据库 <code>resource_site_rules</code> 表，与自动学习产生的域名规则<strong>互不干扰</strong>，可安全手动维护。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 统计 -->
+            <div class="card">
+                <div class="card-title">📊 规则概况</div>
+                <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+                    <div class="stat-card">
+                        <div class="stat-value" id="srTotal">0</div>
+                        <div class="stat-label">规则总数</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-value" id="srEnabled">0</div>
+                        <div class="stat-label">启用</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-value" id="srDisabled">0</div>
+                        <div class="stat-label">停用</div>
+                    </div>
+                    <div class="stat-card pink">
+                        <div class="stat-value" id="srSites">0</div>
+                        <div class="stat-label">涉及资源站</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ③ 规则表单 -->
+            <div class="card" id="srEditor">
+                <div class="card-title">
+                    <span class="step-title"><span class="step-badge success">①</span><span id="srEditorTitle">➕ 新增规则</span></span>
+                    <span class="section-caption">为某个资源站域名配置广告特征规则</span>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>资源站名称 <span class="req-flag">★</span></label>
+                        <select id="srSiteName"><option value="">请选择资源站</option></select>
+                        <div class="form-tip">对哪个资源站的广告做拦截。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>规则类型</label>
+                        <select id="srRuleType">
+                            <option value="duration">⏱ 时长规则</option>
+                            <option value="discontinuity">⨯ 不连续标记</option>
+                            <option value="sequence">🔀 序列跳变</option>
+                            <option value="filename">📄 文件名特征</option>
+                            <option value="keyword">🔑 关键词拦截</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>规则描述</label>
+                        <input type="text" id="srRuleName" placeholder="例如：片头60s强插">
+                        <div class="form-tip">给这条规则起个易识别的名字。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>资源站域名</label>
+                        <input type="text" id="srDomain" placeholder="例如：example.com">
+                        <div class="form-tip">规则生效的域名，留空则匹配该资源站全部域名。</div>
+                    </div>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label id="srKeywordLabel">关键词 / 特征</label>
+                        <input type="text" id="srKeyword" placeholder="例如：_ad / 999 / promo">
+                        <div class="form-tip">文件名包含此特征即判定为广告。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>广告阈值 (%)</label>
+                        <input type="number" id="srAdThreshold" value="80" min="1" max="100">
+                        <div class="form-tip">命中比例超过该值即标记为广告段。</div>
+                    </div>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group" style="grid-column:auto/-1">
+                        <label>说明备注</label>
+                        <input type="text" id="srNote" placeholder="选填">
+                    </div>
+                </div>
+                <div class="action-bar tight">
+                    <button class="btn btn-primary" onclick="srSave()" id="srSaveBtn">💾 保存规则</button>
+                    <button class="btn btn-secondary" onclick="srReset()">↩️ 重置</button>
+                </div>
+                <div id="srMsg" style="margin-top:14px;display:none"></div>
+            </div>
+
+            <!-- ④ 规则列表 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">②</span><span>规则列表</span></span>
+                    <span class="section-caption">共 <span id="srCount">0</span> 条</span>
+                </div>
+                <div style="margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+                    <button class="btn btn-primary" onclick="srRefresh()">🔄 刷新</button>
+                    <select id="srFilterSite" onchange="srRefresh()" style="padding:10px 12px;border:1px solid var(--border-base);border-radius:8px;font-size:14px;min-width:170px">
+                        <option value="">全部资源站</option>
+                    </select>
+                    <input type="text" id="srSearch" placeholder="搜索关键词..." style="flex:1;min-width:200px;padding:10px 12px;border:1px solid var(--border-base);border-radius:8px;font-size:14px" oninput="srRender()">
+                    <button class="btn btn-danger" onclick="srClearAll()">🗑️ 清空规则</button>
+                </div>
+                <div id="srTable"></div>
+            </div>
+        </div>
+
         <div class="page" id="page-ai_autolearn">
             <!-- ① 概览卡 -->
             <div class="card">
@@ -6598,6 +6835,8 @@ if (!$_mxGXSecret) {
                 group: '资源管理',
                 items: [
                     { page: 'sites', icon: '🌐', text: '资源站管理' },
+                    { page: 'domain_discovery', icon: '🕵️', text: '域名发现', badge: 'NEW' },
+                    { page: 'site_rules', icon: '🗂️', text: '资源站规则', badge: 'NEW' },
                     { page: 'ai_autolearn', icon: '🧠', text: 'AI自动学习', badge: 'NEW' },
                     { page: 'official_sites', icon: '⭐', text: '推荐采集' },
                     { page: 'official_replace', icon: '🔄', text: '官替管理' },
@@ -6763,6 +7002,8 @@ if (!$_mxGXSecret) {
             if (page === 'update') { checkUpdate(); loadVersion(); loadBackupList(); }
             if (page === 'database') checkDbStatus();
             if (page === 'sniffer') loadSnifferConfig();
+            if (page === 'domain_discovery') { ddRefresh(); }
+            if (page === 'site_rules') { srLoadSites(); }
         }
 
         document.addEventListener('click', (e) => {
@@ -10466,6 +10707,346 @@ if (!$_mxGXSecret) {
 
         let currentSites = [];
         let editingSite = null;
+
+        /* ================= 域名发现（资源站收录） ================= */
+        let ddSites = [];
+        let ddEditing = null;
+
+        async function ddRefresh() {
+            try {
+                const res = await fetch(API_BASE + '?action=sites/list&include_paused=1&_t=' + Date.now(), { cache: 'no-store' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                ddSites = data.sites || [];
+                ddRender();
+                ddUpdateStats();
+            } catch (e) {
+                showToast('获取资源站失败: ' + e.message, 'error');
+            }
+        }
+
+        function ddUpdateStats() {
+            const total = ddSites.length;
+            const active = ddSites.filter(s => s.status === 'active').length;
+            const paused = ddSites.filter(s => s.status === 'paused').length;
+            const checked = ddSites.filter(s => s.last_check_status).length;
+            document.getElementById('ddTotalSites').textContent = total;
+            document.getElementById('ddActiveSites').textContent = active;
+            document.getElementById('ddPausedSites').textContent = paused;
+            document.getElementById('ddCheckedSites').textContent = checked;
+            document.getElementById('ddCount').textContent = total;
+        }
+
+        function ddRender() {
+            const kw = (document.getElementById('ddSearch').value || '').trim().toLowerCase();
+            const list = kw ? ddSites.filter(s => (s.name || '').toLowerCase().includes(kw) || (s.note || '').toLowerCase().includes(kw)) : ddSites;
+            const box = document.getElementById('ddSiteTable');
+            if (list.length === 0) {
+                box.innerHTML = '<div style="padding:30px;text-align:center;color:#909399">暂无资源站，用上方表单添加一个吧。</div>';
+                return;
+            }
+            let html = '<table class="rules-table" style="width:100%;border-collapse:collapse"><thead><tr>' +
+                '<th>名称</th><th>采集接口 / 域名</th><th>类型</th><th>状态</th><th>备注</th><th>操作</th></tr></thead><tbody>';
+            list.forEach(s => {
+                const ok = s.status === 'active';
+                html += '<tr>' +
+                    '<td><strong>' + escapeHtml(s.name) + '</strong></td>' +
+                    '<td style="word-break:break-all;font-size:12px;color:#606266">' + escapeHtml(s.api_url || s.site_url || '-') + '</td>' +
+                    '<td>' + escapeHtml(s.type || 'maccms') + '</td>' +
+                    '<td>' + (ok
+                        ? '<span class="status-pill green">正常</span>'
+                        : '<span class="status-pill red">已暂停</span>') + (s.last_check_status ? '<div style="font-size:11px;color:#909399;margin-top:4px">' + escapeHtml(s.last_check_status) + '</div>' : '') + '</td>' +
+                    '<td style="font-size:12px;color:#606266">' + escapeHtml(s.note || '-') + '</td>' +
+                    '<td style="white-space:nowrap">' +
+                        '<button class="btn btn-sm btn-secondary" onclick="ddEdit(\'' + escapeHtml(s.name) + '\')">✏️</button> ' +
+                        '<button class="btn btn-sm ' + (ok ? 'btn-warning' : 'btn-success') + '" onclick="ddToggle(\'' + escapeHtml(s.name) + '\',\'' + s.status + '\')">' + (ok ? '⏸' : '▶') + '</button> ' +
+                        '<button class="btn btn-sm btn-danger" onclick="ddDelete(\'' + escapeHtml(s.name) + '\')">🗑️</button>' +
+                    '</td></tr>';
+            });
+            html += '</tbody></table>';
+            box.innerHTML = html;
+        }
+
+        function ddReset() {
+            ddEditing = null;
+            document.getElementById('ddSiteName').value = '';
+            document.getElementById('ddSiteUrl').value = '';
+            document.getElementById('ddApiUrl').value = '';
+            document.getElementById('ddNote').value = '';
+            document.getElementById('ddEditorTitle').textContent = '➕ 添加资源站';
+            document.getElementById('ddSaveBtn').textContent = '💾 保存资源站';
+            document.getElementById('ddMsg').style.display = 'none';
+        }
+
+        async function ddSave() {
+            const name = document.getElementById('ddSiteName').value.trim();
+            const apiUrl = document.getElementById('ddApiUrl').value.trim();
+            if (!name || !apiUrl) { showToast('资源站名称和采集接口不能为空', 'error'); return; }
+            const payload = {
+                name,
+                site_url: document.getElementById('ddSiteUrl').value.trim(),
+                api_url: apiUrl,
+                type: document.getElementById('ddApiType').value,
+                note: document.getElementById('ddNote').value.trim(),
+                status: 'active'
+            };
+            try {
+                const url = ddEditing
+                    ? API_BASE + '?action=sites/update'
+                    : API_BASE + '?action=sites/add';
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast(data.message, 'success');
+                ddReset();
+                ddRefresh();
+            } catch (e) { showToast('保存失败: ' + e.message, 'error'); }
+        }
+
+        async function ddEdit(name) {
+            const site = ddSites.find(s => s.name === name);
+            if (!site) return;
+            ddEditing = name;
+            document.getElementById('ddSiteName').value = site.name;
+            document.getElementById('ddSiteUrl').value = site.site_url || '';
+            document.getElementById('ddApiUrl').value = site.api_url || '';
+            document.getElementById('ddNote').value = site.note || '';
+            document.getElementById('ddEditorTitle').textContent = '✏️ 编辑资源站';
+            document.getElementById('ddSaveBtn').textContent = '💾 保存修改';
+            document.getElementById('ddEditorCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        async function ddToggle(name, status) {
+            const newStatus = status === 'active' ? 'paused' : 'active';
+            try {
+                const res = await fetch(API_BASE + '?action=sites/update_status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, status: newStatus, note: newStatus === 'paused' ? '手动暂停(域名发现)' : '' })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast(data.message, 'success');
+                ddRefresh();
+            } catch (e) { showToast('操作失败: ' + e.message, 'error'); }
+        }
+
+        async function ddDelete(name) {
+            if (!confirm('确定删除资源站「' + name + '」吗？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=sites/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast(data.message, 'success');
+                ddRefresh();
+            } catch (e) { showToast('删除失败: ' + e.message, 'error'); }
+        }
+
+        async function ddHealthCheck() {
+            const btn = document.getElementById('ddHealthBtn');
+            btn.disabled = true; btn.textContent = '检测中...';
+            try {
+                const res = await fetch(API_BASE + '?action=sites/health_check&_t=' + Date.now());
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('检测完成：' + (data.healthy ?? '-') + '/' + (data.total ?? '-') + ' 个可用', 'success');
+                ddRefresh();
+            } catch (e) { showToast('检测失败: ' + e.message, 'error'); }
+            finally { btn.disabled = false; btn.textContent = '🔍 健康检测'; }
+        }
+
+        /* ================= 资源站规则（独立规则库） ================= */
+        let srRules = [];
+        let srEditingId = null;
+
+        async function srRefresh() {
+            try {
+                const site = document.getElementById('srFilterSite').value;
+                const q = site ? '&site_name=' + encodeURIComponent(site) : '';
+                const res = await fetch(API_BASE + '?action=resource_rules/list' + q + '&_t=' + Date.now(), { cache: 'no-store' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                srRules = data.rules || [];
+                srRender();
+            } catch (e) { showToast('获取规则失败: ' + e.message, 'error'); }
+        }
+
+        function srRender() {
+            const kw = (document.getElementById('srSearch').value || '').trim().toLowerCase();
+            const list = kw ? srRules.filter(r =>
+                (r.rule_name || '').toLowerCase().includes(kw) ||
+                (r.keyword || '').toLowerCase().includes(kw) ||
+                (r.site_name || '').toLowerCase().includes(kw) ||
+                (r.domain || '').toLowerCase().includes(kw)
+            ) : srRules;
+            // 统计
+            document.getElementById('srTotal').textContent = srRules.length;
+            document.getElementById('srEnabled').textContent = srRules.filter(r => String(r.enabled) === '1').length;
+            document.getElementById('srDisabled').textContent = srRules.filter(r => String(r.enabled) !== '1').length;
+            document.getElementById('srSites').textContent = new Set(srRules.map(r => r.site_name || '')).size;
+            document.getElementById('srCount').textContent = list.length;
+
+            const box = document.getElementById('srTable');
+            if (list.length === 0) {
+                box.innerHTML = '<div style="padding:30px;text-align:center;color:#909399">暂无规则，用上方表单添加一条吧。</div>';
+                return;
+            }
+            let html = '<table class="rules-table" style="width:100%;border-collapse:collapse"><thead><tr>' +
+                '<th>资源站</th><th>类型</th><th>描述</th><th>关键词/特征</th><th>阈值</th><th>启用</th><th>命中</th><th>操作</th></tr></thead><tbody>';
+            list.forEach(r => {
+                const enabled = String(r.enabled) === '1';
+                const typeMap = {
+                    duration: '⏱ 时长', discontinuity: '⨯ 不连续', sequence: '🔀 序列',
+                    filename: '📄 文件名', keyword: '🔑 关键词'
+                };
+                html += '<tr>' +
+                    '<td><strong>' + escapeHtml(r.site_name || '-') + '</strong>' + (r.domain ? '<div style="font-size:11px;color:#909399">' + escapeHtml(r.domain) + '</div>' : '') + '</td>' +
+                    '<td>' + escapeHtml(typeMap[r.rule_type] || r.rule_type || '-') + '</td>' +
+                    '<td style="font-size:12px">' + escapeHtml(r.rule_name || '-') + '</td>' +
+                    '<td style="word-break:break-all"><code>' + escapeHtml(r.keyword || '-') + '</code></td>' +
+                    '<td>' + (r.ad_threshold ?? '-') + '%</td>' +
+                    '<td>' + (enabled ? '<span class="status-pill green">启用</span>' : '<span class="status-pill red">停用</span>') + '</td>' +
+                    '<td>' + (r.match_count ?? 0) + '</td>' +
+                    '<td style="white-space:nowrap">' +
+                        '<button class="btn btn-sm btn-secondary" onclick="srEdit(' + r.id + ')">✏️</button> ' +
+                        '<button class="btn btn-sm ' + (enabled ? 'btn-warning' : 'btn-success') + '" onclick="srToggle(' + r.id + ',' + (enabled ? 0 : 1) + ')">' + (enabled ? '⏸' : '▶') + '</button> ' +
+                        '<button class="btn btn-sm btn-danger" onclick="srDelete(' + r.id + ')">🗑️</button>' +
+                    '</td></tr>';
+            });
+            html += '</tbody></table>';
+            box.innerHTML = html;
+        }
+
+        let srSitesLoaded = false;
+
+        async function srLoadSites() {
+            const formSel = document.getElementById('srSiteName');
+            const filterSel = document.getElementById('srFilterSite');
+            if (!formSel || formSel.options.length > 1) { await srRefresh(); return; }
+            try {
+                const res = await fetch(API_BASE + '?action=sites/list&include_paused=1&_t=' + Date.now(), { cache: 'no-store' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                const sites = data.sites || [];
+                srSitesLoaded = true;
+                const opts = sites.map(s => '<option value="' + escapeHtml(s.name) + '">' + escapeHtml(s.name) + '</option>').join('');
+                formSel.insertAdjacentHTML('afterbegin', opts);
+                filterSel.insertAdjacentHTML('beforeend', opts);
+            } catch (e) { console.error('加载资源站列表到规则表单失败:', e); }
+        }
+
+        function srReset() {
+            srEditingId = null;
+            document.getElementById('srSiteName').selectedIndex = 0;
+            document.getElementById('srRuleType').selectedIndex = 0;
+            document.getElementById('srRuleName').value = '';
+            document.getElementById('srDomain').value = '';
+            document.getElementById('srKeyword').value = '';
+            document.getElementById('srAdThreshold').value = '80';
+            document.getElementById('srNote').value = '';
+            document.getElementById('srEditorTitle').textContent = '➕ 新增规则';
+            document.getElementById('srSaveBtn').textContent = '💾 保存规则';
+            document.getElementById('srMsg').style.display = 'none';
+        }
+
+        async function srSave() {
+            const siteName = document.getElementById('srSiteName').value;
+            if (!siteName) { showToast('请选择资源站', 'error'); return; }
+            const payload = {
+                site_name: siteName,
+                rule_type: document.getElementById('srRuleType').value,
+                rule_name: document.getElementById('srRuleName').value.trim(),
+                domain: document.getElementById('srDomain').value.trim(),
+                keyword: document.getElementById('srKeyword').value.trim(),
+                ad_threshold: parseInt(document.getElementById('srAdThreshold').value) || 80,
+                note: document.getElementById('srNote').value.trim(),
+                enabled: 1
+            };
+            if (srEditingId) payload.id = srEditingId;
+            try {
+                const url = srEditingId
+                    ? API_BASE + '?action=resource_rules/update'
+                    : API_BASE + '?action=resource_rules/add';
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast(data.message, 'success');
+                srReset();
+                srRefresh();
+            } catch (e) { showToast('保存失败: ' + e.message, 'error'); }
+        }
+
+        async function srEdit(id) {
+            const r = srRules.find(x => x.id === id);
+            if (!r) return;
+            srEditingId = id;
+            document.getElementById('srSiteName').value = r.site_name || '';
+            document.getElementById('srRuleType').value = r.rule_type || 'keyword';
+            document.getElementById('srRuleName').value = r.rule_name || '';
+            document.getElementById('srDomain').value = r.domain || '';
+            document.getElementById('srKeyword').value = r.keyword || '';
+            document.getElementById('srAdThreshold').value = r.ad_threshold ?? 80;
+            document.getElementById('srNote').value = r.note || '';
+            document.getElementById('srEditorTitle').textContent = '✏️ 编辑规则';
+            document.getElementById('srSaveBtn').textContent = '💾 保存修改';
+            document.getElementById('srEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        async function srToggle(id, enabled) {
+            try {
+                const res = await fetch(API_BASE + '?action=resource_rules/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, enabled })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast(data.message, 'success');
+                srRefresh();
+            } catch (e) { showToast('操作失败: ' + e.message, 'error'); }
+        }
+
+        async function srDelete(id) {
+            if (!confirm('确定删除该规则吗？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=resource_rules/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast(data.message, 'success');
+                srRefresh();
+            } catch (e) { showToast('删除失败: ' + e.message, 'error'); }
+        }
+
+        async function srClearAll() {
+            if (!confirm('确定清空全部资源站规则吗？此操作不可恢复！')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=resource_rules/clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('已清空 ' + (data.count ?? 0) + ' 条规则', 'success');
+                srRefresh();
+            } catch (e) { showToast('清空失败: ' + e.message, 'error'); }
+        }
 
         async function refreshSites() {
             try {

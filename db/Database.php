@@ -223,6 +223,7 @@ class Database {
             'ad_signatures',
             'official_replace_cache',
             'domain_analysis_stats',
+            'resource_site_rules',
         ];
 
         foreach ($expectedTables as $table) {
