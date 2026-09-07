@@ -3115,7 +3115,7 @@ class OfficialReplaceManager {
                 if (empty($apiUrl)) continue;
                 $siteName = $site['name'];
                 try {
-                    $result = $siteMgr->searchVideos($apiUrl, $keyword, 1, 10);
+                    $result = $siteMgr->searchVideos($site, $keyword, 1, 10);
                     if ($result && $result['success'] && !empty($result['videos'])) {
                         foreach ($result['videos'] as $v) {
                             $v['site'] = $siteName;

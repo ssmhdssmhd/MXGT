@@ -488,7 +488,7 @@ class AiAutoLearner {
 
                     // 获取视频列表（多取一些用于过滤后仍有足够样本）
                     $fetchLimit = min(500, $videosPerSite * 4);
-                    $fetchResult = $this->siteManager->fetchVideos($site['api_url'], 1, $fetchLimit);
+                    $fetchResult = $this->siteManager->fetchVideos($site, 1, $fetchLimit);
 
                     if (!$fetchResult['success']) {
                         $siteResult['error'] = $fetchResult['message'];

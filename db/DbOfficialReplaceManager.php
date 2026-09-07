@@ -2539,7 +2539,7 @@ class DbOfficialReplaceManager {
                 if (empty($apiUrl)) continue;
                 $searchedSites++;
                 try {
-                    $result = $siteMgr->searchVideos($apiUrl, $keyword, 1, 10);
+                    $result = $siteMgr->searchVideos($siteMap[$siteName], $keyword, 1, 10);
                     if ($result && $result['success'] && !empty($result['videos'])) {
                         foreach ($result['videos'] as $v) {
                             if (empty($v['site'])) $v['site'] = $siteName;
@@ -3273,6 +3273,7 @@ class DbOfficialReplaceManager {
                 $tasks[] = [
                     'id' => $site['name'],
                     'api_url' => $site['api_url'],
+                    'api_urls' => $site['api_urls'] ?? [],
                     'keyword' => $pageInfo['title'],
                     'site_name' => $site['name']
                 ];
@@ -3285,7 +3286,11 @@ class DbOfficialReplaceManager {
             ]);
 
             $results = $runner->run($tasks, function($task) use ($siteManager) {
-                $result = $siteManager->searchVideos($task['api_url'], $task['keyword'], 1, 10);
+                // 组装成站点结构，供多地址自动切换识别
+                $siteForSearch = !empty($task['api_urls'])
+                    ? ['api_urls' => $task['api_urls'], 'api_url' => $task['api_url']]
+                    : $task['api_url'];
+                $result = $siteManager->searchVideos($siteForSearch, $task['keyword'], 1, 10);
                 if ($result['success'] && !empty($result['videos'])) {
                     foreach ($result['videos'] as &$video) {
                         $video['site'] = $task['site_name'];

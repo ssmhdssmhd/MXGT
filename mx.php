@@ -2608,7 +2608,8 @@ try {
             if (!empty($name)) {
                 $site = $siteManager->getSiteByName($name);
                 if ($site) {
-                    $apiUrl = $site['api_url'];
+                    // 传入整个站点对象，支持多地址自动切换
+                    $apiUrl = $site;
                 }
             }
 
@@ -2618,6 +2619,21 @@ try {
 
             $result = $siteManager->fetchVideos($apiUrl, $page, $limit);
             sendJsonResponse($result, $result['success'] ? 200 : 400);
+            break;
+
+        case 'sites/test_urls':
+            $input = getInputJson();
+            $urls = $input['urls'] ?? $_GET['urls'] ?? [];
+            if (is_string($urls)) {
+                $urls = preg_split('/[\r\n,]+/', $urls);
+            }
+            $urls = array_values(array_filter(array_map('trim', (array)$urls)));
+            if (empty($urls)) {
+                sendJsonResponse(['success' => false, 'message' => '请提供至少一个采集地址'], 400);
+            }
+            $timeout = isset($input['timeout']) ? intval($input['timeout']) : 6;
+            $result = $siteManager->testApiUrls($urls, $timeout);
+            sendJsonResponse($result, 200);
             break;
 
         case 'sites/search':
@@ -2634,7 +2650,8 @@ try {
             if (!empty($name)) {
                 $site = $siteManager->getSiteByName($name);
                 if ($site) {
-                    $apiUrl = $site['api_url'];
+                    // 传入整个站点对象，支持多地址自动切换
+                    $apiUrl = $site;
                 }
             }
 
@@ -2722,7 +2739,7 @@ try {
                 if (!$site) {
                     sendJsonResponse(['success' => false, 'message' => '资源站不存在'], 400);
                 }
-                $searchResult = $siteManager->searchVideos($site['api_url'], $keyword, 1, $limitPerSite * 3);
+                $searchResult = $siteManager->searchVideos($site, $keyword, 1, $limitPerSite * 3);
                 if ($searchResult['success']) {
                     $videos = array_slice($searchResult['videos'] ?? [], 0, $limitPerSite);
                     foreach ($videos as &$v) {
@@ -3435,9 +3452,9 @@ try {
                 foreach ($sites as $site) {
                     try {
                         if (!empty($keyword)) {
-                            $fetchResult = $siteManager->searchVideos($site['api_url'], $keyword, 1, $videosPerSite * 3);
+                            $fetchResult = $siteManager->searchVideos($site, $keyword, 1, $videosPerSite * 3);
                         } else {
-                            $fetchResult = $siteManager->fetchVideos($site['api_url'], 1, $videosPerSite * 3);
+                            $fetchResult = $siteManager->fetchVideos($site, 1, $videosPerSite * 3);
                         }
                         if ($fetchResult['success']) {
                             $videos = $fetchResult['videos'] ?? [];
@@ -6358,8 +6375,9 @@ try {
                     'sites/add' => '添加资源站',
                     'sites/update' => '更新资源站',
                     'sites/delete' => '删除资源站',
-                    'sites/fetch_videos' => '从资源站获取视频列表',
-                    'sites/search' => '搜索指定资源站视频',
+                    'sites/fetch_videos' => '从资源站获取视频列表（支持多地址自动切换）',
+                    'sites/search' => '搜索指定资源站视频（支持多地址自动切换）',
+                    'sites/test_urls' => '多地址测速：检测多个采集地址可用性与响应速度，返回排序结果',
                     'sites/search_all' => '搜索所有资源站视频',
                     'sites/search_and_learn' => '搜索并学习（搜索影视学习一体化）',
                     'sites/learn_video' => '从指定视频URL学习规则',

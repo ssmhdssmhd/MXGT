@@ -40,6 +40,36 @@ class ResourceSiteManager {
         $this->useProxyOnFirstTry = (bool)$use;
     }
 
+    /**
+     * 规范化多地址：接受 api_urls 数组或 api_url 字符串，去重、过滤空值，确保 https?:// 开头
+     */
+    private function normalizeApiUrls($siteData) {
+        $urls = [];
+        if (!empty($siteData['api_urls']) && is_array($siteData['api_urls'])) {
+            $urls = $siteData['api_urls'];
+        } elseif (!empty($siteData['api_url'])) {
+            $urls = [$siteData['api_url']];
+        }
+        $result = [];
+        foreach ($urls as $u) {
+            $u = trim((string)$u);
+            if ($u === '' || !preg_match('#^https?://#i', $u)) continue;
+            if (in_array($u, $result)) continue;
+            $result[] = $u;
+        }
+        return $result;
+    }
+
+    /**
+     * 解析出待尝试的地址列表：传入 site 数组取 api_urls，传入字符串视为单地址
+     */
+    private function resolveApiUrls($apiUrlOrSite) {
+        if (is_array($apiUrlOrSite)) {
+            return $this->normalizeApiUrls($apiUrlOrSite);
+        }
+        return $this->normalizeApiUrls(['api_url' => $apiUrlOrSite]);
+    }
+
     public function getAllSites($includePaused = false) {
         $sites = $this->config['sites'] ?? [];
         if (!$includePaused) {
@@ -47,6 +77,13 @@ class ResourceSiteManager {
                 return ($s['status'] ?? 'active') === 'active';
             });
         }
+        foreach ($sites as &$site) {
+            $site['api_urls'] = $this->normalizeApiUrls($site);
+            if (empty($site['api_url']) && !empty($site['api_urls'])) {
+                $site['api_url'] = $site['api_urls'][0];
+            }
+        }
+        unset($site);
         usort($sites, function($a, $b) {
             return ($a['priority'] ?? 99) - ($b['priority'] ?? 99);
         });
@@ -54,29 +91,86 @@ class ResourceSiteManager {
     }
 
     public function checkSiteHealth($site, $timeout = 8) {
-        $apiUrl = $site['api_url'] ?? '';
-        if (empty($apiUrl)) {
+        $urls = $this->resolveApiUrls($site);
+        if (empty($urls)) {
             return ['healthy' => false, 'message' => '无API地址', 'response_time' => 0];
         }
 
-        $startTime = microtime(true);
-        $result = $this->fetchVideos($apiUrl, 1, 1, $timeout);
-        $responseTime = round((microtime(true) - $startTime) * 1000, 0);
+        $allResults = [];
+        $best = null;
+        foreach ($urls as $url) {
+            $startTime = microtime(true);
+            $result = $this->fetchVideos($url, 1, 1, $timeout);
+            $responseTime = round((microtime(true) - $startTime) * 1000, 0);
 
-        if ($result['success'] && !empty($result['videos'])) {
-            return [
-                'healthy' => true,
-                'message' => '正常',
-                'video_count' => count($result['videos']),
+            $health = [
+                'url' => $url,
+                'healthy' => $result['success'] && !empty($result['videos']),
+                'message' => $result['success'] ? '正常' : ($result['message'] ?? '未知错误'),
+                'video_count' => $result['success'] ? count($result['videos']) : 0,
+                'response_time' => $responseTime
+            ];
+            $allResults[] = $health;
+            if ($health['healthy'] && ($best === null || $responseTime < $best['response_time'])) {
+                $best = $health;
+            }
+        }
+
+        if ($best !== null) {
+            $best['urls_checked'] = $allResults;
+            $best['active_url'] = $best['url'];
+            return $best;
+        }
+
+        $first = $allResults[0] ?? [];
+        return [
+            'healthy' => false,
+            'message' => $first['message'] ?? '未知错误',
+            'urls_checked' => $allResults,
+            'active_url' => $urls[0] ?? '',
+            'response_time' => $first['response_time'] ?? 0
+        ];
+    }
+
+    /**
+     * 多地址测速：逐个检测 url 列表，返回按健康+速度排序的结果，供前端选择最优源
+     */
+    public function testApiUrls($urls, $timeout = 6) {
+        $results = [];
+        $healthyCount = 0;
+        foreach ($urls as $url) {
+            $url = trim((string)$url);
+            if ($url === '') continue;
+            if (!preg_match('#^https?://#i', $url)) {
+                $results[] = ['url' => $url, 'healthy' => false, 'message' => '地址格式无效', 'response_time' => 0, 'video_count' => 0];
+                continue;
+            }
+            $startTime = microtime(true);
+            $result = $this->fetchVideos($url, 1, 1, $timeout);
+            $responseTime = round((microtime(true) - $startTime) * 1000, 0);
+            $ok = $result['success'] && !empty($result['videos']);
+            if ($ok) $healthyCount++;
+            $results[] = [
+                'url' => $url,
+                'healthy' => $ok,
+                'message' => $ok ? '正常' : ($result['message'] ?? '未知错误'),
+                'video_count' => $ok ? count($result['videos']) : 0,
                 'response_time' => $responseTime
             ];
         }
 
+        usort($results, function ($a, $b) {
+            if (($a['healthy'] ?? false) !== ($b['healthy'] ?? false)) {
+                return ($a['healthy'] ?? false) ? -1 : 1;
+            }
+            return ($a['response_time'] ?? 0) - ($b['response_time'] ?? 0);
+        });
+
         return [
-            'healthy' => false,
-            'message' => $result['message'] ?? '未知错误',
-            'video_count' => 0,
-            'response_time' => $responseTime
+            'success' => true,
+            'healthy' => $healthyCount,
+            'total' => count($results),
+            'results' => $results
         ];
     }
 
@@ -99,7 +193,9 @@ class ResourceSiteManager {
             $health = $this->checkSiteHealth($site, $timeoutPerSite);
             $results[] = [
                 'name' => $site['name'],
-                'api_url' => $site['api_url'],
+                'api_url' => $health['active_url'] ?? ($site['api_url'] ?? ''),
+                'api_urls' => $site['api_urls'] ?? [],
+                'urls_checked' => $health['urls_checked'] ?? [],
                 'status' => $site['status'] ?? 'active',
                 'priority' => $site['priority'] ?? 99,
                 'healthy' => $health['healthy'],
@@ -150,15 +246,24 @@ class ResourceSiteManager {
         $result = [];
         foreach ($this->config['sites'] as $site) {
             $siteDomain = parse_url($site['site_url'] ?? '', PHP_URL_HOST);
-            $apiDomain = parse_url($site['api_url'] ?? '', PHP_URL_HOST);
-            if (stripos($domain, $siteDomain) !== false || stripos($domain, $apiDomain) !== false) {
-                $result[] = $site;
+            $domains = [];
+            foreach ($this->normalizeApiUrls($site) as $u) {
+                $h = parse_url($u, PHP_URL_HOST);
+                if ($h) $domains[] = $h;
+            }
+            if ($siteDomain) $domains[] = $siteDomain;
+            foreach ($domains as $d) {
+                if ($d && stripos($domain, $d) !== false) {
+                    $result[] = $site;
+                    break;
+                }
             }
         }
         return $result;
     }
 
     public function addSite($siteData) {
+        $urls = $this->normalizeApiUrls($siteData);
         $site = array_merge([
             'name' => '',
             'site_url' => '',
@@ -168,8 +273,12 @@ class ResourceSiteManager {
             'note' => '',
             'priority' => 50
         ], $siteData);
+        if (!empty($urls)) {
+            $site['api_url'] = $urls[0];
+            $site['api_urls'] = $urls;
+        }
 
-        if (empty($site['name']) || empty($site['api_url'])) {
+        if (empty($site['name']) || empty($urls)) {
             return ['success' => false, 'message' => '名称和采集接口不能为空'];
         }
 
@@ -188,8 +297,26 @@ class ResourceSiteManager {
     public function updateSite($name, $siteData) {
         foreach ($this->config['sites'] as &$site) {
             if ($site['name'] === $name) {
+                // 只传 api_url 时保留原有 api_urls，把新主地址排在最前
+                if (isset($siteData['api_url']) && !isset($siteData['api_urls'])) {
+                    $existing = $this->normalizeApiUrls($site);
+                    $newMain = trim((string)$siteData['api_url']);
+                    $merged = [];
+                    if ($newMain !== '') $merged[] = $newMain;
+                    foreach ($existing as $u) {
+                        if ($u !== $newMain) $merged[] = $u;
+                    }
+                    $siteData['api_urls'] = $merged;
+                }
+                if (isset($siteData['api_urls'])) {
+                    $urls = $this->normalizeApiUrls($siteData);
+                    if (!empty($urls)) {
+                        $siteData['api_url'] = $urls[0];
+                    }
+                }
                 $site = array_merge($site, $siteData);
                 $site['name'] = $name;
+                $site['api_urls'] = $this->normalizeApiUrls($site);
                 $this->config['update_date'] = date('Y-m-d H:i:s');
                 $this->saveConfig();
                 return ['success' => true, 'message' => '更新成功'];
@@ -246,7 +373,40 @@ class ResourceSiteManager {
         return false;
     }
 
+    /**
+     * 多地址自动切换：依次尝试 api_urls（或单地址），第一个成功即返回，失败自动换下一个源
+     */
     public function fetchVideos($apiUrl, $page = 1, $limit = 20, $timeout = 30) {
+        $urls = $this->resolveApiUrls($apiUrl);
+        if (empty($urls)) {
+            return ['success' => false, 'message' => '无API地址'];
+        }
+
+        $errors = [];
+        $attempted = 0;
+        foreach ($urls as $url) {
+            $attempted++;
+            $result = $this->fetchVideosSingle($url, $page, $limit, $timeout);
+            if ($result['success']) {
+                $result['page'] = $page;
+                $result['api_url'] = $url;
+                if ($attempted > 1) {
+                    $result['switched_source'] = true;
+                    $result['message'] = '已自动切换至备用源';
+                }
+                return $result;
+            }
+            $errors[] = $url . ' → ' . ($result['message'] ?? '失败');
+        }
+
+        return [
+            'success' => false,
+            'message' => '所有采集地址均失败（' . $attempted . '个）: ' . implode(' | ', array_slice($errors, 0, 6)),
+            'errors' => array_slice($errors, 0, 6)
+        ];
+    }
+
+    public function fetchVideosSingle($apiUrl, $page = 1, $limit = 20, $timeout = 30) {
         $urlsToTry = $this->generateApiUrlVariants($apiUrl);
         $fetchStrategies = [
             ['ac' => 'detail'],
@@ -303,7 +463,40 @@ class ResourceSiteManager {
         return ['success' => false, 'message' => '获取失败: ' . $lastError];
     }
 
-    public function searchVideos($apiUrl, $keyword, $page = 1, $limit = 20) {
+    /**
+     * 多地址自动切换搜索：依次尝试 api_urls，失败自动换下一个源
+     */
+    public function searchVideos($apiUrl, $keyword, $page = 1, $limit = 20, $timeout = 30) {
+        $urls = $this->resolveApiUrls($apiUrl);
+        if (empty($urls)) {
+            return ['success' => false, 'message' => '无API地址'];
+        }
+
+        $errors = [];
+        $attempted = 0;
+        foreach ($urls as $url) {
+            $attempted++;
+            $result = $this->searchVideosSingle($url, $keyword, $page, $limit, $timeout);
+            if ($result['success']) {
+                $result['page'] = $page;
+                $result['api_url'] = $url;
+                if ($attempted > 1) {
+                    $result['switched_source'] = true;
+                    $result['message'] = '已自动切换至备用源';
+                }
+                return $result;
+            }
+            $errors[] = $url . ' → ' . ($result['message'] ?? '失败');
+        }
+
+        return [
+            'success' => false,
+            'message' => '所有采集地址均失败（' . $attempted . '个）: ' . implode(' | ', array_slice($errors, 0, 6)),
+            'errors' => array_slice($errors, 0, 6)
+        ];
+    }
+
+    public function searchVideosSingle($apiUrl, $keyword, $page = 1, $limit = 20, $timeout = 30) {
         $urlsToTry = $this->generateApiUrlVariants($apiUrl);
         $searchStrategies = [
             ['ac' => 'detail', 'wd' => $keyword],
@@ -321,7 +514,7 @@ class ResourceSiteManager {
                 ]);
                 $url = $this->buildApiUrl($tryUrl, $params);
 
-                $response = $this->httpGet($url);
+                $response = $this->httpGet($url, $timeout);
                 if ($response === false) {
                     $lastError = $this->lastHttpError ?? '未知错误';
                     if ($this->isDomainFailureError($lastError)) {
@@ -687,7 +880,7 @@ class ResourceSiteManager {
         $totalVideos = 0;
 
         foreach ($sites as $site) {
-            $searchResult = $this->searchVideos($site['api_url'], $keyword, 1, $limitPerSite);
+            $searchResult = $this->searchVideos($site, $keyword, 1, $limitPerSite);
             if ($searchResult['success']) {
                 foreach ($searchResult['videos'] as &$video) {
                     $video['site_name'] = $site['name'];
@@ -1015,9 +1208,9 @@ class ResourceSiteManager {
 
                 try {
                     if (!empty($keyword)) {
-                        $fetchResult = $this->searchVideos($site['api_url'], $keyword, 1, $videosPerSite * 3);
+                        $fetchResult = $this->searchVideos($site, $keyword, 1, $videosPerSite * 3);
                     } else {
-                        $fetchResult = $this->fetchVideos($site['api_url'], 1, $videosPerSite * 3);
+                        $fetchResult = $this->fetchVideos($site, 1, $videosPerSite * 3);
                     }
 
                     if (!$fetchResult['success']) {

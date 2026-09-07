@@ -3717,8 +3717,18 @@ if (!$_mxGXSecret) {
                     <input type="text" id="siteUrl" placeholder="例如：https://example.com">
                 </div>
                 <div class="form-group">
-                    <label>采集接口</label>
-                    <input type="text" id="siteApiUrl" placeholder="例如：https://example.com/api.php/provide/vod/">
+                    <label>采集接口（支持多个地址，自动切换）</label>
+                    <div id="siteApiUrlsBox">
+                        <div class="site-url-row" style="display:flex;gap:8px;margin-bottom:8px">
+                            <input type="text" class="site-api-url" placeholder="例如：https://example.com/api.php/provide/vod/" style="flex:1">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="siteRemoveUrlRow(this)">✕</button>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:4px">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="siteAddUrlRow()">➕ 添加地址</button>
+                        <button type="button" class="btn btn-sm btn-success" onclick="siteTestUrls()" id="siteTestBtn">⚡ 测速排序</button>
+                    </div>
+                    <div class="form-tip">可填写多个采集接口，抓取/搜索时自动按顺序尝试；测速后可一键按最快可用源排序。</div>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
                     <div class="form-group">
@@ -3830,9 +3840,18 @@ if (!$_mxGXSecret) {
                 </div>
                 <div class="inline-form-grid">
                     <div class="form-group">
-                        <label>采集接口 <span class="req-flag">★</span></label>
-                        <input type="text" id="ddApiUrl" placeholder="例如：https://example.com/api.php/provide/vod/">
-                        <div class="form-tip">MacCMS 采集接口地址，用于拉取视频列表。</div>
+                        <label>采集接口 <span class="req-flag">★</span>（支持多个地址，自动切换）</label>
+                        <div id="ddApiUrlsBox">
+                            <div class="site-url-row" style="display:flex;gap:8px;margin-bottom:8px">
+                                <input type="text" class="dd-api-url" placeholder="例如：https://example.com/api.php/provide/vod/" style="flex:1">
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="ddRemoveUrlRow(this)">✕</button>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:4px">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="ddAddUrlRow()">➕ 添加地址</button>
+                            <button type="button" class="btn btn-sm btn-success" onclick="ddTestUrls()" id="ddTestBtn">⚡ 测速排序</button>
+                        </div>
+                        <div class="form-tip">可填写多个采集接口，抓取时自动按顺序尝试；测速后可一键按最快可用源排序。</div>
                     </div>
                     <div class="form-group">
                         <label>类型</label>
@@ -10749,9 +10768,14 @@ if (!$_mxGXSecret) {
                 '<th>名称</th><th>采集接口 / 域名</th><th>类型</th><th>状态</th><th>备注</th><th>操作</th></tr></thead><tbody>';
             list.forEach(s => {
                 const ok = s.status === 'active';
+                const urls = (Array.isArray(s.api_urls) && s.api_urls.length ? s.api_urls : (s.api_url ? [s.api_url] : []));
+                const urlCount = urls.length;
                 html += '<tr>' +
                     '<td><strong>' + escapeHtml(s.name) + '</strong></td>' +
-                    '<td style="word-break:break-all;font-size:12px;color:#606266">' + escapeHtml(s.api_url || s.site_url || '-') + '</td>' +
+                    '<td style="word-break:break-all;font-size:12px;color:#606266">' +
+                        (urlCount > 1 ? '<span class="status-pill blue" style="margin-right:6px">' + urlCount + '个源</span>' : '') +
+                        '<span title="' + escapeHtml(urls.join('\n')) + '">' + escapeHtml((urls[0] || s.api_url || s.site_url || '-')) + '</span>' +
+                    '</td>' +
                     '<td>' + escapeHtml(s.type || 'maccms') + '</td>' +
                     '<td>' + (ok
                         ? '<span class="status-pill green">正常</span>'
@@ -10767,11 +10791,77 @@ if (!$_mxGXSecret) {
             box.innerHTML = html;
         }
 
+        /* ---------- 域名发现：多地址输入辅助 ---------- */
+        function ddAddUrlRow(value) {
+            const box = document.getElementById('ddApiUrlsBox');
+            const row = document.createElement('div');
+            row.className = 'site-url-row';
+            row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+            row.innerHTML =
+                '<input type="text" class="dd-api-url" placeholder="例如：https://example.com/api.php/provide/vod/" style="flex:1" value="' + escapeHtml(value || '') + '">' +
+                '<button type="button" class="btn btn-sm btn-secondary" onclick="ddRemoveUrlRow(this)">✕</button>';
+            box.appendChild(row);
+        }
+
+        function ddRemoveUrlRow(btn) {
+            const box = document.getElementById('ddApiUrlsBox');
+            if (box.querySelectorAll('.site-url-row').length <= 1) {
+                box.querySelector('.dd-api-url').value = '';
+                return;
+            }
+            btn.parentElement.remove();
+        }
+
+        function ddCollectApiUrls() {
+            const inputs = document.querySelectorAll('#ddApiUrlsBox .dd-api-url');
+            const urls = [];
+            inputs.forEach(inp => {
+                const v = inp.value.trim();
+                if (v) urls.push(v);
+            });
+            return urls;
+        }
+
+        function ddFillApiUrls(urls) {
+            const box = document.getElementById('ddApiUrlsBox');
+            box.innerHTML = '';
+            const list = (Array.isArray(urls) && urls.length) ? urls : (urls ? [urls] : ['']);
+            list.forEach(u => ddAddUrlRow(u || ''));
+        }
+
+        async function ddTestUrls() {
+            const urls = ddCollectApiUrls();
+            if (urls.length === 0) { showToast('请先填写至少一个采集地址', 'error'); return; }
+            const btn = document.getElementById('ddTestBtn');
+            btn.disabled = true; btn.textContent = '测速中...';
+            try {
+                const res = await fetch(API_BASE + '?action=sites/test_urls', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ urls, timeout: 6 })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                // 按测速结果排序：健康优先、响应时间升序；失败地址排最后
+                const passed = [];
+                const failed = [];
+                data.results.forEach(r => {
+                    (r.healthy ? passed : failed).push(r.url);
+                });
+                const newUrls = passed.concat(failed);
+                ddFillApiUrls(newUrls);
+                let msg = '测速完成：' + (data.healthy ?? 0) + '/' + (data.total ?? 0) + ' 个可用';
+                if (data.healthy > 0) msg += '，已按最快可用源排序';
+                showToast(msg, data.healthy > 0 ? 'success' : 'error');
+            } catch (e) { showToast('测速失败: ' + e.message, 'error'); }
+            finally { btn.disabled = false; btn.textContent = '⚡ 测速排序'; }
+        }
+
         function ddReset() {
             ddEditing = null;
             document.getElementById('ddSiteName').value = '';
             document.getElementById('ddSiteUrl').value = '';
-            document.getElementById('ddApiUrl').value = '';
+            ddFillApiUrls(['']);
             document.getElementById('ddNote').value = '';
             document.getElementById('ddEditorTitle').textContent = '➕ 添加资源站';
             document.getElementById('ddSaveBtn').textContent = '💾 保存资源站';
@@ -10780,12 +10870,13 @@ if (!$_mxGXSecret) {
 
         async function ddSave() {
             const name = document.getElementById('ddSiteName').value.trim();
-            const apiUrl = document.getElementById('ddApiUrl').value.trim();
-            if (!name || !apiUrl) { showToast('资源站名称和采集接口不能为空', 'error'); return; }
+            const urls = ddCollectApiUrls();
+            if (!name || urls.length === 0) { showToast('资源站名称和采集接口不能为空', 'error'); return; }
             const payload = {
                 name,
                 site_url: document.getElementById('ddSiteUrl').value.trim(),
-                api_url: apiUrl,
+                api_urls: urls,
+                api_url: urls[0],
                 type: document.getElementById('ddApiType').value,
                 note: document.getElementById('ddNote').value.trim(),
                 status: 'active'
@@ -10813,7 +10904,8 @@ if (!$_mxGXSecret) {
             ddEditing = name;
             document.getElementById('ddSiteName').value = site.name;
             document.getElementById('ddSiteUrl').value = site.site_url || '';
-            document.getElementById('ddApiUrl').value = site.api_url || '';
+            const urls = (Array.isArray(site.api_urls) && site.api_urls.length) ? site.api_urls : (site.api_url ? [site.api_url] : ['']);
+            ddFillApiUrls(urls);
             document.getElementById('ddNote').value = site.note || '';
             document.getElementById('ddEditorTitle').textContent = '✏️ 编辑资源站';
             document.getElementById('ddSaveBtn').textContent = '💾 保存修改';
@@ -11184,7 +11276,9 @@ if (!$_mxGXSecret) {
                 }
                 
                 const siteUrl = site.site_url || '#';
-                const apiUrl = site.api_url || '';
+                const urls = (Array.isArray(site.api_urls) && site.api_urls.length) ? site.api_urls : (site.api_url ? [site.api_url] : []);
+                const apiUrl = urls[0] || site.api_url || '';
+                const apiUrlsTitle = urls.length > 1 ? urls.join('\n') : apiUrl;
                 const note = escapeHtml(site.note || '');
                 const healthNote = health && !health.healthy ? escapeHtml(health.message) : note;
                 const isPaused = site.status !== 'active';
@@ -11197,8 +11291,8 @@ if (!$_mxGXSecret) {
                         <td>
                             ${site.site_url ? `<a href="${escapeHtml(siteUrl)}" target="_blank" style="color:#409eff;text-decoration:none;font-size:12px">访问官网 ↗</a>` : '-'}
                         </td>
-                        <td style="font-size:12px;color:#909399;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(apiUrl)}">
-                            ${escapeHtml(apiUrl)}
+                        <td style="font-size:12px;color:#909399;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(apiUrlsTitle)}">
+                            ${urls.length > 1 ? `<span class="tag tag-blue" style="margin-right:4px">${urls.length}个源</span>` : ''}${escapeHtml(apiUrl)}
                         </td>
                         <td>${statusTag}</td>
                         <td style="font-size:12px;color:#67c23a">${responseTime}</td>
@@ -11216,12 +11310,74 @@ if (!$_mxGXSecret) {
             container.innerHTML = html;
         }
 
+        /* ---------- 资源站管理：多地址输入辅助 ---------- */
+        function siteAddUrlRow(value) {
+            const box = document.getElementById('siteApiUrlsBox');
+            const row = document.createElement('div');
+            row.className = 'site-url-row';
+            row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+            row.innerHTML =
+                '<input type="text" class="site-api-url" placeholder="例如：https://example.com/api.php/provide/vod/" style="flex:1" value="' + escapeHtml(value || '') + '">' +
+                '<button type="button" class="btn btn-sm btn-secondary" onclick="siteRemoveUrlRow(this)">✕</button>';
+            box.appendChild(row);
+        }
+
+        function siteRemoveUrlRow(btn) {
+            const box = document.getElementById('siteApiUrlsBox');
+            if (box.querySelectorAll('.site-url-row').length <= 1) {
+                box.querySelector('.site-api-url').value = '';
+                return;
+            }
+            btn.parentElement.remove();
+        }
+
+        function siteCollectApiUrls() {
+            const inputs = document.querySelectorAll('#siteApiUrlsBox .site-api-url');
+            const urls = [];
+            inputs.forEach(inp => {
+                const v = inp.value.trim();
+                if (v) urls.push(v);
+            });
+            return urls;
+        }
+
+        function siteFillApiUrls(urls) {
+            const box = document.getElementById('siteApiUrlsBox');
+            box.innerHTML = '';
+            const list = (Array.isArray(urls) && urls.length) ? urls : (urls ? [urls] : ['']);
+            list.forEach(u => siteAddUrlRow(u || ''));
+        }
+
+        async function siteTestUrls() {
+            const urls = siteCollectApiUrls();
+            if (urls.length === 0) { showToast('请先填写至少一个采集地址', 'error'); return; }
+            const btn = document.getElementById('siteTestBtn');
+            btn.disabled = true; btn.textContent = '测速中...';
+            try {
+                const res = await fetch(API_BASE + '?action=sites/test_urls', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ urls, timeout: 6 })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                const passed = [];
+                const failed = [];
+                data.results.forEach(r => { (r.healthy ? passed : failed).push(r.url); });
+                siteFillApiUrls(passed.concat(failed));
+                let msg = '测速完成：' + (data.healthy ?? 0) + '/' + (data.total ?? 0) + ' 个可用';
+                if (data.healthy > 0) msg += '，已按最快可用源排序';
+                showToast(msg, data.healthy > 0 ? 'success' : 'error');
+            } catch (e) { showToast('测速失败: ' + e.message, 'error'); }
+            finally { btn.disabled = false; btn.textContent = '⚡ 测速排序'; }
+        }
+
         function showAddSite() {
             editingSite = null;
             document.getElementById('siteEditorTitle').textContent = '新增资源站';
             document.getElementById('siteName').value = '';
             document.getElementById('siteUrl').value = '';
-            document.getElementById('siteApiUrl').value = '';
+            siteFillApiUrls(['']);
             document.getElementById('siteType').value = 'maccms';
             document.getElementById('siteStatus').value = 'active';
             document.getElementById('sitePriority').value = 50;
@@ -11240,7 +11396,8 @@ if (!$_mxGXSecret) {
                 document.getElementById('siteEditorTitle').textContent = '编辑资源站';
                 document.getElementById('siteName').value = data.site.name || '';
                 document.getElementById('siteUrl').value = data.site.site_url || '';
-                document.getElementById('siteApiUrl').value = data.site.api_url || '';
+                const urls = (Array.isArray(data.site.api_urls) && data.site.api_urls.length) ? data.site.api_urls : (data.site.api_url ? [data.site.api_url] : ['']);
+                siteFillApiUrls(urls);
                 document.getElementById('siteType').value = data.site.type || 'maccms';
                 document.getElementById('siteStatus').value = data.site.status || 'active';
                 document.getElementById('sitePriority').value = data.site.priority || 50;
@@ -11261,19 +11418,20 @@ if (!$_mxGXSecret) {
         async function saveSite() {
             const name = document.getElementById('siteName').value.trim();
             const siteUrl = document.getElementById('siteUrl').value.trim();
-            const apiUrl = document.getElementById('siteApiUrl').value.trim();
+            const urls = siteCollectApiUrls();
             const type = document.getElementById('siteType').value;
             const status = document.getElementById('siteStatus').value;
             const priority = parseInt(document.getElementById('sitePriority').value) || 50;
             const note = document.getElementById('siteNote').value.trim();
 
             if (!name) { showToast('请输入资源站名称', 'error'); return; }
-            if (!apiUrl) { showToast('请输入采集接口地址', 'error'); return; }
+            if (urls.length === 0) { showToast('请输入采集接口地址', 'error'); return; }
 
             const siteData = {
                 name: name,
                 site_url: siteUrl,
-                api_url: apiUrl,
+                api_urls: urls,
+                api_url: urls[0],
                 type: type,
                 status: status,
                 priority: priority,

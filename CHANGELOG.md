@@ -1,5 +1,65 @@
 # 更新日志
 
+## v5.14.7 (2026-09-07) — 资源站多地址 + 自动换源
+
+### 新增资源站支持多个采集地址，测速选最优，失败自动切换
+
+> 资源站新增时可直接填写多条采集接口地址，系统抓取/搜索时按顺序自动切换，避免单一地址连接不到导致资源站不可用。
+
+#### 1. 后端（[mx.php](file:///workspace/mx.php) + [db/DbResourceSiteManager.php](file:///workspace/db/DbResourceSiteManager.php) + [gz/ResourceSiteManager.php](file:///workspace/gz/ResourceSiteManager.php)）
+
+- **多地址存储**：资源站新增 `api_urls` 数组字段（数据库版存于 `config` JSON），只填 `api_url` 的旧数据自动兼容回退为单地址；
+- **多地址测速**：新增 `sites/test_urls` 接口，逐个检测地址可用性与响应时间，按「健康优先 + 速度升序」排序返回；
+- **自动切换**：`fetchVideos` / `searchVideos` 依次尝试所有地址，首个成功即返回（带 `switched_source` 标记），全部失败返回各地址失败明细；
+- **健康检测升级**：`checkSiteHealth` 对每个地址分别测速，返回最佳可用地址 `active_url` 与各地址明细 `urls_checked`；
+- **调用链打通**：AiAutoLearner / OfficialReplaceManager / DbOfficialReplaceManager / gx.php 全部改为传站点对象搜索抓取，享受多地址自动切换。
+
+#### 2. 前端（[mxadmin.php](file:///workspace/mxadmin.php)）
+
+- 「资源站管理」与「域名发现」两个页面的采集接口表单均改为**多地址列表**（➕添加地址 / ✕删除行）；
+- 新增「⚡ 测速排序」按钮：一键检测所有已填地址并**按最快可用源排序**；
+- 资源站列表展示「N个源」徽标与主地址，健康检测返回每个地址的测速明细。
+
+#### 3. 验证
+
+- `php -l` 全部通过；
+- 本地实测：坏地址 + 备用源自动切换成功（`switched=true`，取回 20 条视频）；`testApiUrls` 测速排序正常（可用源排前）。
+
+---
+
+## v5.14.6 (2026-09-07) — 自动学习失败修复
+
+### M3U8Parser 自动跟随 Master playlist variant
+
+- `src/M3U8Parser.php` `parse()` 检测到 Master playlist（`#EXT-X-STREAM-INF`）且无片段时，自动跟随最高带宽 variant 重新解析媒体流，拿到真实片段列表；
+- 此前只解析出 0 片段导致学习链路报「Unsupported operand types: array * int」、自动学习/多线程学习全部失败；
+- 保留 `isMaster` / `variants` 元信息，新增 `selectedVariant` / `selectedVariantUri` 字段；已有直接解析媒体流的场景不受影响。
+
+## v5.14.5 (2026-09-07) — 公告实时化
+
+### announcement/list 实时生成「最新版本公告」
+
+- 基于 `version.php` 实时生成首条「最新版本 vX.Y.Z 发布：<变更标题>」公告（`is_latest_version` 标记），不再依赖手工维护的 `gg.txt` 过期问题；
+- 本地 `gg.txt` 历史公告仍正常叠加返回。
+
+## v5.14.4 (2026-09-07) — 在线更新源修复 + 健康检测卡死修复
+
+### UpdateManager 更新源由 qcb 更正为 MXGT；修复 sites/health_check 长时间挂起
+
+- `src/UpdateManager.php` 更新源由 `ssmhdssmhd/qcb` 更正为 `ssmhdssmhd/MXGT`，修正在线更新一直指向旧仓库而判定无更新的问题；
+- `checkSiteHealth` 的 `$timeout` 真正透传给 `fetchVideos` / `httpGet`（此前 8s 超时参数从未生效）；`batchCheckHealth` 新增总时间预算（默认 20s），后台一键健康检测不再挂起。
+
+## v5.14.3 (2026-09-07) — 接口去重 + API 文档补全
+
+### 删除 notice/* 与 ad_signatures/* 重复别名，补全 API 文档接口索引
+
+- 移除重复别名公告接口 `notice/list`、`notice/save`、`notice/add`、`notice/refresh`（保留规范名 `announcement/*`）；
+- 移除重复别名特征码接口 `ad_signatures/*`（保留规范名 `signatures/*`）；
+- `api_doc.php` 完整接口索引新增「资源站规则 / AI自动学习 / 公告管理 / 嗅探设置」四分类；
+- 保留公有解析别名 `jx`、`parse/parse`、`moxi/api` 避免破坏外部引用。
+
+---
+
 ## v5.14.2 (2026-09-07) — 版本标识
 
 ### 发布版本号提升至 v5.14.2

@@ -624,7 +624,7 @@ class GxRunner {
                         $tried = 0;
                         foreach ($allSites as $s) {
                             if ($tried >= 3) break;
-                            $tmpRes = $sm->searchVideos($s['api_url'], $kw, 1, 3);
+                            $tmpRes = $sm->searchVideos($s, $kw, 1, 3);
                             $tried++;
                             if (!empty($tmpRes['success']) && !empty($tmpRes['videos'])) {
                                 $videos = array_merge($videos, $tmpRes['videos']);

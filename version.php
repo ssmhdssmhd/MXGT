@@ -1,13 +1,27 @@
 <?php
 return array (
-  'version' => 'v5.14.6',
+  'version' => 'v5.14.7',
   'branch' => 'main',
-  'build' => '20260907-v5-14-6-release',
-  'version_code' => 51406,
-  'commit' => 'v5.14.6-release',
+  'build' => '20260907-v5-14-7-release',
+  'version_code' => 51407,
+  'commit' => 'v5.14.7-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.14.7' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【资源站多地址+自动换源】新增资源站支持填写多个采集地址，测速排序选最优，失败自动切换备用源',
+      'changes' =>
+      array (
+        0 => '【新增-多地址】资源站支持 api_urls 多地址数组（存储于 config JSON），数据库版 DbResourceSiteManager 与文件版 ResourceSiteManager 同步支持；只填 api_url 的旧数据自动兼容回退为单地址',
+        1 => '【新增-测速排序】mx.php 新增 sites/test_urls 测速接口：逐个检测地址可用性与响应时间，按「健康优先+速度升序」排序返回；前端一键把最快可用源排到最前',
+        2 => '【新增-自动切换】fetchVideos/searchVideos 改为多地址自动切换：依次尝试 api_urls，首个成功即返回（带 switched_source 标记），全部失败返回各地址失败明细；健康检测 checkSiteHealth 对每个地址分别测速并返回最佳地址 active_url',
+        3 => '【新增-前端】后台「资源站管理」与「域名发现」两个页面的采集接口表单均改为多地址列表（➕添加地址/✕删除），支持「⚡测速排序」一键排序；列表展示「N个源」徽标与主地址',
+        4 => '【兼容-调用链】AiAutoLearner/OfficialReplaceManager/DbOfficialReplaceManager/gx.php 等全部改为传站点对象搜索/抓取，享受多地址自动切换；旧传字符串调用保持单地址兼容',
+        5 => '【验证】php -l 全部通过；本地实测坏地址+备用源：自动切换成功（switched=true，取回20条视频）；testApiUrls 测速排序正常（OK源排前）',
+      ),
+    ),
     'v5.14.6' =>
     array (
       'date' => '2026-09-07',
