@@ -1,0 +1,14388 @@
+<?php
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
+// ---- 自动更新模块：输出 gx_secret 给前端（用于 HMAC 签名启动任务）----
+$_mxGXSecret = null;
+$_mxGXDir    = __DIR__ . '/gx';
+$_mxGXSecretFile = $_mxGXDir . '/.gx_secret.php';
+if (file_exists($_mxGXSecretFile)) {
+    $_cfg = @include $_mxGXSecretFile;
+    if (is_array($_cfg) && !empty($_cfg['gx_key']) && strlen($_cfg['gx_key']) >= 16) {
+        $_mxGXSecret = $_cfg['gx_key'];
+    }
+}
+if (!$_mxGXSecret) {
+    // 兼容旧版纯文本格式 .gx_secret
+    $_old = $_mxGXDir . '/.gx_secret';
+    if (file_exists($_old)) {
+        $_s = trim(file_get_contents($_old));
+        if (strlen($_s) >= 16) $_mxGXSecret = $_s;
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3U8 广告分析后台</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/dplayer/1.27.1/DPlayer.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/hls.js/1.5.15/hls.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/dplayer/1.27.1/DPlayer.min.js"></script>
+    <script>
+        // 自动更新（进度条）模块的前端常量
+        // 说明：签名 token 改为服务端 gx_token.php 生成（避免客户端 Web Crypto 需要安全上下文的问题），
+        // 所以不再把 gx_secret 明文暴露到前端，只输出一个 ready 标志用于前端提示。
+        window.__GX_SECRET_READY__ = <?php echo $_mxGXSecret ? 'true' : 'false'; ?>;
+        window.__GX_TOKEN_URL__    = 'gx_token.php';
+        window.__GX_EXEC_URL__     = 'gx_execute.php';
+        window.__GX_PROGRESS_URL__ = 'gx_progress.php';
+    </script>
+    <style>
+        :root {
+            --primary: #667eea;
+            --primary-light: #764ba2;
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --primary-bg: #ecf5ff;
+            --primary-text: #409eff;
+            --bg-page: #f5f7fa;
+            --bg-card: #ffffff;
+            --text-primary: #303133;
+            --text-regular: #606266;
+            --text-secondary: #909399;
+            --text-placeholder: #c0c4cc;
+            --border-base: #dcdfe6;
+            --border-light: #e4e7ed;
+            --border-lighter: #ebeef5;
+            --fill-light: #fafafa;
+            --fill-lighter: #f5f7fa;
+            --success: #67c23a;
+            --success-light: #f0f9eb;
+            --success-border: #e1f3d8;
+            --warning: #e6a23c;
+            --warning-light: #fdf6ec;
+            --danger: #f56c6c;
+            --danger-light: #fef0f0;
+            --danger-border: #fbc4c4;
+            --shadow-base: 0 2px 12px rgba(0,0,0,0.05);
+            --shadow-hover: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        [data-theme="gold"] {
+            --primary: #9f6d1d;
+            --primary-light: #fff89c;
+            --primary-gradient: linear-gradient(135deg, #9f6d1d 0%, #d4a017 100%);
+            --primary-bg: #fdf6ec;
+            --primary-text: #e6a23c;
+            --success: #95c44a;
+            --success-light: #f0f9eb;
+            --success-border: #e1f3d8;
+        }
+
+        [data-theme="green"] {
+            --primary: #217e25;
+            --primary-light: #baff54;
+            --primary-gradient: linear-gradient(135deg, #217e25 0%, #52c41a 100%);
+            --primary-bg: #f0f9eb;
+            --primary-text: #67c23a;
+            --success: #52c41a;
+        }
+
+        [data-theme="blue"] {
+            --primary: #171be1;
+            --primary-light: #80f1ff;
+            --primary-gradient: linear-gradient(135deg, #171be1 0%, #409eff 100%);
+            --primary-bg: #ecf5ff;
+            --primary-text: #409eff;
+        }
+
+        [data-theme="cyan"] {
+            --primary: #03626c;
+            --primary-light: #6efaff;
+            --primary-gradient: linear-gradient(135deg, #03626c 0%, #13c2c2 100%);
+            --primary-bg: #e6fffb;
+            --primary-text: #13c2c2;
+        }
+
+        [data-theme="red"] {
+            --primary: #c41d1d;
+            --primary-light: #ff9c9c;
+            --primary-gradient: linear-gradient(135deg, #c41d1d 0%, #f56c6c 100%);
+            --primary-bg: #fff1f0;
+            --primary-text: #f56c6c;
+        }
+
+        [data-theme="dark"] {
+            --primary: #667eea;
+            --primary-light: #764ba2;
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --primary-bg: rgba(102, 126, 234, 0.15);
+            --primary-text: #85a5ff;
+            --bg-page: #141414;
+            --bg-card: #1f1f1f;
+            --text-primary: #e8e8e8;
+            --text-regular: #bfbfbf;
+            --text-secondary: #8c8c8c;
+            --text-placeholder: #595959;
+            --border-base: #434343;
+            --border-light: #303030;
+            --border-lighter: #262626;
+            --fill-light: #262626;
+            --fill-lighter: #1f1f1f;
+            --success: #52c41a;
+            --success-light: rgba(82, 196, 26, 0.15);
+            --success-border: rgba(82, 196, 26, 0.3);
+            --warning: #faad14;
+            --warning-light: rgba(250, 173, 20, 0.15);
+            --danger: #ff4d4f;
+            --danger-light: rgba(255, 77, 79, 0.15);
+            --danger-border: rgba(255, 77, 79, 0.3);
+            --shadow-base: 0 2px 12px rgba(0,0,0,0.3);
+            --shadow-hover: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-page);
+            color: var(--text-primary);
+            transition: background 0.3s, color 0.3s;
+        }
+        .app-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border-light);
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            flex-shrink: 0;
+        }
+        .sidebar-logo {
+            padding: 8px 12px 16px;
+            border-bottom: 1px solid var(--border-lighter);
+            margin-bottom: 4px;
+        }
+        .sidebar-logo h2 {
+            font-size: 18px;
+            font-weight: 700;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.3;
+        }
+        .sidebar-logo p {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        .menu-group {
+            background: var(--bg-card);
+            border-radius: 10px;
+            border: 1px solid var(--border-lighter);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .menu-group:hover {
+            border-color: var(--border-base);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .menu-group-title {
+            padding: 10px 14px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            background: var(--fill-lighter);
+            border-bottom: 1px solid var(--border-lighter);
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 14px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            border-bottom: none;
+            transition: all 0.2s ease;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-regular);
+            white-space: nowrap;
+            position: relative;
+        }
+        .nav-item:last-child {
+            border-bottom: none;
+        }
+        .nav-item + .nav-item {
+            border-top: 1px solid var(--border-lighter);
+        }
+        .nav-item:hover {
+            color: var(--primary);
+            background: var(--primary-bg);
+            border-left-color: var(--primary);
+        }
+        .nav-item.active {
+            color: var(--primary);
+            border-left-color: var(--primary);
+            border-bottom: none;
+            font-weight: 600;
+            background: var(--primary-bg);
+        }
+        .nav-item.active::before {
+            display: none;
+        }
+        .nav-item .menu-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .nav-item .menu-text {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .nav-item .menu-badge {
+            background: var(--danger);
+            color: white;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-lighter);
+        }
+        .sidebar-version {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .main-content {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 24px 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            position: relative;
+            overflow: hidden;
+        }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        }
+        .header-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header-left {
+            flex: 1;
+        }
+        .header h1 { 
+            font-size: 26px; 
+            font-weight: 700; 
+            letter-spacing: -0.5px;
+        }
+        .header p { 
+            opacity: 0.9; 
+            margin-top: 6px; 
+            font-size: 14px; 
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .theme-switcher {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .theme-label {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        .theme-dot {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.3);
+            transition: all 0.2s;
+            position: relative;
+        }
+        .theme-dot:hover { transform: scale(1.15); border-color: white; }
+        .theme-dot.active {
+            border-color: white;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
+        }
+        .theme-dot.active::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        .theme-dot[data-theme-name="default"] { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .theme-dot[data-theme-name="gold"] { background: linear-gradient(135deg, #9f6d1d, #d4a017); }
+        .theme-dot[data-theme-name="green"] { background: linear-gradient(135deg, #217e25, #52c41a); }
+        .theme-dot[data-theme-name="blue"] { background: linear-gradient(135deg, #171be1, #409eff); }
+        .theme-dot[data-theme-name="cyan"] { background: linear-gradient(135deg, #03626c, #13c2c2); }
+        .theme-dot[data-theme-name="red"] { background: linear-gradient(135deg, #c41d1d, #f56c6c); }
+        .theme-dot[data-theme-name="dark"] { background: linear-gradient(135deg, #1f1f1f, #434343); }
+        .container { padding: 30px; }
+        .page { display: none; }
+        .page.active { display: block; animation: fadeInPage 0.3s ease; }
+        @keyframes fadeInPage {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-base);
+            transition: all 0.3s ease;
+            border: 1px solid var(--border-lighter);
+        }
+        .card:hover {
+            box-shadow: var(--shadow-hover);
+            transform: translateY(-1px);
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card-title::before {
+            content: '';
+            width: 4px;
+            height: 18px;
+            background: var(--primary-gradient);
+            border-radius: 2px;
+        }
+        .input-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .input-group input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border-base);
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+        .input-group input:focus { border-color: var(--primary); }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+        .btn:hover::before {
+            left: 100%;
+        }
+        .btn-sm {
+            padding: 6px 14px;
+            font-size: 12px;
+        }
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        .btn-primary:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        .btn-primary:active { transform: translateY(-1px); }
+        .btn-primary:disabled { 
+            opacity: 0.6; 
+            cursor: not-allowed; 
+            transform: none; 
+            box-shadow: none;
+        }
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-regular);
+            border: 1px solid var(--border-base);
+        }
+        .btn-secondary:hover { 
+            border-color: var(--primary); 
+            color: var(--primary);
+            transform: translateY(-1px);
+        }
+        .btn-success { 
+            background: var(--success); 
+            color: white; 
+            box-shadow: 0 4px 12px rgba(103, 194, 58, 0.3);
+        }
+        .btn-success:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 20px rgba(103, 194, 58, 0.4);
+        }
+        .btn-danger { 
+            background: var(--danger); 
+            color: white; 
+            box-shadow: 0 4px 12px rgba(245, 108, 108, 0.3);
+        }
+        .btn-danger:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 20px rgba(245, 108, 108, 0.4);
+        }
+        .btn-warning { 
+            background: var(--warning); 
+            color: white; 
+            box-shadow: 0 4px 12px rgba(230, 162, 60, 0.3);
+        }
+        .btn-warning:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 20px rgba(230, 162, 60, 0.4);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--v3-bg-card);
+            border-radius: var(--v3-radius-lg);
+            padding: 20px;
+            box-shadow: var(--v3-shadow-sm);
+            transition: all 0.3s ease;
+            border: 1px solid var(--v3-border-light);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 4px;
+            background: var(--primary-gradient);
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--v3-shadow-md);
+            border-color: var(--v3-primary);
+        }
+        .stat-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: var(--v3-radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+            background: var(--v3-primary-light);
+        }
+        .stat-content {
+            flex: 1;
+            min-width: 0;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--v3-text-primary);
+            line-height: 1.2;
+            margin-bottom: 4px;
+        }
+        .stat-value.warning { color: var(--v3-warning); }
+        .stat-value.danger { color: var(--v3-danger); }
+        .stat-value.success { color: var(--v3-success); }
+        .stat-label {
+            color: var(--v3-text-muted);
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        .stat-trend {
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .stat-trend.up { color: var(--v3-success); }
+        .stat-trend.down { color: var(--v3-danger); }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--primary);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ===== 通用进度条组件（请稍后 + 进度条） ===== */
+        .loading-wrapper {
+            text-align: center;
+            padding: 24px 16px;
+            color: var(--text-secondary);
+        }
+        .loading-wrapper .loading-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+        .loading-wrapper .loading-label::before {
+            content: '';
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--primary);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        .progress-bar-container {
+            width: 100%;
+            max-width: 520px;
+            height: 10px;
+            background: var(--border-lighter);
+            border-radius: 999px;
+            overflow: hidden;
+            margin: 8px auto 6px;
+            position: relative;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #409eff, #67c23a);
+            border-radius: 999px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        .progress-bar-fill.indeterminate {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 40%;
+            animation: progress-indeterminate 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+            background: linear-gradient(90deg, #409eff, #67c23a);
+        }
+        @keyframes progress-indeterminate {
+            0% { left: -40%; }
+            100% { left: 100%; }
+        }
+        .progress-bar-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            font-family: monospace;
+        }
+        .segment-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid var(--border-lighter);
+            border-radius: 6px;
+        }
+        .segment-item {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border-lighter);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        .segment-item:last-child { border-bottom: none; }
+        .segment-item.ad {
+            background: var(--danger-light);
+            border-left: 3px solid var(--danger);
+        }
+        .segment-name { font-family: monospace; color: var(--text-primary); }
+        .segment-duration { color: var(--text-secondary); }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: 6px;
+        }
+        .tag-red { background: var(--danger-light); color: var(--danger); }
+        .tag-blue { background: var(--primary-bg); color: var(--primary-text); }
+        .tag-green { background: var(--success-light); color: var(--success); }
+        .tag-orange { background: var(--warning-light); color: var(--warning); }
+        .tag-gray { background: linear-gradient(135deg, #909399, #c0c4cc); color: white; }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .detail-grid { grid-template-columns: 1fr; }
+        }
+        .jump-item {
+            padding: 12px;
+            background: var(--warning-light);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: var(--text-primary);
+        }
+        .jump-item .jump-arrow { color: var(--warning); font-weight: bold; }
+        .rules-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .rules-table th, .rules-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-lighter);
+            font-size: 14px;
+        }
+        .rules-table th {
+            background: var(--fill-light);
+            color: var(--text-regular);
+            font-weight: 500;
+        }
+        .rules-table tr:hover { background: var(--fill-light); }
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-regular);
+        }
+        .form-group input[type="checkbox"] + span,
+        .form-group label input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+        .form-group label:has(input[type="checkbox"]) {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 8px 0;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border-base);
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-bg);
+        }
+        .form-group textarea { min-height: 100px; font-family: monospace; }
+        .form-group input:disabled, .form-group textarea:disabled {
+            background: var(--fill-lighter);
+            color: var(--text-secondary);
+            cursor: not-allowed;
+        }
+        /* ====== 嗅探设置：栅格/必填/提示 ====== */
+        .req-flag { color: #f56c6c; margin-left: 2px; font-weight: 600; }
+        .form-tip {
+            margin-top: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+        .form-tip code {
+            background: var(--fill-lighter);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .sniffer-form-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px 20px;
+        }
+        @media (max-width: 900px) {
+            .sniffer-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) {
+            .sniffer-form-grid { grid-template-columns: 1fr; }
+        }
+        .sniffer-form-grid .form-group { margin-bottom: 0; }
+        /* 模式卡片选中态 */
+        [data-sniffer-mode-card].is-active {
+            border-color: var(--primary) !important;
+            background: var(--primary-bg) !important;
+            box-shadow: 0 2px 10px rgba(64, 158, 255, 0.12);
+        }
+        /* 接口卡启用/当前主路由态 */
+        #snifferOfficialCard.is-enabled,
+        #snifferReplaceCard.is-enabled {
+            background: #fff;
+        }
+        #snifferOfficialCard.is-disabled,
+        #snifferReplaceCard.is-disabled {
+            background: #fafafa;
+            opacity: 0.85;
+        }
+        #snifferOfficialCard.is-current,
+        #snifferReplaceCard.is-current {
+            border-color: var(--success) !important;
+            box-shadow: 0 2px 10px rgba(103, 194, 58, 0.1);
+        }
+        #snifferOfficialCard.is-current::before,
+        #snifferReplaceCard.is-current::before {
+            content: "";
+            display: block;
+            height: 3px;
+            margin: -16px -18px 12px -18px;
+            background: linear-gradient(90deg, var(--success), #95d475);
+            border-radius: 10px 10px 0 0;
+        }
+
+        /* ===============================================================
+         * v5.12 后台全局统一美化组件（与嗅探设置同风格，冻结逻辑只改UI）
+         *   1. step-badge       ①②③ 编号圆形徽章（配合 card-title 使用）
+         *   2. overview-*       概览双栅格信息卡（首屏介绍）
+         *   3. form-grid        通用三列表单栅格（别名 sniffer-form-grid）
+         *   4. inline-form-grid 单行自适应栅格（200px/列，响应式 auto-fit）
+         *   5. status-pill      状态胶囊徽章（未启用 / 当前主路由 / 有修改未保存 …）
+         *   6. sub-card         子卡（接口配置/小节独立包装，嗅探 snifferOfficialCard 同款）
+         *   7. sub-card-header  子卡头部（标题+徽章左右布局）
+         *   8. section-caption  小节小字辅助说明（★必填/新增xxx等，与 card-title 同行右侧）
+         *   9. mode-card        模式选择卡（radio/checkbox 卡片式，嗅探 data-sniffer-mode-card 同款）
+         *   10. action-bar      操作按钮栏（按钮+灰字提示并排）
+         * =============================================================== */
+
+        /* 1. step-badge ①②③ 编号徽章（通用数字/圆点徽章） */
+        .step-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 22px;
+            height: 22px;
+            padding: 0 6px;
+            border-radius: 50%;
+            background: var(--primary-bg);
+            color: var(--primary-text);
+            font-size: 13px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .step-badge.success { background: var(--success-light); color: var(--success); }
+        .step-badge.warning { background: var(--warning-light); color: var(--warning); }
+        .step-badge.danger  { background: var(--danger-light);  color: var(--danger);  }
+        .step-badge.info    { background: var(--primary-bg);    color: var(--primary-text); }
+        .step-badge.plain   { background: var(--fill-lighter);  color: var(--text-regular); }
+        .step-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        /* 2. overview-grid / overview-item 概览双栅格信息卡 */
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+            margin-bottom: 0;
+        }
+        .overview-item {
+            border-radius: 10px;
+            padding: 14px 16px;
+            border: 1px solid var(--border-lighter);
+            background: var(--bg-card);
+        }
+        .overview-item.primary {
+            border-color: #dbe5fb;
+            background: #f5f9ff;
+        }
+        .overview-item.success {
+            border-color: var(--success-border);
+            background: var(--success-light);
+        }
+        .overview-item.warning {
+            border-color: #faecd8;
+            background: var(--warning-light);
+        }
+        .overview-item.danger {
+            border-color: #fde2e2;
+            background: #fff7f7;
+        }
+        .overview-item.info {
+            border-color: #d9ecff;
+            background: #ecf5ff;
+        }
+        .overview-item .overview-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 6px;
+            line-height: 1.5;
+        }
+        .overview-item.primary .overview-title { color: #2b4b9a; }
+        .overview-item.success .overview-title { color: #3d8c26; }
+        .overview-item.warning .overview-title { color: #9e7b1f; }
+        .overview-item.danger  .overview-title { color: #9e2d2d; }
+        .overview-item.info    .overview-title { color: #2e5b9e; }
+        .overview-item .overview-desc {
+            font-size: 13px;
+            color: var(--text-regular);
+            line-height: 1.8;
+        }
+        .overview-item .overview-desc code {
+            background: var(--bg-card);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        /* 3. form-grid 通用三列表单栅格（与嗅探设置 sniffer-form-grid 完全一致） */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px 20px;
+        }
+        @media (max-width: 900px) {
+            .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) {
+            .form-grid { grid-template-columns: 1fr; }
+        }
+        .form-grid .form-group { margin-bottom: 0; }
+        /* sniffer-form-grid 保持别名兼容 */
+        .sniffer-form-grid { }
+
+        /* 4. inline-form-grid 单行自适应栅格 */
+        .inline-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .inline-form-grid .form-group { margin-bottom: 0; }
+        .inline-form-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        @media (max-width: 700px) {
+            .inline-form-grid.cols-2 { grid-template-columns: 1fr; }
+        }
+
+        /* 5. status-pill 状态胶囊徽章（嗅探：未启用/当前主路由/有修改未保存） */
+        .status-pill {
+            display: inline-block;
+            font-size: 12px;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-weight: 500;
+            line-height: 1.8;
+            white-space: nowrap;
+        }
+        .status-pill.gray    { background: #f0f0f0;    color: #909399; }
+        .status-pill.green   { background: #e1f3d8;   color: #67c23a; }
+        .status-pill.blue    { background: #d9ecff;   color: #409eff; }
+        .status-pill.orange  { background: #faecd8;   color: #e6a23c; }
+        .status-pill.red     { background: #fde2e2;   color: #f56c6c; }
+        .status-pill.dirty   { background: #fef6e7;   color: #e6a23c; }
+        .status-pill.purple  { background: #efe5ff;   color: #722ed1; }
+        .status-pill.dark    { background: #303133;   color: #ffffff; }
+
+        /* 6. sub-card 子卡 */
+        .sub-card {
+            border: 1px solid var(--border-lighter);
+            border-radius: 10px;
+            padding: 16px 18px;
+            margin-bottom: 16px;
+            transition: all 0.2s ease;
+            background: var(--bg-card);
+        }
+        .sub-card:last-child { margin-bottom: 0; }
+        .sub-card:hover {
+            border-color: var(--border-light);
+        }
+        .sub-card.is-current {
+            border-color: var(--success) !important;
+            box-shadow: 0 2px 10px rgba(103, 194, 58, 0.1);
+        }
+        .sub-card.is-current::before {
+            content: "";
+            display: block;
+            height: 3px;
+            margin: -16px -18px 12px -18px;
+            background: linear-gradient(90deg, var(--success), #95d475);
+            border-radius: 10px 10px 0 0;
+        }
+        .sub-card.is-disabled {
+            background: #fafafa;
+            opacity: 0.85;
+        }
+
+        /* 7. sub-card-header 子卡头部（左右两栏） */
+        .sub-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .sub-card-header .left,
+        .sub-card-header .right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .sub-card-header .title {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 15px;
+        }
+        .sub-card-header .toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-weight: normal;
+            margin: 0;
+            user-select: none;
+            font-size: 13px;
+        }
+        .sub-card-header .toggle-label input { transform: scale(1.05); }
+
+        /* 8. section-caption 小节小字辅助说明 */
+        .section-caption {
+            font-size: 12px;
+            font-weight: normal;
+            color: var(--text-secondary);
+            margin-left: 8px;
+        }
+        .section-caption.required { color: var(--warning); }
+        .card-title .section-caption {
+            font-weight: normal;
+            line-height: 1.6;
+        }
+
+        /* 9. mode-card 模式选择卡 */
+        .mode-card {
+            position: relative;
+            display: block;
+            border: 2px solid var(--border-base);
+            background: var(--bg-card);
+            border-radius: 10px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: 0.15s all ease;
+        }
+        .mode-card:hover {
+            border-color: var(--primary);
+        }
+        .mode-card.is-active {
+            border-color: var(--primary) !important;
+            background: var(--primary-bg) !important;
+            box-shadow: 0 2px 10px rgba(64, 158, 255, 0.12);
+        }
+        .mode-card .mode-card-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .mode-card .mode-card-head input { transform: scale(1.1); }
+        .mode-card .mode-card-title {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .mode-card .mode-card-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-left: 26px;
+            line-height: 1.6;
+        }
+
+        /* 10. action-bar 操作按钮栏 */
+        .action-bar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .action-bar.tight    { margin-top: 0; }
+        .action-bar.with-top { margin-top: 18px; }
+        .action-bar .action-tip {
+            font-size: 12px;
+            color: var(--text-secondary);
+            align-self: center;
+        }
+        .action-bar input[type="file"] { display: none; }
+
+        /* ----- v5.12 输入焦点&下拉选框与嗅探同款（统一 input-group 内的 select 样式） ----- */
+        .inline-form-grid select,
+        .form-grid select,
+        .sub-card select,
+        select.form-control-inline {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border-base);
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+        .inline-form-grid select:focus,
+        .form-grid select:focus,
+        .sub-card select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-bg);
+        }
+
+        .rule-section {
+            border: 1px solid var(--border-lighter);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .fast-mode-banner {
+            background: var(--success-light);
+            border: 1px solid var(--success-border);
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .fast-mode-banner .icon {
+            font-size: 24px;
+        }
+        .fast-mode-banner .content {
+            flex: 1;
+        }
+        .fast-mode-banner .title {
+            font-weight: 600;
+            color: var(--success);
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+        .fast-mode-banner .desc {
+            color: var(--text-regular);
+            font-size: 13px;
+        }
+        .fast-mode-banner .domain-tag {
+            display: inline-block;
+            background: var(--bg-card);
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--success);
+            margin-left: 8px;
+            border: 1px solid var(--success-border);
+        }
+        .rule-section-title {
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-placeholder);
+        }
+        .code-block {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .tab-bar {
+            display: flex;
+            gap: 2px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border-light);
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .tab-bar::-webkit-scrollbar { display: none; }
+        .tab-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            font-size: 13px;
+            color: var(--text-regular);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .tab-item.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            border-radius: 6px;
+            color: white;
+            font-size: 14px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        .toast.info { background: var(--primary); }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .copy-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-left: 8px;
+            white-space: nowrap;
+        }
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .copy-btn:active {
+            transform: translateY(0) scale(0.98);
+        }
+        .access-item {
+            display: flex;
+            align-items: center;
+            flex-wrap: nowrap;
+            gap: 8px;
+            background: rgba(255,255,255,0.12);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 12px;
+            padding: 10px 14px;
+            min-width: 0;
+        }
+        .access-item code {
+            cursor: pointer;
+            user-select: all;
+            font-size: 12px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            color: white !important;
+            flex: 1;
+            min-width: 0;
+            line-height: 1.5;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+        .access-item code:hover {
+            opacity: 0.9;
+        }
+        
+        .api-preview-section {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .api-preview-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        
+        .api-preview-section::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: 5%;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        
+        .api-preview-bottom {
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 24px;
+            background: var(--v3-bg-page);
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 24'%3E%3Cpath fill='white' d='M0,24 L0,12 C100,20 200,24 300,24 C400,24 500,20 600,12 C700,4 800,0 900,0 C1000,0 1100,4 1200,12 L1200,24 Z'/%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 24'%3E%3Cpath fill='white' d='M0,24 L0,12 C100,20 200,24 300,24 C400,24 500,20 600,12 C700,4 800,0 900,0 C1000,0 1100,4 1200,12 L1200,24 Z'/%3E%3C/svg%3E");
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+            -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+            z-index: 2;
+        }
+        
+        .api-card-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        
+        .api-card-icon {
+            width: 36px;
+            height: 36px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        
+        .api-card-label {
+            font-size: 11px;
+            opacity: 0.75;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .api-card-name {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        
+        .api-type-select {
+            width: auto !important;
+            background: rgba(255,255,255,0.18) !important;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: white !important;
+            border: 1px solid rgba(255,255,255,0.28) !important;
+            border-radius: 10px !important;
+            padding: 10px 14px !important;
+            font-size: 13px !important;
+            font-weight: 500;
+            cursor: pointer;
+            flex-shrink: 0;
+            min-width: 180px;
+            transition: all 0.3s;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 8L1 3h10z'/%3E%3C/svg%3E") !important;
+            background-repeat: no-repeat !important;
+            background-position: right 12px center !important;
+            padding-right: 36px !important;
+        }
+        
+        .api-type-select:hover {
+            background: rgba(255,255,255,0.25) !important;
+            border-color: rgba(255,255,255,0.4) !important;
+        }
+        
+        .api-type-select:focus {
+            outline: none;
+            border-color: rgba(255,255,255,0.5) !important;
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.15);
+        }
+        
+        .api-type-select option {
+            color: #333;
+            background: white;
+        }
+        
+        .api-url-row {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+        }
+        
+        .api-hint {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 12px;
+            font-size: 11px;
+            opacity: 0.7;
+        }
+        
+        .api-hint-dot {
+            width: 4px;
+            height: 4px;
+            background: currentColor;
+            border-radius: 50%;
+            opacity: 0.5;
+        }
+        
+        .admin-preview-card {
+            background: rgba(255,255,255,0.12);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 14px;
+            padding: 16px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .admin-preview-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .admin-preview-icon {
+            width: 36px;
+            height: 36px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        
+        .admin-preview-title {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        
+        .admin-preview-subtitle {
+            font-size: 11px;
+            opacity: 0.7;
+        }
+        
+        .announcement-card {
+            background: rgba(255,255,255,0.12);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 14px;
+            padding: 16px 18px;
+            transition: all 0.3s;
+        }
+        
+        .announcement-card:hover {
+            background: rgba(255,255,255,0.16);
+            border-color: rgba(255,255,255,0.3);
+        }
+        
+        .announcement-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .announcement-icon {
+            width: 36px;
+            height: 36px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+            animation: announcementPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes announcementPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .announcement-title {
+            font-size: 15px;
+            font-weight: 600;
+            flex: 1;
+        }
+        
+        .announcement-loading {
+            font-size: 11px;
+            opacity: 0.6;
+            animation: blink 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 0.3; }
+        }
+        
+        .announcement-content {
+            background: rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 13px;
+            line-height: 1.7;
+            max-height: 120px;
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        .announcement-content::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .announcement-content::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+        
+        .announcement-content::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+        }
+        
+        .announcement-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.5);
+        }
+        
+        .announcement-item {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        
+        .announcement-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        
+        .announcement-item:first-child {
+            padding-top: 0;
+        }
+        
+        .announcement-dot {
+            width: 6px;
+            height: 6px;
+            background: rgba(255,255,255,0.6);
+            border-radius: 50%;
+            margin-top: 7px;
+            flex-shrink: 0;
+        }
+        
+        .announcement-item.new .announcement-dot {
+            background: #ff6b6b;
+            box-shadow: 0 0 8px rgba(255,107,107,0.6);
+        }
+        
+        .announcement-text {
+            flex: 1;
+            word-break: break-all;
+        }
+        
+        .announcement-date {
+            font-size: 11px;
+            opacity: 0.6;
+            margin-top: 4px;
+        }
+        
+        .announcement-error {
+            text-align: center;
+            opacity: 0.6;
+            font-size: 12px;
+            padding: 10px 0;
+        }
+        
+        .announcement-edit-item {
+            padding: 12px;
+            background: var(--v3-bg-card);
+            border: 1px solid var(--v3-border-color);
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .announcement-edit-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+        .announcement-empty {
+            text-align: center;
+            opacity: 0.5;
+            font-size: 12px;
+            padding: 10px 0;
+        }
+        .bar-chart { display: flex; align-items: flex-end; gap: 2px; height: 120px; padding: 10px 0; }
+        .bar {
+            flex: 1;
+            background: var(--primary-gradient);
+            border-radius: 2px 2px 0 0;
+            min-height: 2px;
+            transition: all 0.3s;
+        }
+        .bar:hover { opacity: 0.8; }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            color: var(--text-regular);
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            margin-right: 6px;
+        }
+
+        @media (max-width: 768px) {
+            .app-layout { flex-direction: column; }
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+                padding: 12px;
+                gap: 10px;
+                flex-direction: row;
+                overflow-x: auto;
+            }
+            .sidebar-logo { display: none; }
+            .sidebar-footer { display: none; }
+            .menu-group {
+                flex-shrink: 0;
+                min-width: 140px;
+            }
+            .menu-group-title { display: none; }
+            .header { padding: 16px 20px; }
+            .header h1 { font-size: 18px; }
+            .header p { font-size: 12px; }
+            .header-actions { margin-top: 10px; }
+            .theme-label { display: none; }
+            .theme-dot { width: 20px; height: 20px; }
+            .nav-item { padding: 10px 12px; font-size: 12px; }
+            .container { padding: 16px; }
+            .card { padding: 16px; margin-bottom: 16px; }
+            .card-title { font-size: 15px; margin-bottom: 12px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .stat-card { padding: 14px; }
+            .stat-value { font-size: 22px; }
+            .stat-label { font-size: 12px; }
+            .input-group { flex-direction: column; }
+            .input-group .btn { width: 100%; }
+            .rules-table { font-size: 12px; }
+            .rules-table th, .rules-table td { padding: 8px 6px; font-size: 12px; }
+            .rules-table th:nth-child(n+4), .rules-table td:nth-child(n+4) { display: none; }
+            .toast { left: 20px; right: 20px; text-align: center; }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .card { padding: 12px; }
+            .form-group { margin-bottom: 12px; }
+            .form-group label { font-size: 13px; }
+        }
+
+        /* ============================================
+           v3.0 全新设计语言 - PlainAdmin 风格
+           ============================================ */
+        
+        :root {
+            --v3-primary: #3b82f6;
+            --v3-primary-dark: #2563eb;
+            --v3-primary-light: #dbeafe;
+            --v3-primary-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            --v3-success: #10b981;
+            --v3-success-light: #d1fae5;
+            --v3-warning: #f59e0b;
+            --v3-warning-light: #fef3c7;
+            --v3-danger: #ef4444;
+            --v3-danger-light: #fee2e2;
+            --v3-info: #06b6d4;
+            --v3-info-light: #cffafe;
+            --v3-purple: #8b5cf6;
+            --v3-purple-light: #ede9fe;
+            --v3-pink: #ec4899;
+            --v3-pink-light: #fce7f3;
+            --v3-bg-page: #f8fafc;
+            --v3-bg-card: #ffffff;
+            --v3-bg-hover: #f1f5f9;
+            --v3-border: #e2e8f0;
+            --v3-border-light: #f1f5f9;
+            --v3-text-primary: #0f172a;
+            --v3-text-secondary: #475569;
+            --v3-text-muted: #94a3b8;
+            --v3-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --v3-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+            --v3-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            --v3-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            --v3-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            --v3-radius-sm: 6px;
+            --v3-radius: 10px;
+            --v3-radius-md: 12px;
+            --v3-radius-lg: 16px;
+            --v3-radius-xl: 20px;
+            --v3-transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-theme="dark"] {
+            --v3-bg-page: #0f172a;
+            --v3-bg-card: #1e293b;
+            --v3-bg-hover: #334155;
+            --v3-border: #334155;
+            --v3-border-light: #1e293b;
+            --v3-text-primary: #f1f5f9;
+            --v3-text-secondary: #94a3b8;
+            --v3-text-muted: #64748b;
+        }
+
+        body { background: var(--v3-bg-page); }
+
+        /* ===== 背景图 v3 ===== */
+        body.bg-image-mode {
+            background-image: none;
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            transition: background-image 0.8s ease-in-out;
+        }
+        body.bg-image-mode::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg,
+                rgba(59, 130, 246, 0.15) 0%,
+                rgba(139, 92, 246, 0.15) 50%,
+                rgba(236, 72, 153, 0.15) 100%);
+            background-size: 300% 300%;
+            animation: bgGradientShift 15s ease infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+        body.bg-image-mode::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: rgba(248, 250, 252, 0.75);
+            pointer-events: none;
+            z-index: 0;
+            backdrop-filter: blur(0px);
+        }
+        [data-theme="dark"].bg-image-mode::after {
+            background: rgba(15, 23, 42, 0.8);
+        }
+        @keyframes bgGradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        body.bg-image-mode .app-layout,
+        body.bg-image-mode .container {
+            position: relative;
+            z-index: 1;
+        }
+        body.bg-image-mode .card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        [data-theme="dark"].bg-image-mode .card {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        body.bg-image-mode .sidebar {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-right: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        [data-theme="dark"].bg-image-mode .sidebar {
+            background: rgba(30, 41, 59, 0.9);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        body.bg-image-mode .header {
+            background: var(--primary-gradient);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: none;
+        }
+        [data-theme="dark"].bg-image-mode .header {
+            background: var(--primary-gradient);
+            border-bottom: none;
+        }
+        body.bg-image-mode .stat-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        [data-theme="dark"].bg-image-mode .stat-card {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        body.bg-image-mode .dashboard-card,
+        body.bg-image-mode .quick-action-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        [data-theme="dark"].bg-image-mode .dashboard-card,
+        [data-theme="dark"].bg-image-mode .quick-action-card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        body.bg-image-mode .mobile-bottom-nav {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-top: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        [data-theme="dark"].bg-image-mode .mobile-bottom-nav {
+            background: rgba(30, 41, 59, 0.9);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        body.bg-image-mode input,
+        body.bg-image-mode select,
+        body.bg-image-mode textarea {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        [data-theme="dark"].bg-image-mode input,
+        [data-theme="dark"].bg-image-mode select,
+        [data-theme="dark"].bg-image-mode textarea {
+            background: rgba(30, 41, 59, 0.9);
+        }
+
+        /* ===== 背景图切换按钮 ===== */
+        .bg-toggle-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            background: var(--v3-bg-hover);
+            color: var(--v3-text-secondary);
+            transition: all var(--v3-transition);
+            margin-left: 8px;
+        }
+        .bg-toggle-btn:hover {
+            background: var(--v3-primary-light);
+            color: var(--v3-primary);
+            transform: scale(1.1);
+        }
+        .bg-toggle-btn.active {
+            background: var(--v3-primary-gradient);
+            color: white;
+        }
+        .bg-change-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            background: var(--v3-bg-hover);
+            color: var(--v3-text-secondary);
+            transition: all var(--v3-transition);
+            margin-left: 8px;
+        }
+        .bg-change-btn:hover {
+            background: var(--v3-primary-light);
+            color: var(--v3-primary);
+            transform: rotate(180deg);
+        }
+
+        /* ===== 侧边栏 v3 ===== */
+        .sidebar {
+            width: 250px;
+            background: var(--v3-bg-card);
+            border-right: 1px solid var(--v3-border);
+            padding: 16px 12px;
+            box-shadow: none;
+        }
+        .sidebar-logo {
+            padding: 8px 12px 20px;
+            border-bottom: 1px solid var(--v3-border-light);
+            margin-bottom: 12px;
+        }
+        .sidebar-logo h2 {
+            font-size: 17px;
+            font-weight: 700;
+            background: var(--v3-primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .sidebar-logo p {
+            font-size: 11px;
+            color: var(--v3-text-muted);
+            margin-top: 2px;
+        }
+        .menu-group {
+            background: transparent;
+            border-radius: 0;
+            border: none;
+            margin-bottom: 8px;
+        }
+        .menu-group:hover {
+            border-color: transparent;
+            box-shadow: none;
+        }
+        .menu-group-title {
+            padding: 8px 12px 6px;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--v3-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            background: transparent;
+            border-bottom: none;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            margin: 2px 0;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            border-radius: var(--v3-radius);
+            border-bottom: none;
+            transition: all var(--v3-transition);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--v3-text-secondary);
+            white-space: nowrap;
+            position: relative;
+        }
+        .nav-item + .nav-item {
+            border-top: none;
+        }
+        .nav-item:hover {
+            color: var(--v3-primary);
+            background: var(--v3-primary-light);
+            border-left-color: transparent;
+        }
+        .nav-item.active {
+            color: var(--v3-primary);
+            border-left-color: var(--v3-primary);
+            font-weight: 600;
+            background: var(--v3-primary-light);
+            box-shadow: var(--v3-shadow-sm);
+        }
+        .nav-item .menu-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .nav-item .menu-text {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .nav-item .menu-badge {
+            background: var(--v3-danger);
+            color: white;
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 700;
+        }
+
+        /* ===== 顶部栏 v3 ===== */
+        .header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 24px 32px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            position: relative;
+            overflow: hidden;
+            border-bottom: none;
+        }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            display: block;
+        }
+        .header-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header-left {
+            flex: 1;
+        }
+        .header h1 { 
+            font-size: 26px; 
+            font-weight: 700; 
+            color: white;
+            letter-spacing: -0.5px;
+        }
+        .header p { 
+            opacity: 0.9; 
+            margin-top: 6px; 
+            font-size: 14px;
+            color: white;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .theme-switcher {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+        }
+        .theme-label {
+            font-size: 13px;
+            opacity: 0.9;
+            color: white;
+        }
+        .theme-dot {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.3);
+            transition: all 0.2s;
+            position: relative;
+        }
+        .theme-dot:hover { transform: scale(1.15); border-color: white; }
+        .theme-dot.active {
+            border-color: white;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
+        }
+        .theme-dot.active::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        /* ===== 内容区 v3 ===== */
+        .container { 
+            padding: 24px 32px;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .page { animation: fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ===== 卡片 v3 ===== */
+        .card {
+            background: var(--v3-bg-card);
+            border-radius: var(--v3-radius-lg);
+            padding: 24px;
+            border: 1px solid var(--v3-border-light);
+            box-shadow: var(--v3-shadow-sm);
+            transition: all var(--v3-transition);
+        }
+        .card:hover {
+            box-shadow: var(--v3-shadow-md);
+        }
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--v3-text-primary);
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--v3-border-light);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: var(--v3-primary-gradient);
+            border-radius: 2px;
+        }
+
+        /* ===== 数据统计卡片 v3 ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--v3-bg-card);
+            border-radius: var(--v3-radius-lg);
+            padding: 20px;
+            border: 1px solid var(--v3-border-light);
+            box-shadow: var(--v3-shadow-sm);
+            transition: all var(--v3-transition);
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--v3-shadow-lg);
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--v3-primary-gradient);
+            opacity: 0.8;
+        }
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: var(--v3-radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-bottom: 12px;
+            background: var(--v3-primary-light);
+        }
+        .stat-card.success::before { background: var(--v3-success); }
+        .stat-card.success .stat-icon { background: var(--v3-success-light); }
+        .stat-card.warning::before { background: var(--v3-warning); }
+        .stat-card.warning .stat-icon { background: var(--v3-warning-light); }
+        .stat-card.danger::before { background: var(--v3-danger); }
+        .stat-card.danger .stat-icon { background: var(--v3-danger-light); }
+        .stat-card.purple::before { background: var(--v3-purple); }
+        .stat-card.purple .stat-icon { background: var(--v3-purple-light); }
+        .stat-card.info::before { background: var(--v3-info); }
+        .stat-card.info .stat-icon { background: var(--v3-info-light); }
+        .stat-card.pink::before { background: var(--v3-pink); }
+        .stat-card.pink .stat-icon { background: var(--v3-pink-light); }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--v3-text-primary);
+            line-height: 1.2;
+            margin-bottom: 4px;
+        }
+        .stat-label {
+            font-size: 13px;
+            color: var(--v3-text-muted);
+            font-weight: 500;
+        }
+        .stat-trend {
+            font-size: 12px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .stat-trend.up { color: var(--v3-success); }
+        .stat-trend.down { color: var(--v3-danger); }
+
+        /* ===== 按钮 v3 ===== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px 18px;
+            border-radius: var(--v3-radius);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all var(--v3-transition);
+            text-decoration: none;
+            white-space: nowrap;
+            height: 40px;
+        }
+        .btn-primary {
+            background: var(--v3-primary-gradient);
+            color: white;
+            border: none;
+            box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        .btn-secondary {
+            background: var(--v3-bg-card);
+            color: var(--v3-text-secondary);
+            border: 1px solid var(--v3-border);
+        }
+        .btn-secondary:hover {
+            color: var(--v3-primary);
+            border-color: var(--v3-primary);
+            background: var(--v3-primary-light);
+        }
+        .btn-success {
+            background: var(--v3-success);
+            color: white;
+            border: none;
+        }
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+        .btn-danger {
+            background: var(--v3-danger);
+            color: white;
+            border: none;
+        }
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            height: 32px;
+        }
+        .btn-lg {
+            padding: 12px 24px;
+            font-size: 14px;
+            height: 44px;
+        }
+        .btn-block {
+            width: 100%;
+        }
+
+        /* ===== 输入框 v3 ===== */
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        input[type="text"],
+        input[type="url"],
+        input[type="number"],
+        input[type="password"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--v3-border);
+            border-radius: var(--v3-radius);
+            font-size: 13px;
+            color: var(--v3-text-primary);
+            background: var(--v3-bg-card);
+            transition: all var(--v3-transition);
+            outline: none;
+            height: 40px;
+        }
+        textarea {
+            height: auto;
+            min-height: 100px;
+            resize: vertical;
+        }
+        input:focus,
+        textarea:focus,
+        select:focus {
+            border-color: var(--v3-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        input::placeholder,
+        textarea::placeholder {
+            color: var(--v3-text-muted);
+        }
+
+        /* ===== 标签/徽章 v3 ===== */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            border-radius: 6px;
+            line-height: 1.4;
+        }
+        .badge-primary {
+            background: var(--v3-primary-light);
+            color: var(--v3-primary);
+        }
+        .badge-success {
+            background: var(--v3-success-light);
+            color: var(--v3-success);
+        }
+        .badge-warning {
+            background: var(--v3-warning-light);
+            color: #b45309;
+        }
+        .badge-danger {
+            background: var(--v3-danger-light);
+            color: var(--v3-danger);
+        }
+        .badge-info {
+            background: var(--v3-info-light);
+            color: var(--v3-info);
+        }
+        .badge-purple {
+            background: var(--v3-purple-light);
+            color: var(--v3-purple);
+        }
+
+        /* ===== 表格 v3 ===== */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .data-table th {
+            background: var(--v3-bg-hover);
+            color: var(--v3-text-secondary);
+            font-weight: 600;
+            text-align: left;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--v3-border);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .data-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--v3-border-light);
+            color: var(--v3-text-primary);
+        }
+        .data-table tr:hover td {
+            background: var(--v3-bg-hover);
+        }
+
+        /* ===== 页面标题区 v3 ===== */
+        .page-header {
+            margin-bottom: 24px;
+        }
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--v3-text-primary);
+            margin-bottom: 6px;
+        }
+        .page-subtitle {
+            font-size: 14px;
+            color: var(--v3-text-muted);
+        }
+        .page-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        /* ===== 仪表盘专用 ===== */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        .dashboard-card {
+            background: var(--v3-bg-card);
+            border-radius: var(--v3-radius-lg);
+            padding: 20px;
+            border: 1px solid var(--v3-border-light);
+            box-shadow: var(--v3-shadow-sm);
+        }
+        .dashboard-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--v3-text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        .quick-action-card {
+            padding: 16px;
+            border-radius: var(--v3-radius);
+            background: var(--v3-bg-hover);
+            cursor: pointer;
+            transition: all var(--v3-transition);
+            border: 1px solid transparent;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .quick-action-card:hover {
+            background: var(--v3-primary-light);
+            border-color: var(--v3-primary);
+            transform: translateY(-2px);
+            box-shadow: var(--v3-shadow-md);
+        }
+        .quick-action-icon {
+            font-size: 24px;
+        }
+        .quick-action-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--v3-text-primary);
+        }
+        .quick-action-desc {
+            font-size: 11px;
+            color: var(--v3-text-muted);
+            line-height: 1.4;
+        }
+
+        /* ===== 最近记录列表 ===== */
+        .recent-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .recent-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--v3-border-light);
+            cursor: pointer;
+            transition: all var(--v3-transition);
+        }
+        .recent-item:last-child { border-bottom: none; }
+        .recent-item:hover {
+            padding-left: 6px;
+        }
+        .recent-item-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--v3-radius);
+            background: var(--v3-primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .recent-item-content {
+            flex: 1;
+            min-width: 0;
+        }
+        .recent-item-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--v3-text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .recent-item-meta {
+            font-size: 11px;
+            color: var(--v3-text-muted);
+            margin-top: 2px;
+            display: flex;
+            gap: 10px;
+        }
+
+        /* ===== 移动端底部导航 ===== */
+        .mobile-bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--v3-bg-card);
+            border-top: 1px solid var(--v3-border);
+            padding: 6px 0;
+            padding-bottom: max(6px, env(safe-area-inset-bottom));
+            z-index: 100;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .mobile-nav-items {
+            display: flex;
+            justify-content: space-around;
+        }
+        .mobile-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            padding: 6px 12px;
+            cursor: pointer;
+            color: var(--v3-text-muted);
+            font-size: 10px;
+            font-weight: 500;
+            transition: all var(--v3-transition);
+            flex: 1;
+            min-width: 0;
+        }
+        .mobile-nav-item .nav-icon {
+            font-size: 20px;
+        }
+        .mobile-nav-item.active {
+            color: var(--v3-primary);
+        }
+        .mobile-nav-item.active .nav-icon {
+            transform: translateY(-2px);
+        }
+
+        /* ===== 移动端菜单按钮 ===== */
+        .mobile-menu-toggle {
+            display: none;
+            width: 40px;
+            height: 40px;
+            border-radius: var(--v3-radius);
+            background: var(--v3-bg-hover);
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--v3-transition);
+        }
+        .mobile-menu-toggle:hover {
+            background: var(--v3-primary-light);
+        }
+
+        /* ===== 侧边栏遮罩 ===== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 90;
+            opacity: 0;
+            transition: opacity var(--v3-transition);
+        }
+        .sidebar-overlay.show {
+            display: block;
+            opacity: 1;
+        }
+
+        /* ===== 响应式：平板 ===== */
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .quick-actions {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .container { padding: 20px; }
+            .header { padding: 14px 20px; }
+        }
+
+        /* ===== 响应式：手机 ===== */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: -280px;
+                top: 0;
+                bottom: 0;
+                z-index: 95;
+                width: 260px;
+                transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: var(--v3-shadow-xl);
+            }
+            .sidebar.show {
+                left: 0;
+            }
+            .mobile-menu-toggle {
+                display: flex;
+            }
+            .header h1 { font-size: 16px; }
+            .header p { font-size: 12px; }
+            .theme-label { display: none; }
+            .container { 
+                padding: 16px;
+                padding-bottom: 80px;
+            }
+            .card { 
+                padding: 16px; 
+                margin-bottom: 16px;
+                border-radius: var(--v3-radius-md);
+            }
+            .card-title { 
+                font-size: 15px; 
+                margin-bottom: 14px;
+                padding-bottom: 10px;
+            }
+            .stats-grid { 
+                grid-template-columns: 1fr; 
+                gap: 12px; 
+            }
+            .stat-card { 
+                padding: 16px;
+                border-radius: var(--v3-radius-md);
+                gap: 12px;
+            }
+            .stat-icon {
+                width: 44px;
+                height: 44px;
+                font-size: 20px;
+            }
+            .stat-value { font-size: 22px; }
+            .stat-label { font-size: 12px; }
+            
+            .quick-actions {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .mobile-bottom-nav {
+                display: block;
+            }
+            
+            .page-title {
+                font-size: 20px;
+            }
+            
+            .dashboard-card {
+                padding: 16px;
+                border-radius: var(--v3-radius-md);
+            }
+            
+            #accessPreview {
+                padding: 16px 20px !important;
+            }
+            
+            #accessPreview > div {
+                gap: 16px !important;
+            }
+            
+            .api-url-row {
+                flex-direction: column;
+            }
+            
+            .api-type-select {
+                min-width: 100% !important;
+            }
+            
+            .api-card-name {
+                font-size: 13px;
+            }
+            
+            .announcement-card {
+                padding: 14px;
+            }
+            
+            .announcement-content {
+                max-height: 100px;
+                font-size: 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { 
+                grid-template-columns: 1fr; 
+                gap: 10px;
+            }
+            .stat-value { font-size: 18px; }
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+            .card { 
+                padding: 14px; 
+            }
+            .btn {
+                height: 44px;
+                font-size: 14px;
+            }
+            input[type="text"],
+            input[type="url"],
+            input[type="number"],
+            select {
+                height: 44px;
+                font-size: 14px;
+            }
+            .api-preview-section {
+                padding: 12px 16px !important;
+            }
+            .api-preview-section .api-card-title {
+                gap: 10px;
+            }
+            .api-preview-section .api-url-row {
+                flex-direction: column;
+                gap: 8px;
+            }
+            .api-preview-section .api-type-select {
+                width: 100%;
+            }
+            .announcement-card {
+                padding: 12px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-logo">
+                <h2>M3U8 广告分析</h2>
+                <p>智能去广告管理后台</p>
+            </div>
+            <div id="sidebarMenu"></div>
+            <div class="sidebar-footer">
+                <div class="sidebar-version" id="sidebarVersion">加载中...</div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="header">
+                <div class="header-content">
+                    <button class="mobile-menu-toggle" onclick="toggleSidebar()" title="菜单">☰</button>
+                    <div class="header-left">
+                        <h1>M3U8 广告分析与规则管理后台</h1>
+                        <p>靶机测试工具 - 分析视频广告特征，管理域名去广告规则</p>
+                    </div>
+                    <div class="header-actions">
+                        <div class="theme-switcher">
+                            <span class="theme-label">主题:</span>
+                            <div class="theme-dot active" data-theme-name="default" title="默认紫" onclick="switchTheme('default')"></div>
+                            <div class="theme-dot" data-theme-name="gold" title="金色" onclick="switchTheme('gold')"></div>
+                            <div class="theme-dot" data-theme-name="green" title="绿色" onclick="switchTheme('green')"></div>
+                            <div class="theme-dot" data-theme-name="blue" title="蓝色" onclick="switchTheme('blue')"></div>
+                            <div class="theme-dot" data-theme-name="cyan" title="青色" onclick="switchTheme('cyan')"></div>
+                            <div class="theme-dot" data-theme-name="red" title="红色" onclick="switchTheme('red')"></div>
+                            <div class="theme-dot" data-theme-name="dark" title="深色" onclick="switchTheme('dark')"></div>
+                        </div>
+                        <button class="bg-toggle-btn" id="bgToggleBtn" onclick="toggleBgImage()" title="背景图">🖼️</button>
+                        <button class="bg-change-btn" id="bgChangeBtn" onclick="changeBgImage()" title="换一张" style="display:none">🔄</button>
+                    </div>
+                </div>
+            </div>
+
+    <div id="accessPreview" class="api-preview-section" style="background:var(--primary-gradient);color:white;padding:24px 32px;font-size:13px;position:relative">
+        <div style="display:flex;flex-direction:column;gap:14px;position:relative;z-index:1">
+            <div class="api-card-title">
+                <div class="api-card-icon">🚀</div>
+                <div>
+                    <div class="api-card-label">V2 统一接口</div>
+                    <div class="api-card-name">支持所有类型，通过 type 参数切换</div>
+                </div>
+            </div>
+            <div class="api-url-row">
+                <select id="v2TypeSelect" onchange="updateV2ApiUrl()" class="api-type-select">
+                    <option value="parse" style="color:#333">parse - 统一解析</option>
+                    <option value="info" style="color:#333">info - 解析详情</option>
+                    <option value="mxjx" style="color:#333">mxjx - 去广告M3U8</option>
+                    <option value="deep" style="color:#333">deep - 深度去广告</option>
+                    <option value="official" style="color:#333">official - 官替解析</option>
+                    <option value="analyze" style="color:#333">analyze - 广告分析</option>
+                    <option value="subtitle" style="color:#333">subtitle - 字幕分析</option>
+                    <option value="md5" style="color:#333">md5 - MD5特征码</option>
+                </select>
+                <div class="access-item" style="flex:1">
+                    <code id="preview-v2-api" onclick="copyText(this.textContent)" title="点击复制"></code>
+                    <button class="copy-btn" onclick="copyText(document.getElementById('preview-v2-api').textContent)">📋 复制</button>
+                </div>
+            </div>
+            <div class="api-hint">
+                <span class="api-hint-dot"></span>
+                <span>修改下拉类型后，URL 会自动更新。也可直接在 URL 中通过 <code style="background:rgba(255,255,255,0.2);padding:1px 6px;border-radius:4px;font-size:10px">?type=xxx</code> 指定类型</span>
+            </div>
+        </div>
+        <div class="announcement-card" style="margin-top:20px;position:relative;z-index:1">
+            <div class="announcement-header">
+                <div class="announcement-icon">📢</div>
+                <div class="announcement-title">最新公告</div>
+                <div class="announcement-loading" id="announcementLoading">加载中...</div>
+            </div>
+            <div class="announcement-content" id="announcementContent">
+                <div style="opacity:0.7">正在获取最新公告...</div>
+            </div>
+        </div>
+        <div class="api-preview-bottom"></div>
+    </div>
+
+    <div class="container">
+        <div class="page active" id="page-dashboard">
+            <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px">
+                <div>
+                    <h2 class="page-title">📊 数据概览</h2>
+                    <p class="page-subtitle">实时掌握系统运行状态与分析统计</p>
+                </div>
+                <div class="page-actions">
+                    <button class="btn btn-primary" onclick="navigateTo('ai_skip')">🚀 AI去广告</button>
+                    <button class="btn btn-secondary" onclick="navigateTo('batch')">📦 批量分析</button>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card success">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="dashTotalAnalyze">0</div>
+                        <div class="stat-label">总分析次数</div>
+                        <div class="stat-trend up">↑ 今日 +0</div>
+                    </div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-icon">🚫</div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="dashAdRemoved">0</div>
+                        <div class="stat-label">已去除广告片段</div>
+                        <div class="stat-trend up">↑ 累计</div>
+                    </div>
+                </div>
+                <div class="stat-card purple">
+                    <div class="stat-icon">🌐</div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="dashDomains">0</div>
+                        <div class="stat-label">已分析域名</div>
+                        <div class="stat-trend up">↑ 新增规则</div>
+                    </div>
+                </div>
+                <div class="stat-card info">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="dashAvgTime">0s</div>
+                        <div class="stat-label">平均分析耗时</div>
+                        <div class="stat-trend down">↓ 极速模式</div>
+                    </div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-icon">📝</div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="dashRules">0</div>
+                        <div class="stat-label">广告规则数</div>
+                        <div class="stat-trend up">↑ 持续增长</div>
+                    </div>
+                </div>
+                <div class="stat-card pink">
+                    <div class="stat-icon">🤖</div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="dashMd5">0</div>
+                        <div class="stat-label">AI去广告</div>
+                        <div class="stat-trend up">↑ 智能处理</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="dashboard-card">
+                    <div class="dashboard-card-title">
+                        <span>⚡ 快捷操作</span>
+                    </div>
+                    <div class="quick-actions">
+                        <div class="quick-action-card" onclick="navigateTo('ai_skip')">
+                            <div class="quick-action-icon">🤖</div>
+                            <div class="quick-action-title">AI自动去广告</div>
+                            <div class="quick-action-desc">智能识别并去除视频广告</div>
+                        </div>
+                        <div class="quick-action-card" onclick="navigateTo('analyze')">
+                            <div class="quick-action-icon">🎯</div>
+                            <div class="quick-action-title">视频分析</div>
+                            <div class="quick-action-desc">详细分析视频广告特征</div>
+                        </div>
+                        <div class="quick-action-card" onclick="navigateTo('batch')">
+                            <div class="quick-action-icon">📦</div>
+                            <div class="quick-action-title">批量分析</div>
+                            <div class="quick-action-desc">批量导入URL快速分析</div>
+                        </div>
+                        <div class="quick-action-card" onclick="navigateTo('rules')">
+                            <div class="quick-action-icon">📋</div>
+                            <div class="quick-action-title">规则管理</div>
+                            <div class="quick-action-desc">管理域名去广告规则</div>
+                        </div>
+                        <div class="quick-action-card" onclick="navigateTo('ai_insert')">
+                            <div class="quick-action-icon">📺</div>
+                            <div class="quick-action-title">插播识别</div>
+                            <div class="quick-action-desc">识别视频中间插播内容</div>
+                        </div>
+                        <div class="quick-action-card" onclick="navigateTo('sites')">
+                            <div class="quick-action-icon">🌐</div>
+                            <div class="quick-action-title">资源站管理</div>
+                            <div class="quick-action-desc">管理资源站配置</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-card">
+                    <div class="dashboard-card-title">
+                        <span>🕐 最近分析</span>
+                        <span style="font-size:12px;color:var(--v3-text-muted);cursor:pointer" onclick="navigateTo('history')">查看全部 →</span>
+                    </div>
+                    <ul class="recent-list" id="dashRecentList">
+                        <li class="recent-item" style="justify-content:center;color:var(--v3-text-muted);padding:20px 0">
+                            暂无分析记录，快去分析一个视频吧！
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">🔥 热门域名排行</div>
+                <div id="dashTopDomains">
+                    <div style="text-align:center;color:var(--v3-text-muted);padding:30px">
+                        暂无数据，分析更多视频后显示热门域名将在这里展示
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-history">
+            <!-- ① 概览卡（信息架构） -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">📜 分析历史</span>
+                        <span class="status-pill blue">localStorage</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">全部记录保存在浏览器本地，不占用服务器空间</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item info">
+                        <div class="overview-title">🔍 快速查询</div>
+                        <div class="overview-desc">
+                            · 支持按 URL / 域名关键字<strong>实时过滤</strong>，无需刷新。<br>
+                            · 支持按类型切换：<strong>全部/视频分析/AI去广告/MD5分析</strong>。
+                        </div>
+                    </div>
+                    <div class="overview-item warning">
+                        <div class="overview-title">🗑️ 清理注意</div>
+                        <div class="overview-desc">
+                            · 清空为<strong>不可逆操作</strong>，仅建议浏览器占用过高时执行。<br>
+                            · 若需保留关键记录，请勿点击清空按钮；可按URL单独删除对应条目。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 记录列表 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>检索与记录列表</span></span>
+                    <span class="section-caption">支持模糊搜索 + 类型下拉双条件筛选</span>
+                </div>
+                <div class="action-bar" style="margin-bottom:16px">
+                    <input type="text" id="historySearch" placeholder="搜索URL或域名..." style="min-width:220px;flex:1;max-width:360px;padding:10px 14px;border:1px solid var(--border-base);border-radius:8px;font-size:13px;outline:none;transition:.3s" oninput="filterHistory()">
+                    <select id="historyFilter" onchange="filterHistory()" style="width:160px;padding:10px 14px;border:1px solid var(--border-base);border-radius:8px;font-size:13px;outline:none">
+                        <option value="all">全部类型</option>
+                        <option value="analyze">视频分析</option>
+                        <option value="ai_skip">AI去广告</option>
+                        <option value="md5">MD5分析</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="clearHistory()">🗑️ 清空历史</button>
+                    <span class="action-tip">共 <strong id="historyCount" style="color:var(--primary-text)">0</strong> 条记录</span>
+                </div>
+                <div id="historyList">
+                    <div style="text-align:center;color:var(--text-secondary);padding:40px">
+                        <div style="font-size:40px;margin-bottom:12px">📭</div>
+                        <div style="font-weight:500">暂无分析记录</div>
+                        <div style="font-size:12px;margin-top:4px;color:var(--text-secondary)">分析视频后，记录将自动保存在这里</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-batch">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">📦 批量分析</span>
+                        <span class="status-pill purple">一键批量</span>
+                    </div>
+                    <div class="action-bar tight">
+                        <button class="btn btn-secondary" onclick="loadBatchDemo()">📋 示例数据</button>
+                        <button class="btn btn-primary" onclick="startBatchAnalyze()">🚀 开始批量分析</button>
+                    </div>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item primary">
+                        <div class="overview-title">⚡ 极速模式（默认开启）</div>
+                        <div class="overview-desc">
+                            · 使用 <code>md5-fingerprint + 快速时长规则</code>，速度提升 <strong>2~3 倍</strong>。<br>
+                            · 适合大批量视频统一清洗，<strong>单视频耗时约 1~2s</strong>。
+                        </div>
+                    </div>
+                    <div class="overview-item success">
+                        <div class="overview-title">🤖 AI 去广告模式（建议开启）</div>
+                        <div class="overview-desc">
+                            · 开启后自动走 <strong>AI+MD5 非正片占位</strong>，不中断播放。<br>
+                            · 关闭时只分析不输出：用于对比纯时长与 AI 的差异。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 输入链接 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>输入视频链接</span></span>
+                    <span class="section-caption required">★ 必填；每行 1 条链接</span>
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                    <label>待分析链接 <span class="req-flag">★</span></label>
+                    <textarea id="batchUrls" placeholder="每行一个M3U8链接，例如：&#10;https://example.com/video1/index.m3u8&#10;https://example.com/video2/index.m3u8" style="min-height:160px;font-family:monospace;font-size:12px"></textarea>
+                    <div class="form-tip">
+                        支持批量粘贴，<strong>最多 20 条</strong>同时分析；超过 20 条自动按前 20 条处理。
+                        可点右上角 <code style="background:var(--fill-lighter);padding:1px 5px;border-radius:3px">📋 示例数据</code> 一键填入试试。
+                    </div>
+                </div>
+                <div class="action-bar with-top">
+                    <span class="action-tip">已输入 <strong id="batchUrlCount" style="color:var(--primary-text)">0</strong> 个链接</span>
+                    <label class="toggle-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-regular);user-select:none">
+                        <input type="checkbox" id="batchFastMode" checked> <strong>极速模式</strong>
+                        <span class="status-pill green">提速 2~3×</span>
+                    </label>
+                    <label class="toggle-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-regular);user-select:none">
+                        <input type="checkbox" id="batchAiMode" checked> <strong>AI 去广告</strong>
+                        <span class="status-pill blue">v5.11 引擎</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- ③ 结果展示 -->
+            <div class="card" id="batchResultCard" style="display:none">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>批量分析结果</span></span>
+                    <span class="section-caption">实时进度 + 成功/失败/进度 4 项概览 + 单条明细</span>
+                </div>
+                <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+                    <div class="stat-card">
+                        <div class="stat-value" id="batchTotal">0</div>
+                        <div class="stat-label">总链接数</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-value" id="batchSuccess">0</div>
+                        <div class="stat-label">成功</div>
+                    </div>
+                    <div class="stat-card danger">
+                        <div class="stat-value" id="batchFailed">0</div>
+                        <div class="stat-label">失败</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-value" id="batchProgress">0%</div>
+                        <div class="stat-label">进度</div>
+                    </div>
+                </div>
+                <div id="batchResultList" style="margin-top:16px"></div>
+            </div>
+        </div>
+
+        <div class="page" id="page-analyze">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🎯 视频广告分析</span>
+                        <span class="status-pill green">v5.11 AI+MD5</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">单视频深度解析，定位广告段 + 生成无广告播放地址</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item info">
+                        <div class="overview-title">🔗 输入类型</div>
+                        <div class="overview-desc">
+                            · 支持 <strong>标准 M3U8 直链</strong>、<strong>Master Playlist（含多码率/多分辨率）</strong>。<br>
+                            · 系统自动追踪 #EXT-X-STREAM-INF 下最合适的子流再分析。
+                        </div>
+                    </div>
+                    <div class="overview-item success">
+                        <div class="overview-title">🚫 去非正片内容输出</div>
+                        <div class="overview-desc">
+                            · 自动识别广告/插播/水印并生成"等时长黑屏静音占位版"地址。<br>
+                            · <strong>确保无广告无插播，进度条不回跳、解码器不中断</strong>。
+                        </div>
+                    </div>
+                    <div class="overview-item warning">
+                        <div class="overview-title">⚠️ 不雅内容自动屏蔽</div>
+                        <div class="overview-desc">
+                            · 时长异常（远低于/远高于正片）段自动识别为广告/插播。<br>
+                            · 关键词（广告/预告/花絮/速看）段自动标记并走占位输出。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 输入链接 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>输入视频链接</span></span>
+                    <span class="section-caption required">★ 必填</span>
+                </div>
+                <div class="form-group">
+                    <label>M3U8 视频链接 <span class="req-flag">★</span></label>
+                    <div class="input-group" style="margin-bottom:0">
+                        <input type="text" id="analyzeUrl" placeholder="输入 M3U8 视频链接，例如：https://example.com/video/index.m3u8"
+                            value="https://v.lfthirtytwo.com/20260623/7885_1d9dba16/index.m3u8">
+                        <button class="btn btn-primary" onclick="analyzeVideo()">开始分析</button>
+                    </div>
+                    <div class="form-tip">
+                        系统将自动检测 Master Playlist 并追踪到实际视频进行分析；若已知具体子流可直接填子流地址以跳过解析步骤。
+                    </div>
+                </div>
+            </div>
+
+            <div id="analyzeResult" style="display:none">
+                <div id="fastModeBanner" style="display:none"></div>
+
+                <!-- ③ 核心指标 -->
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge info">②</span><span>核心指标</span></span>
+                        <span class="section-caption">总时长 / 片段数 / 广告占比 / 检测到的特征</span>
+                    </div>
+                    <div class="stats-grid" id="statsGrid"></div>
+                </div>
+
+                <div class="detail-grid" id="detailGrid">
+                    <div class="card">
+                        <div class="card-title"><span class="step-title"><span class="step-badge warning">③</span><span>序列号跳跃检测</span></span></div>
+                        <div id="jumpList"></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span class="step-title"><span class="step-badge info">④</span><span>时长分布</span></span></div>
+                        <div class="bar-chart" id="durationChart"></div>
+                        <div class="legend">
+                            <div class="legend-item"><div class="legend-color" style="background:linear-gradient(to top,#667eea,#764ba2)"></div>片段数量</div>
+                        </div>
+                        <div id="durationStats" style="margin-top:12px;font-size:13px;color:#606266"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge danger">⑤</span><span>广告片段详情</span></span>
+                        <span class="section-caption">广告段高亮/标记 红色左竖条+浅红底</span>
+                    </div>
+                    <div class="tab-bar">
+                        <div class="tab-item active" onclick="switchSegmentTab(this, 'ad')">广告片段</div>
+                        <div class="tab-item" onclick="switchSegmentTab(this, 'all')">全部片段</div>
+                        <div class="tab-item" onclick="switchSegmentTab(this, 'cluster')">广告聚类</div>
+                    </div>
+                    <div class="segment-list" id="segmentList"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge success">⑥</span><span>无广告播放链接</span></span>
+                        <span class="section-caption">AI+MD5 黑屏静音占位版，无广告/无插播/无不雅内容</span>
+                    </div>
+                    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+                        <code id="analyzeMxjxUrl" style="background:var(--fill-lighter);padding:8px 12px;border-radius:4px;word-break:break-all;flex:1;min-width:200px;cursor:pointer" onclick="copyText(this.textContent)" title="点击复制"></code>
+                        <button class="btn btn-sm btn-secondary" onclick="copyText(document.getElementById('analyzeMxjxUrl').textContent)">复制链接</button>
+                        <button class="btn btn-sm btn-primary" onclick="window.open(document.getElementById('analyzeMxjxUrl').textContent, '_blank')">新窗口播放</button>
+                        <button class="btn btn-sm btn-success" onclick="playAnalyzeVideo()">内置播放器播放</button>
+                    </div>
+                    <div class="inline-form-grid" style="margin-top:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-regular);padding:0">
+                            <input type="checkbox" id="analyzeUseProxy" onchange="updateAnalyzeMxjxUrl()"> 使用代理播放
+                        </label>
+                        <label id="analyzeAutoProxyLabel" style="display:none;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-regular);padding:0">
+                            <input type="checkbox" id="analyzeAutoProxy" checked onchange="toggleAutoProxy()"> 自动选最快
+                        </label>
+                        <select id="analyzeProxyServer" class="form-control-inline" style="display:none" onchange="onProxySelectChange()">
+                            <option value="">选择代理服务器（按延迟排序）</option>
+                        </select>
+                        <button class="btn btn-sm btn-secondary" id="checkProxyBtn" onclick="checkAllProxies()" style="display:none;justify-self:start">🔄 测速</button>
+                    </div>
+                    <div id="analyzePlayerContainer" style="display:none;margin-top:16px">
+                        <div id="analyzeVideoPlayer" style="width:100%;height:360px;border-radius:8px;overflow:hidden;background:#000"></div>
+                        <div style="margin-top:8px;font-size:12px;color:#909399" id="analyzePlayStatus"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge plain">⑦</span><span>后续操作</span></span></div>
+                    <div class="action-bar tight">
+                        <button class="btn btn-secondary" onclick="generateRules()">自动生成规则</button>
+                        <button class="btn btn-success" onclick="goToRules()">查看规则管理</button>
+                        <button class="btn btn-secondary" id="learnBtn" onclick="learnRules()">学习并更新规则</button>
+                    </div>
+                    <div id="learnStatus" style="margin-top:12px;font-size:13px;color:#606266;display:none"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-rules">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">📐 域名规则管理</span>
+                        <span class="status-pill blue">智能去广告引擎</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">按域名精准匹配，支持导入/导出/批量管理</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item primary">
+                        <div class="overview-title">🎯 规则触发链路</div>
+                        <div class="overview-desc">
+                            解析 m3u8 时按域名命中规则 → 依次走 <strong>时长→DISCONTINUITY→序列号跳跃→文件名模式</strong>四重检测 → 广告段自动标记占位。
+                        </div>
+                    </div>
+                    <div class="overview-item success">
+                        <div class="overview-title">📤 可导入导出 JSON</div>
+                        <div class="overview-desc">
+                            便于多台机器同步、备份分享。推荐先<strong>导出备份</strong>再做批量清理，<strong>一键清理为不可逆操作</strong>。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 规则列表 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>域名规则列表</span></span>
+                    <span class="section-caption">表格视图 + 行内编辑 / 删除</span>
+                </div>
+                <div class="action-bar" style="margin-bottom:16px">
+                    <button class="btn btn-primary" onclick="showAddRule()">+ 新增规则</button>
+                    <button class="btn btn-secondary" onclick="refreshRules()">🔄 刷新列表</button>
+                    <button class="btn btn-secondary" onclick="exportAllRules()">📤 导出全部规则</button>
+                    <label class="btn btn-secondary" style="cursor:pointer;margin:0">
+                        📥 导入规则
+                        <input type="file" id="importFileInput" accept=".json" onchange="importRulesFromFile(event)">
+                    </label>
+                    <button class="btn btn-danger" onclick="clearAllRules()">🗑️ 一键清理所有规则</button>
+                </div>
+                <div id="rulesTable"></div>
+            </div>
+
+            <!-- ③ 规则编辑器（默认隐藏） -->
+            <div class="card" id="ruleEditor" style="display:none">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">②</span><span id="ruleEditorTitle">编辑规则</span></span>
+                    <span class="section-caption required">★ 必填项标红；修改后立即生效无需重启</span>
+                </div>
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge info">A</span>
+                            <span class="title">基础信息</span>
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>资源名称 <span class="req-flag">★</span></label>
+                            <input type="text" id="ruleName" placeholder="例如：芒果TV">
+                            <div class="form-tip">仅用于后台区分，不参与匹配</div>
+                        </div>
+                        <div class="form-group">
+                            <label>域名 <span class="req-flag">★</span></label>
+                            <input type="text" id="ruleDomain" placeholder="例如：v.lfthirtytwo.com">
+                            <div class="form-tip">支持子域名，<code>a.b.com</code> 自动包含 <code>*.a.b.com</code></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge success">B</span>
+                            <span class="title">时长规则</span>
+                            <span class="status-pill green">建议至少 1 条</span>
+                        </div>
+                    </div>
+                    <div id="durationRules" style="margin-bottom:10px"></div>
+                    <button class="btn btn-sm btn-secondary" onclick="addDurationRule()">+ 添加时长规则</button>
+                    <div class="form-tip" style="margin-top:8px">用法示例：<code>min 2.0 max 6.0 → ad</code> 表示 2~6 秒区间视为广告段。</div>
+                </div>
+
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge warning">C</span>
+                            <span class="title">DISCONTINUITY 规则</span>
+                        </div>
+                    </div>
+                    <label class="toggle-label" style="display:flex;align-items:center;gap:8px">
+                        <input type="checkbox" id="discontinuityEnabled"> 启用 DISCONTINUITY 检测
+                    </label>
+                    <div class="form-tip">
+                        检测到 <code>#EXT-X-DISCONTINUITY</code> 标记时，标记该片段为广告插播点；<strong>适合腾讯/爱奇艺等官方切片分隔符非常明显的站点</strong>。
+                    </div>
+                </div>
+
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge danger">D</span>
+                            <span class="title">序列号跳跃规则</span>
+                        </div>
+                    </div>
+                    <div id="sequenceJumpRules" style="margin-bottom:10px"></div>
+                    <button class="btn btn-sm btn-secondary" onclick="addSeqJumpRule()">+ 添加序列号跳跃规则</button>
+                    <div class="form-tip" style="margin-top:8px">用于检测广告段结束后 ts 序号<strong>突然跳变</strong>（如 23→999）。</div>
+                </div>
+
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge info">E</span>
+                            <span class="title">文件名模式</span>
+                        </div>
+                    </div>
+                    <div id="filenamePatterns" style="margin-bottom:10px"></div>
+                    <button class="btn btn-sm btn-secondary" onclick="addFilenamePattern()">+ 添加文件名模式</button>
+                    <div class="form-tip" style="margin-top:8px">支持正则 / 字符串包含，命中 <code>ad/adv/prelude/promotion</code> 等常见广告路径关键字。</div>
+                </div>
+
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge plain">F</span>
+                            <span class="title">备注</span>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <textarea id="ruleNote" placeholder="例如：芒果TV 剧集正片时长 ~8.05s/片，片头片尾广告 2.5s"></textarea>
+                        <div class="form-tip">备注仅供后台记录，不参与实际匹配；推荐把来源/维护日期/关键发现写在这里便于团队协作。</div>
+                    </div>
+                </div>
+
+                <div class="action-bar with-top">
+                    <button class="btn btn-primary" onclick="saveRule()">💾 保存规则</button>
+                    <button class="btn btn-secondary" onclick="cancelRuleEdit()">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-sites">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🔎 搜索学习 &amp; 自动学习配置</span>
+                        <span class="status-pill green">推荐启用</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">从资源站持续获得最新样本，自动更新规则</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item success">
+                        <div class="overview-title">⚙️ 自动学习（定时任务）</div>
+                        <div class="overview-desc">
+                            每隔 N 天从<strong>如意/暴风/量子</strong>等资源站拉热门视频样本 → 深度广告分析 → 自动写入域名规则。<br>
+                            启用后无需人工维护，<strong>规则长期保持最新</strong>。
+                        </div>
+                    </div>
+                    <div class="overview-item primary">
+                        <div class="overview-title">🔍 搜索影视学习（手动）</div>
+                        <div class="overview-desc">
+                            搜<strong>流浪地球 / 庆余年</strong>等指定剧名 → 批量分析 → 一键学习。<br>
+                            适合<strong>立刻对某部热门剧</strong>生效，配合自动学习双管齐下。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 自动学习配置 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>自动学习配置</span></span>
+                    <span class="section-caption">后台定时任务的参数设置</span>
+                </div>
+                <div class="stats-grid" id="autoLearnStats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalSites">-</div>
+                        <div class="stat-label">资源站总数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="activeSites">-</div>
+                        <div class="stat-label">活跃资源站</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="lastLearnTime">-</div>
+                        <div class="stat-label">上次学习时间</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="autoLearnStatus">-</div>
+                        <div class="stat-label">自动学习状态</div>
+                    </div>
+                </div>
+
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>启用自动学习 <span class="req-flag">★</span></label>
+                        <select id="autoLearnEnabled">
+                            <option value="true">启用</option>
+                            <option value="false">禁用</option>
+                        </select>
+                        <div class="form-tip">禁用后不再执行任何定时学习任务。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>更新间隔 (天)</label>
+                        <input type="number" id="intervalDays" min="1" max="30" value="3">
+                        <div class="form-tip">两次自动学习的最小间隔，默认 3 天。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>每站视频数</label>
+                        <input type="number" id="videosPerSite" min="1" max="20" value="5">
+                        <div class="form-tip">每站取多少条样本，越多越全但更耗时。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>每次最大站点数</label>
+                        <input type="number" id="maxSitesPerRun" min="1" max="20" value="5">
+                        <div class="form-tip">单次任务最多处理多少个资源站。</div>
+                    </div>
+                </div>
+
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>最小片段数</label>
+                        <input type="number" id="minSegments" min="10" max="500" value="50">
+                        <div class="form-tip">低于此数的视频视为样本不足，跳过。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>最大广告占比 (%)</label>
+                        <input type="number" id="maxAdPercentage" min="10" max="100" value="90">
+                        <div class="form-tip">超过阈值的样本视为异常，不进入学习。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>多线程加速</label>
+                        <select id="autoLearnMultiThread">
+                            <option value="true">启用</option>
+                            <option value="false">禁用</option>
+                        </select>
+                        <div class="form-tip">建议服务器 CPU ≥ 4 核时启用。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>并发数</label>
+                        <select id="autoLearnConcurrency">
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="5" selected>5</option>
+                            <option value="8">8</option>
+                            <option value="10">10</option>
+                        </select>
+                        <div class="form-tip">并发数越高越快，网络带宽占用越高。</div>
+                    </div>
+                </div>
+
+                <div class="action-bar tight">
+                    <button class="btn btn-primary" onclick="saveAutoLearnConfig()">💾 保存配置</button>
+                    <button class="btn btn-success" onclick="runAutoLearn()">▶ 立即执行学习</button>
+                    <button class="btn btn-secondary" onclick="refreshSites()">🔄 刷新</button>
+                </div>
+                <div id="autoLearnResult" style="margin-top:16px;display:none"></div>
+            </div>
+
+            <!-- ③ 搜索影视学习 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>搜索影视学习</span></span>
+                    <span class="section-caption">手动指定剧名，精准学习特定剧集的广告模式</span>
+                </div>
+                <div class="form-tip" style="margin-bottom:14px">
+                    搜索指定或热门影视名称，查看返回的 M3U8 视频链接，用对应的视频链接进行学习，用 M3U8 的域名进行学习更新规则。
+                </div>
+                <div class="action-bar" style="margin-bottom:16px">
+                    <input type="text" id="searchKeyword" placeholder="输入影视名称，如：流浪地球、庆余年..." style="flex:1;min-width:250px;padding:10px 14px;border:1px solid var(--border-base);border-radius:8px;font-size:14px;outline:none">
+                    <select id="searchSiteSelect" class="form-control-inline" style="width:auto;min-width:160px">
+                        <option value="all">全部资源站</option>
+                    </select>
+                    <input type="number" id="searchMaxSites" value="5" min="1" max="20" placeholder="最大站点数" style="width:140px;padding:10px 14px;border:1px solid var(--border-base);border-radius:8px;font-size:14px;outline:none">
+                    <button class="btn btn-primary" onclick="searchVideos()">🔍 搜索</button>
+                    <button class="btn btn-secondary" onclick="clearSearchResults()">🧹 清空</button>
+                </div>
+                <div id="searchResults" style="display:none">
+                    <div id="searchSummary" style="padding:12px 14px;background:var(--primary-bg);border:1px solid #d9ecff;border-radius:8px;margin-bottom:14px;font-size:13px;color:var(--primary-text)"></div>
+                    <div id="searchActions" style="display:none;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                        <button class="btn btn-success" onclick="batchLearnAll()">📚 一键学习全部</button>
+                        <button class="btn btn-primary" onclick="batchAnalyzeAll()">🔍 一键分析全部</button>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-regular);user-select:none">
+                            <input type="checkbox" id="enableMultiThread" checked onchange="onMultiThreadToggle()">
+                            <strong>⚡ 多线程加速</strong>
+                        </label>
+                        <div id="concurrencyWrap" style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-regular)">
+                            <span>并发数:</span>
+                            <select id="concurrencyNum" class="form-control-inline" style="width:auto">
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="5" selected>5</option>
+                                <option value="8">8</option>
+                                <option value="10">10</option>
+                            </select>
+                        </div>
+                        <span class="status-pill green" id="multiThreadBadge" style="display:none">后端加速</span>
+                        <span style="font-size:12px;color:#909399;margin-left:auto" id="searchStats">准备就绪</span>
+                    </div>
+                    <div id="batchResult" style="display:none;margin-bottom:14px;padding:12px 14px;border-radius:8px"></div>
+                    <div id="searchVideoList"></div>
+                </div>
+                <div id="searchLoading" style="display:none;text-align:center;padding:20px;color:#909399">
+                    <div class="loading" style="display:inline-block">正在搜索中，请稍候...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    资源站列表
+                    <span style="margin-left:12px;font-size:12px;color:#909399;font-weight:normal">共 <span id="sitesCount">0</span> 个资源站</span>
+                </div>
+                <div style="margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap">
+                    <button class="btn btn-primary" onclick="showAddSite()">+ 新增资源站</button>
+                    <button class="btn btn-secondary" onclick="checkSitesHealth()" id="healthCheckBtn">🔍 健康检测</button>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                        <input type="checkbox" id="showPaused" onchange="refreshSites()"> 显示已暂停
+                    </label>
+                    <input type="text" id="siteSearch" placeholder="搜索资源站名称..." style="flex:1;min-width:200px;padding:10px 12px;border:1px solid #dcdfe6;border-radius:6px;font-size:14px" oninput="filterSites()">
+                </div>
+                <div id="sitesTable"></div>
+            </div>
+
+            <div class="card" id="siteEditor" style="display:none">
+                <div class="card-title" id="siteEditorTitle">新增资源站</div>
+                <div class="form-group">
+                    <label>资源站名称</label>
+                    <input type="text" id="siteName" placeholder="例如：量子">
+                </div>
+                <div class="form-group">
+                    <label>官网地址</label>
+                    <input type="text" id="siteUrl" placeholder="例如：https://example.com">
+                </div>
+                <div class="form-group">
+                    <label>采集接口</label>
+                    <input type="text" id="siteApiUrl" placeholder="例如：https://example.com/api.php/provide/vod/">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+                    <div class="form-group">
+                        <label>类型</label>
+                        <select id="siteType">
+                            <option value="maccms">MacCMS</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>状态</label>
+                        <select id="siteStatus">
+                            <option value="active">正常</option>
+                            <option value="paused">暂停</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>优先级</label>
+                        <input type="number" id="sitePriority" min="1" max="99" value="50">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>扩展备注</label>
+                    <textarea id="siteNote" placeholder="备注信息，如：推荐、卡、停更等"></textarea>
+                </div>
+                <div style="display:flex;gap:12px">
+                    <button class="btn btn-primary" onclick="saveSite()">保存</button>
+                    <button class="btn btn-secondary" onclick="cancelSiteEdit()">取消</button>
+                </div>
+            </div>
+
+            <div class="card" id="siteVideos" style="display:none">
+                <div class="card-title">
+                    <span id="siteVideosTitle">视频列表</span>
+                    <button class="btn btn-sm btn-secondary" style="float:right" onclick="closeSiteVideos()">关闭</button>
+                </div>
+                <div id="siteVideosList"></div>
+            </div>
+        </div>
+
+        <div class="page" id="page-ai_autolearn">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🤖 AI 自动学习配置</span>
+                        <span class="status-pill purple">频繁更新规则专用</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">每隔几小时自动从指定资源站获取视频样本，深度分析并更新规则</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item info">
+                        <div class="overview-title">⏰ 执行间隔</div>
+                        <div class="overview-desc">
+                            默认每 4 小时执行一次，可根据资源站更新频率调整；建议设置为 2-6 小时。
+                        </div>
+                    </div>
+                    <div class="overview-item warning">
+                        <div class="overview-title">🎯 目标资源站</div>
+                        <div class="overview-desc">
+                            默认从「如意」获取，可填写多个（逗号分隔）；推荐同时配置 2-3 个以提高稳定性。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 运行状态统计 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>运行状态总览</span></span>
+                    <span class="section-caption">实时查看学习任务运行情况</span>
+                </div>
+                <div class="stats-grid" id="aiAutoLearnStats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="aiAlStatus">-</div>
+                        <div class="stat-label">运行状态</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="aiAlLastRun">-</div>
+                        <div class="stat-label">上次执行</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="aiAlInterval">-</div>
+                        <div class="stat-label">执行间隔</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="aiAlTargets">-</div>
+                        <div class="stat-label">目标资源站</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ③ 配置表单 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>AI 自动学习参数</span></span>
+                    <span class="section-caption">控制学习频率、样本数量和质量过滤</span>
+                </div>
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge info">A</span>
+                            <span class="title">基础开关 & 频率</span>
+                            <span class="status-pill blue">必选</span>
+                        </div>
+                    </div>
+                    <div class="inline-form-grid">
+                        <div class="form-group">
+                            <label>启用 AI 自动学习 <span class="req-flag">★</span></label>
+                            <select id="aiAlEnabled">
+                                <option value="false">禁用</option>
+                                <option value="true">启用</option>
+                            </select>
+                            <div class="form-tip">禁用后将停止所有自动学习任务。</div>
+                        </div>
+                        <div class="form-group">
+                            <label>执行间隔 (小时)</label>
+                            <input type="number" id="aiAlIntervalHours" min="1" max="24" value="4">
+                            <div class="form-tip">资源站更新快可调小，否则建议 4-6 小时。</div>
+                        </div>
+                        <div class="form-group">
+                            <label>每站视频数 (建议 50-100)</label>
+                            <input type="number" id="aiAlVideosPerSite" min="1" max="100" value="50">
+                            <div class="form-tip">每站样本数，越多规则越精准但耗时越长。</div>
+                        </div>
+                        <div class="form-group">
+                            <label>每次最大站点数</label>
+                            <input type="number" id="aiAlMaxSites" min="1" max="10" value="3">
+                            <div class="form-tip">单次任务最多处理多少个资源站。</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge success">B</span>
+                            <span class="title">样本质量过滤</span>
+                        </div>
+                    </div>
+                    <div class="inline-form-grid">
+                        <div class="form-group">
+                            <label>最小片段数</label>
+                            <input type="number" id="aiAlMinSegments" min="10" max="500" value="50">
+                            <div class="form-tip">低于此数的视频视为样本不足，跳过。</div>
+                        </div>
+                        <div class="form-group">
+                            <label>最大广告占比 (%)</label>
+                            <input type="number" id="aiAlMaxAdPct" min="10" max="100" value="90">
+                            <div class="form-tip">超过阈值的样本视为异常，不进入学习。</div>
+                        </div>
+                        <div class="form-group">
+                            <label>单视频超时 (秒)</label>
+                            <input type="number" id="aiAlMaxExecTime" min="10" max="120" value="30">
+                            <div class="form-tip">单个视频分析最长等待时间，超时跳过。</div>
+                        </div>
+                        <div class="form-group">
+                            <label>去重保留天数</label>
+                            <input type="number" id="aiAlDedupDays" min="1" max="30" value="7">
+                            <div class="form-tip">N 天内同一视频不重复学习，节省算力。</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge warning">C</span>
+                            <span class="title">资源站 & 播放源</span>
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>目标资源站（逗号分隔，对应资源站名称）</label>
+                            <input type="text" id="aiAlTargetSites" value="如意" placeholder="如：如意,暴风,量子">
+                            <div class="form-tip">填写资源站列表中的名称，对应不上的会自动跳过。</div>
+                        </div>
+                        <div class="form-group">
+                            <label>播放源标识（逗号分隔，匹配 play_from）</label>
+                            <input type="text" id="aiAlPlayFromPatterns" value="rym3u8" placeholder="如：rym3u8,lzm3u8">
+                            <div class="form-tip"><code>rym3u8</code>=如意、<code>lzm3u8</code>=量子，可填多个。</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge plain">D</span>
+                            <span class="title">附加选项</span>
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>优先热门/更新视频</label>
+                            <select id="aiAlPreferHot">
+                                <option value="true">启用</option>
+                                <option value="false">禁用</option>
+                            </select>
+                            <div class="form-tip">启用后优先抓取资源站「最近更新」和「热门榜单」。</div>
+                        </div>
+                        <div class="form-group">
+                            <label>访问密钥（定时任务保护，留空不校验）</label>
+                            <input type="text" id="aiAlAccessKey" value="" placeholder="留空则不校验">
+                            <div class="form-tip">部署在公网时建议填一个随机字符串，定时任务 URL 需带上 <code>?k=密钥</code>。</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-bar with-top">
+                    <button class="btn btn-primary" onclick="saveAiAutoLearnConfig()">💾 保存配置</button>
+                    <button class="btn btn-success" onclick="runAiAutoLearn()">▶ 立即执行学习</button>
+                    <button class="btn btn-secondary" onclick="refreshAiAutoLearn()">🔄 刷新</button>
+                    <button class="btn btn-secondary" onclick="loadAiAutoLearnLogs()">📋 查看日志</button>
+                </div>
+                <div id="aiAutoLearnResult" style="margin-top:16px;display:none"></div>
+                <div id="aiAutoLearnLogs" style="margin-top:16px;display:none"></div>
+            </div>
+        </div>
+
+        <div class="page" id="page-official_sites">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">⭐ 官方推荐资源站</span>
+                        <span class="status-pill green">经过验证的稳定源</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">收录常见采集站，开箱即用，支持一键导入到资源站列表</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item success">
+                        <div class="overview-title">✅ 稳定可用</div>
+                        <div class="overview-desc">
+                            推荐资源站均经过<strong>可用性和响应速度</strong>双重验证，按优先级排序；启用后自动出现在「资源站 / 搜索学习」页。
+                        </div>
+                    </div>
+                    <div class="overview-item primary">
+                        <div class="overview-title">🔄 自动故障转移</div>
+                        <div class="overview-desc">
+                            某站失败时可<strong>自动切换到备用域名</strong>，支持重试次数、超时时间、每页条数等细粒度调优。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 推荐站列表 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <span class="step-title"><span class="step-badge info">①</span><span>推荐采集资源站列表</span></span>
+                    <div style="display:flex;gap:10px;align-items:center">
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:8px;margin:0">
+                            <input type="checkbox" id="officialSitesEnabled" onchange="toggleOfficialSites()">
+                            启用推荐采集
+                        </label>
+                        <button class="btn btn-sm btn-primary" onclick="showAddOfficialSite()">+ 添加推荐站</button>
+                    </div>
+                </div>
+                <div class="section-caption" style="margin-bottom:14px">勾选「启用推荐采集」后，这些站点会自动参与官替搜索与 AI 学习任务</div>
+                <div id="officialSitesList"></div>
+            </div>
+
+            <!-- ③ 推荐采集参数 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>推荐采集参数</span></span>
+                    <span class="section-caption">域名切换、重试、超时等调优项</span>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>自动切换域名</label>
+                        <select id="osAutoSwitch">
+                            <option value="1">启用</option>
+                            <option value="0">禁用</option>
+                        </select>
+                        <div class="form-tip">主域名失败时自动尝试备用域名，推荐启用。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>每域名最大重试次数</label>
+                        <input type="number" id="osMaxRetry" value="2" min="0" max="10">
+                        <div class="form-tip">0 = 不重试，建议 1-3 次。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>请求超时（秒）</label>
+                        <input type="number" id="osTimeout" value="10" min="5" max="60">
+                        <div class="form-tip">超过此时长判定为失败，网络较差时可适当调大。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>默认每页条数</label>
+                        <input type="number" id="osDefaultLimit" value="20" min="5" max="100">
+                        <div class="form-tip">列表接口默认返回条数。</div>
+                    </div>
+                </div>
+                <div class="action-bar tight">
+                    <button class="btn btn-primary" onclick="saveOfficialSettings()">💾 保存设置</button>
+                </div>
+            </div>
+
+            <!-- ④ 视频浏览（默认隐藏） -->
+            <div class="card" id="officialSiteVideos" style="display:none">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <span class="step-title"><span class="step-badge warning">③</span><span id="officialSiteVideoTitle">视频列表</span></span>
+                    <button class="btn btn-sm btn-secondary" onclick="closeOfficialSiteVideos()">关闭</button>
+                </div>
+                <div class="action-bar" style="margin-bottom:14px">
+                    <input type="text" id="officialVideoSearch" placeholder="搜索关键词（剧名/演员/类型）..." style="flex:1;min-width:240px;padding:10px 14px;border:1px solid var(--border-base);border-radius:8px;font-size:14px;outline:none">
+                    <button class="btn btn-primary" onclick="searchOfficialVideos()">🔍 搜索</button>
+                    <button class="btn btn-secondary" onclick="refreshOfficialVideos()">🔄 刷新</button>
+                </div>
+                <div id="officialSiteVideosList"></div>
+            </div>
+        </div>
+
+        <div class="page" id="page-official_replace">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🔁 官方替换（官替）引擎</span>
+                        <span class="status-pill green">v5.11 推荐主链路</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">官方页面链接 → 资源站精准搜索 → AI 去广告占位</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item success">
+                        <div class="overview-title">🎬 四步主链路</div>
+                        <div class="overview-desc">
+                            官方 URL → <strong>平台识别抽剧名</strong> → 资源站搜索（按 priority 升序）→ <strong>AI+MD5 匹配正片</strong> → 返回去广告播放链接，成功率最高。
+                        </div>
+                    </div>
+                    <div class="overview-item primary">
+                        <div class="overview-title">⭐ 优先度排序</div>
+                        <div class="overview-desc">
+                            priority 数值<strong>越小越优先</strong>（抖剧TV 默认 = 1，最高优先）。推荐把最稳定的 1-2 个资源站放前面，其余做兜底。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 状态统计 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>运行状态概览</span></span>
+                    <span class="section-caption">官替引擎当前关键指标</span>
+                </div>
+                <div class="stats-grid" id="officialReplaceStats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="orTotalPlatforms">-</div>
+                        <div class="stat-label">支持平台数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="orStatus">-</div>
+                        <div class="stat-label">功能状态</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="orDefaultSiteStat">-</div>
+                        <div class="stat-label">默认官替站</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="orSearchSites">-</div>
+                        <div class="stat-label">搜索资源站</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="orThreshold">-</div>
+                        <div class="stat-label">匹配阈值</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ③ 参数配置 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>官替核心参数</span></span>
+                    <span class="section-caption">开关、阈值、搜索范围配置</span>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>启用官替功能 <span class="req-flag">★</span></label>
+                        <select id="orEnabled">
+                            <option value="true">启用</option>
+                            <option value="false">禁用</option>
+                        </select>
+                        <div class="form-tip">关闭后官替解析接口将不再可用（嗅探设置中仍可保留为备用通道）。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>默认官替资源站 (default_site)</label>
+                        <input type="text" id="orDefaultSite" placeholder="默认站：抖剧TV">
+                        <div class="form-tip">优先从这个资源站做匹配，找不到再遍历其它。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>匹配阈值 (0-100)</label>
+                        <input type="number" id="orThresholdInput" min="0" max="100" value="60">
+                        <div class="form-tip">剧名/MD5 相似度 ≥ 阈值才算命中；越高越严格，建议 55-75。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>最大搜索站点数</label>
+                        <input type="number" id="orMaxSites" min="1" max="100" value="5">
+                        <div class="form-tip">一次请求最多搜索 N 个资源站，超过即停止，避免太慢。</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>搜索资源站（逗号分隔，按顺序优先搜索，建议第 1 个：抖剧TV）</label>
+                    <input type="text" id="orSearchSitesInput" placeholder="留空表示搜索全部（按 priority ASC 自动排序，1 = 最优先）">
+                    <div class="form-tip">留空 = 使用全部资源站（推荐）；也可手动指定 <code>抖剧TV,量子,如意</code> 只搜这几个。</div>
+                </div>
+
+                <div class="sub-card" style="margin-top:16px">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge warning">!</span>
+                            <span class="title">优先度说明（priority 越小越靠前）</span>
+                        </div>
+                    </div>
+                    <div class="form-tip" style="margin:0;line-height:1.8">
+                        priority 范围 <strong>1 ~ 2000+</strong>，<span style="color:#dc2626;font-weight:600">priority=1 为最高优先</span>。<br>
+                        抖剧TV 已默认 <code>priority=1</code>，作为官替第一优先资源站（根源来源 360kan，采集 <code>https://www.douju.tv/api.php/provide/vod/</code>）。<br>
+                        「资源站列表」和「支持平台列表」均已按 <strong>priority ASC 升序</strong> 展示，越靠前匹配越优先。
+                    </div>
+                </div>
+
+                <div class="action-bar with-top">
+                    <button class="btn btn-primary" onclick="saveOfficialReplaceConfig()">💾 保存配置</button>
+                </div>
+            </div>
+
+            <!-- ④ 支持平台 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <span class="step-title"><span class="step-badge info">③</span><span>支持平台列表</span></span>
+                    <button class="btn btn-sm btn-primary" onclick="addOfficialPlatform()">+ 添加平台</button>
+                </div>
+                <div class="section-caption" style="margin-bottom:14px">能识别哪些官方视频平台，正则与解析优先级配置</div>
+                <div id="officialPlatformsList"></div>
+            </div>
+
+            <!-- ⑤ API 测试 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge warning">④</span><span>官替 API 测试</span></span>
+                    <span class="section-caption">用一条真实链接验证整个链路</span>
+                </div>
+                <div class="input-group" style="margin-bottom:12px">
+                    <input type="text" id="officialTestUrl" placeholder="输入官方视频链接，如：https://v.qq.com/x/cover/xxx.html">
+                    <button class="btn btn-primary" onclick="testOfficialReplace()">▶ 测试解析</button>
+                </div>
+                <div class="form-tip" style="margin-bottom:14px">支持：腾讯视频、爱奇艺、优酷、芒果TV、哔哩哔哩 等主流平台</div>
+                <div id="officialTestResult" style="display:none">
+                    <div id="officialTestInfo"></div>
+                </div>
+            </div>
+
+            <!-- ⑥ 在线播放 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge danger">⑤</span><span>官替在线播放</span></span>
+                    <span class="section-caption">完整链路：解析 → 匹配 → AI 去广告 → 播放</span>
+                </div>
+                <div class="form-tip" style="margin-bottom:14px">输入官方链接 → 自动匹配资源 → AI 去广告/插播 → 正片播放</div>
+                <div class="input-group" style="margin-bottom:12px">
+                    <input type="text" id="orPlayUrl" placeholder="输入官方视频链接，如：https://v.qq.com/x/cover/xxx.html" style="flex:1">
+                    <button class="btn btn-primary" onclick="orPlayStart()">▶ 解析播放</button>
+                </div>
+                <div class="action-bar tight" style="margin-bottom:12px">
+                    <div style="font-size:12px;color:#909399">快捷示例：</div>
+                    <a href="javascript:void(0)" onclick="document.getElementById('orPlayUrl').value='https://v.qq.com/x/cover/mzc00200m2v9p9i.html';orPlayStart()" style="color:#409eff;text-decoration:none;font-size:12px">腾讯视频</a>
+                    <span style="color:#ddd;font-size:12px">|</span>
+                    <a href="javascript:void(0)" onclick="document.getElementById('orPlayUrl').value='https://www.iqiyi.com/v_1f0q2q3q3q8.html';orPlayStart()" style="color:#409eff;text-decoration:none;font-size:12px">爱奇艺</a>
+                </div>
+                <div id="orPlayStatus" style="display:none;margin-bottom:12px"></div>
+                <div id="orPlayInfo" style="display:none;margin-bottom:12px"></div>
+                <div id="orPlayerContainer" style="display:none">
+                    <div style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden">
+                        <video id="orPlayVideo" style="width:100%;height:100%;object-fit:contain" controls autoplay playsinline></video>
+                    </div>
+                    <div class="action-bar tight" style="margin-top:12px">
+                        <button class="btn btn-sm btn-secondary" onclick="orPlayCopyUrl()">📋 复制播放地址</button>
+                        <button class="btn btn-sm btn-secondary" onclick="orPlayOpenNew()">🔗 新窗口打开</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ⑦ 接口文档 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge plain">⑥</span><span>开发者 · API 接口说明</span></span>
+                    <span class="section-caption">对接前端/二开时使用</span>
+                </div>
+                <div style="font-size:13px;line-height:1.8;color:var(--text-regular)">
+                    <div class="overview-grid" style="margin-bottom:16px">
+                        <div class="overview-item info">
+                            <div class="overview-title">完整解析接口</div>
+                            <div class="overview-desc" style="margin:0">
+                                <code id="api-resolve-url" style="background:rgba(255,255,255,0.6);padding:4px 8px;border-radius:6px"></code>
+                            </div>
+                        </div>
+                        <div class="overview-item success">
+                            <div class="overview-title">精简信息接口 (JSON)</div>
+                            <div class="overview-desc" style="margin:0">
+                                <code id="api-info-url" style="background:rgba(255,255,255,0.6);padding:4px 8px;border-radius:6px"></code>
+                            </div>
+                        </div>
+                    </div>
+                    <p><strong>参数：</strong></p>
+                    <ul style="margin-left:20px;margin-bottom:12px">
+                        <li><code>url</code> - 官方视频播放页面链接</li>
+                    </ul>
+                    <p><strong>返回示例：</strong></p>
+                    <pre style="background:var(--fill-lighter);padding:14px;border-radius:8px;overflow:auto;font-size:12px;line-height:1.7">{
+  "success": true,
+  "platform": "腾讯视频",
+  "video_title": "庆余年",
+  "match_score": 95.5,
+  "site": "量子",
+  "m3u8_url": "https://.../index.m3u8",
+  "ad_skip_url": "https://你的域名/mx.php?action=mxjx&url=...",
+  "target_episode": "第1集"
+}</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-sniffer">
+            <!-- ========== 1. 概览卡（信息架构 & 三态提示） ========== -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🔍 嗅探设置</span>
+                        <span id="snifferDirtyBadge" style="display:none;font-size:12px;padding:2px 8px;border-radius:10px;background:#fef6e7;color:#e6a23c;font-weight:500">● 有修改未保存</span>
+                    </div>
+                    <span id="snifferUpdateDate" style="font-size:12px;color:#909399;font-weight:normal">加载中...</span>
+                </div>
+
+                <!-- 通道说明：栅格两列（左：通道 右：Fallback 规则） -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:16px">
+                    <div style="border:1px solid #e6ebf5;background:#f5f9ff;border-radius:10px;padding:14px 16px">
+                        <div style="font-weight:600;color:#2b4b9a;margin-bottom:6px">📺 解析通道（2选1 做主路由）</div>
+                        <div style="font-size:13px;color:#606266;line-height:1.8">
+                            · <strong style="color:#409eff">官解解析</strong>：调用上游「官方解析 API」，返回原始 m3u8 / mp4 直链，流量走上游。<br>
+                            · <strong style="color:#67c23a">官替接口</strong>：走项目内部「官方页面识别 → 资源站搜索 → AI+MD5 去非正片占位」四步主链路，稳定性最好，推荐默认开启。
+                        </div>
+                    </div>
+                    <div style="border:1px solid #fde2e2;background:#fff7f7;border-radius:10px;padding:14px 16px">
+                        <div style="font-weight:600;color:#9e2d2d;margin-bottom:6px">🔁 自动 Fallback 规则（硬保障）</div>
+                        <div style="font-size:13px;color:#606266;line-height:1.8">
+                            · 当前主路由失败时，<strong>自动切换到另一条已启用</strong>的通道，不会直接返回失败。<br>
+                            · 建议至少<strong>启用 2 条</strong>，并把「官替接口」设为当前通道（v5.11 新主链路）。<br>
+                            · 配置保存位置：<code style="background:#fff;padding:1px 4px;border-radius:3px">xt/sniffer_config.php</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- v5.13.2-C4：检测到用户还在启用已失效的第三方虾米官解时，立即给红色告警 banner + 1 分钟修复指引 -->
+                <div id="xiamiDeprecatedBanner"
+                     style="display:none;margin-top:14px;padding:14px 16px;border-radius:10px;background:#fef0f0;border:1px solid #fbc4c4;color:#8c1d1d;font-size:13px;line-height:1.8">
+                    <div style="font-weight:700;font-size:14px;margin-bottom:6px">🚨 检测到已失效的「虾米官解 (114.134.184.91:9002)」接口仍处于启用状态</div>
+                    <div>
+                        上游服务器已于 <strong style="background:#fff;padding:0 4px;border-radius:3px">2026-08-14</strong> 改为签名 / 白名单校验，
+                        未授权 IP 直接请求 100% 返回：<code style="background:#fff;padding:1px 4px;border-radius:3px">{"success":false,"message":"❌ 验证失败!"}</code>，
+                        会导致官解通道永远失败，拖慢 fallback 时间。
+                    </div>
+                    <div style="margin-top:8px;font-weight:600">一分钟修复方案（推荐方案一，无需额外服务器）：</div>
+                    <ol style="margin:6px 0 0 22px;padding:0">
+                        <li>保持当前页面「① 选择当前解析通道」为 <strong>官替接口（replace）</strong>（v5.11 推荐主链路）；</li>
+                        <li>向下滚动到「② 接口详细配置 → 1 官解接口」，把该条接口左上角 <strong>「启用此接口」</strong> 的勾选框取消；</li>
+                        <li>确保「2 官替接口」的「启用此接口」已勾选，<strong>URL 留空</strong> = 走本地 OfficialReplaceManager 直调（跳过 HTTP 回环，比远端官替快 30-70%）；</li>
+                        <li>点击底部「💾 保存嗅探设置」即可，再去首页刷新播放页面，嗅探报错立即消失。</li>
+                    </ol>
+                    <div id="xiamiBannerActions" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+                        <button class="btn btn-primary" onclick="xiamiBannerOneClickFix()">✅ 一键修复：取消该官解启用 + 官替 URL 置空 + 切到 replace 主路由</button>
+                        <button class="btn btn-secondary" onclick="document.getElementById('xiamiDeprecatedBanner').style.display='none'">稍后自己改（隐藏此条）</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== 2. 主路由选择 ========== -->
+            <div class="card">
+                <div class="card-title">① 选择当前解析通道 <span style="font-size:12px;color:#e6a23c;font-weight:normal;margin-left:8px">★ 必填</span></div>
+                <div id="snifferModeAlert" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:8px;background:#fef0f0;color:#f56c6c;font-size:13px;border:1px solid #fde2e2">
+                    ⚠️ 当前选择的通道还没启用，请在下方对应卡片勾选「启用此接口」后再保存。
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+                    <label for="snifferModeOfficial" style="position:relative;display:block;border:2px solid #dcdfe6;background:#fff;border-radius:10px;padding:14px 16px;cursor:pointer;transition:.15s" data-sniffer-mode-card="official">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                            <input type="radio" name="snifferMode" value="official" id="snifferModeOfficial" style="transform:scale(1.1)">
+                            <span style="font-weight:600;color:#303133">官解解析（official）</span>
+                            <span style="font-size:12px;padding:1px 6px;border-radius:4px;background:#ecf5ff;color:#409eff">上游直出</span>
+                        </div>
+                        <div style="font-size:12px;color:#909399;margin-left:26px">适合已有稳定官解接口的场景；作为备用通道建议启用。</div>
+                    </label>
+                    <label for="snifferModeReplace" style="position:relative;display:block;border:2px solid #dcdfe6;background:#fff;border-radius:10px;padding:14px 16px;cursor:pointer;transition:.15s" data-sniffer-mode-card="replace">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                            <input type="radio" name="snifferMode" value="replace" id="snifferModeReplace" style="transform:scale(1.1)">
+                            <span style="font-weight:600;color:#303133">官替接口（replace）</span>
+                            <span style="font-size:12px;padding:1px 6px;border-radius:4px;background:#f0f9eb;color:#67c23a">推荐</span>
+                        </div>
+                        <div style="font-size:12px;color:#909399;margin-left:26px">官方页面识别 + 资源站精准搜索 + AI+MD5 占位，不会中断播放。</div>
+                    </label>
+                    <label for="snifferModeConcurrent" style="position:relative;display:block;border:2px solid #dcdfe6;background:#fff;border-radius:10px;padding:14px 16px;cursor:pointer;transition:.15s" data-sniffer-mode-card="concurrent">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                            <input type="radio" name="snifferMode" value="concurrent" id="snifferModeConcurrent" style="transform:scale(1.1)">
+                            <span style="font-weight:600;color:#303133">同时调用（concurrent）</span>
+                            <span style="font-size:12px;padding:1px 6px;border-radius:4px;background:#fdf6ec;color:#e6a23c">⚡ v5.13.4</span>
+                        </div>
+                        <div style="font-size:12px;color:#909399;margin-left:26px">官解 + 官替同时并发请求，最快成功的立即返回结果给 jiexi.php。</div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- ========== 3. 接口配置 ========== -->
+            <div class="card">
+                <div class="card-title">② 接口详细配置</div>
+
+                <!-- 官解接口卡片 -->
+                <div id="snifferOfficialCard" style="border:1px solid #ebeef5;border-radius:10px;padding:16px 18px;margin-bottom:16px;transition:.15s">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                            <span style="font-weight:600;color:#303133;font-size:15px">
+                                <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#ecf5ff;color:#409eff;font-size:13px">1</span>
+                                官解接口
+                            </span>
+                            <span id="snifferOfficialBadge" style="font-size:12px;padding:2px 8px;border-radius:10px;background:#f0f0f0;color:#909399">未启用</span>
+                            <span id="snifferOfficialCurrentBadge" style="display:none;font-size:12px;padding:2px 8px;border-radius:10px;background:#e1f3d8;color:#67c23a;font-weight:500">当前主路由</span>
+                        </div>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;margin:0;user-select:none">
+                            <input type="checkbox" id="snifferOfficialEnabled" style="transform:scale(1.1)">
+                            <span>启用此接口（备用/主路由）</span>
+                        </label>
+                    </div>
+
+                    <div class="sniffer-form-grid">
+                        <div class="form-group">
+                            <label>接口名称 <span class="req-flag">★</span></label>
+                            <input type="text" id="snifferOfficialName" placeholder="如：虾米官解">
+                            <div class="form-tip">仅用于后台展示，不影响实际调用</div>
+                        </div>
+                        <div class="form-group">
+                            <label>接口类型 <span class="req-flag">★</span></label>
+                            <select id="snifferOfficialType">
+                                <option value="json">json（返回 JSON，最常用）</option>
+                                <option value="redirect">redirect（302 跳转直链）</option>
+                                <option value="text">text（响应体只有纯 URL）</option>
+                                <option value="html_player">html_player（HTML播放器页面，直接返回URL给iframe/302）</option>
+                            </select>
+                            <div class="form-tip">jx.xmflv.cc 等HTML播放器接口选 html_player；和上游接口返回格式保持一致</div>
+                        </div>
+                        <div class="form-group">
+                            <label>URL 字段名（json 类型）<span class="req-flag">★</span></label>
+                            <input type="text" id="snifferOfficialUrlField" placeholder="如：play_url / data.url">
+                            <div class="form-tip">上游 JSON 中用来取值的字段，支持点路径</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top:12px;margin-bottom:0">
+                        <label>接口地址（URL 前缀）<span class="req-flag">★</span></label>
+                        <input type="text" id="snifferOfficialUrl" placeholder="示例：http://114.134.184.91:9002/mx.php?action=api/v2&type=parse&url=">
+                        <div class="form-tip">
+                            会自动在末尾拼接 <code>urlencode(视频链接)</code>。结尾保留 <strong>=</strong> 或 <strong>&</strong> 都可以，程序会自动处理。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 官替接口卡片 -->
+                <div id="snifferReplaceCard" style="border:1px solid #ebeef5;border-radius:10px;padding:16px 18px;transition:.15s">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                            <span style="font-weight:600;color:#303133;font-size:15px">
+                                <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#f0f9eb;color:#67c23a;font-size:13px">2</span>
+                                官替接口
+                            </span>
+                            <span id="snifferReplaceBadge" style="font-size:12px;padding:2px 8px;border-radius:10px;background:#f0f0f0;color:#909399">未启用</span>
+                            <span id="snifferReplaceCurrentBadge" style="display:none;font-size:12px;padding:2px 8px;border-radius:10px;background:#e1f3d8;color:#67c23a;font-weight:500">当前主路由</span>
+                        </div>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;margin:0;user-select:none">
+                            <input type="checkbox" id="snifferReplaceEnabled" style="transform:scale(1.1)">
+                            <span>启用此接口（推荐作主路由）</span>
+                        </label>
+                    </div>
+
+                    <div class="sniffer-form-grid">
+                        <div class="form-group">
+                            <label>接口名称 <span class="req-flag">★</span></label>
+                            <input type="text" id="snifferReplaceName" placeholder="如：本地官替（v5.11 新引擎）">
+                            <div class="form-tip">仅用于后台展示，不影响实际调用</div>
+                        </div>
+                        <div class="form-group">
+                            <label>接口类型 <span class="req-flag">★</span></label>
+                            <select id="snifferReplaceType">
+                                <option value="json">json（返回 JSON，最常用）</option>
+                                <option value="redirect">redirect（302 跳转直链）</option>
+                                <option value="text">text（响应体只有纯 URL）</option>
+                                <option value="html_player">html_player（HTML播放器页面）</option>
+                            </select>
+                            <div class="form-tip">本项目官替返回 JSON，一般不要改</div>
+                        </div>
+                        <div class="form-group">
+                            <label>URL 字段名（json 类型）<span class="req-flag">★</span></label>
+                            <input type="text" id="snifferReplaceUrlField" placeholder="推荐：ad_skip_url（去广告占位版）">
+                            <div class="form-tip">
+                                <code style="background:#f5f7fa;padding:1px 4px;border-radius:3px">ad_skip_url</code> = AI+MD5 占位版（推荐，不中断）；
+                                <code style="background:#f5f7fa;padding:1px 4px;border-radius:3px">m3u8_url</code> = 原始资源站直链
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top:12px;margin-bottom:0">
+                        <label>接口地址（URL 前缀）</label>
+                        <input type="text" id="snifferReplaceUrl" placeholder="留空默认：mx.php?action=official_replace/info&url= （项目内置直调，更快）">
+                        <div class="form-tip">
+                            ✅ 强烈建议 <strong>留空</strong>，会走本地 PHP 内调 <code>OfficialReplaceManager</code>，比 HTTP 回环快 30~70%。
+                            若填外部官替接口，则按填的地址请求。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+                    <button class="btn btn-primary" id="btnSaveSniffer" onclick="saveSnifferConfig()">💾 保存嗅探设置</button>
+                    <button class="btn btn-secondary" onclick="loadSnifferConfig()">🔄 重新加载（放弃修改）</button>
+                    <span id="snifferLastSavedTip" style="align-self:center;font-size:12px;color:#909399"></span>
+                </div>
+            </div>
+
+            <!-- ========== 4. 嗅探测试 ========== -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span>③ 嗅探测试（按当前页面未保存配置立即试跑）</span>
+                    <span style="font-size:12px;font-weight:normal;color:#909399">新增：失败时也能看到「平台识别 → 抽剧名 → 资源站搜索 → AI匹配 → 去广告」每一步错在哪</span>
+                </div>
+                <div style="font-size:12px;color:#909399;margin-bottom:12px">
+                    这里会直接拿表单里的值来解析（即使还没点保存也可以试）。失败时直接看下面的「解析时间线」定位环节：✓ 成功  △ 警告  ✕ 失败  ℹ 信息
+                </div>
+                <div class="input-group">
+                    <input type="text" id="snifferTestUrl" placeholder="示例：https://v.youku.com/v_show/id_XNjU0MjcxNTM1Ng==.html">
+                    <button class="btn btn-primary" onclick="testSniffer()">▶ 测试解析</button>
+                </div>
+                <div id="snifferTestResult" style="display:none;margin-top:12px"></div>
+            </div>
+
+            <!-- ========== 5. 开发者 API 文档 ========== -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span>④ 开发者 · API 接口说明</span>
+                    <span style="font-size:12px;font-weight:normal;color:#909399">（给二开/对接前端的人看，普通用户不必关注）</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin:10px 0 14px">
+                    <div style="border:1px solid #ebeef5;border-radius:8px;padding:12px 14px">
+                        <div style="font-weight:600;color:#303133;margin-bottom:6px">GET · 获取嗅探配置</div>
+                        <code style="background:#f5f7fa;padding:4px 6px;border-radius:4px;display:block;font-size:12px">GET /mx.php?action=sniffer/config</code>
+                    </div>
+                    <div style="border:1px solid #ebeef5;border-radius:8px;padding:12px 14px">
+                        <div style="font-weight:600;color:#303133;margin-bottom:6px">POST · 保存嗅探配置</div>
+                        <code style="background:#f5f7fa;padding:4px 6px;border-radius:4px;display:block;font-size:12px">POST /mx.php?action=sniffer/config/save</code>
+                    </div>
+                </div>
+                <div style="font-size:13px;color:#606266;line-height:1.8">
+                    <strong>POST Body 示例（JSON）：</strong>
+                </div>
+                <pre style="background:#f5f7fa;padding:14px;border-radius:8px;overflow:auto;font-size:12px;line-height:1.7;margin:8px 0 0">{
+  "mode": "replace",
+  "official_api": {
+    "enabled": true,
+    "name": "虾米官解",
+    "url": "http://114.134.184.91:9002/mx.php?action=api/v2&type=parse&url=",
+    "type": "json",
+    "url_field": "play_url",
+    "headers": {}
+  },
+  "replace_api": {
+    "enabled": true,
+    "name": "本地官替",
+    "url": "",
+    "type": "json",
+    "url_field": "ad_skip_url",
+    "headers": {}
+  }
+}</pre>
+            </div>
+        </div>
+
+
+
+        <div class="page" id="page-moxi_api">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🧩 沫兮 API · 总览</span>
+                        <span class="status-pill blue">对外统一入口</span>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="window.open('api_doc.php', '_blank')">📚 查看完整 API 文档</button>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item info">
+                        <div class="overview-title">🎯 统一解析入口</div>
+                        <div class="overview-desc">
+                            对外只暴露 <code>mx.php?action=mxjx</code>，自动根据 URL 类型选择「M3U8 去广告 / 官方替换 / 上游官解」链路，前端无需关心细节。
+                        </div>
+                    </div>
+                    <div class="overview-item success">
+                        <div class="overview-title">📡 全平台覆盖</div>
+                        <div class="overview-desc">
+                            支持腾讯/爱奇艺/优酷/芒果TV/B站/搜狐/PP 及直接 M3U8；返回 <strong>code / msg / url / jm / js / time / kfz</strong> 标准字段，对接零成本。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 接口说明 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>接口 & 返回字段说明</span></span>
+                    <span class="section-caption">给对接/二开开发者看</span>
+                </div>
+                <div style="font-size:13px;line-height:1.8;color:var(--text-regular)">
+                    <div class="overview-grid" style="margin-bottom:16px">
+                        <div class="overview-item primary">
+                            <div class="overview-title">🧭 解析接口</div>
+                            <div class="overview-desc" style="margin:0">
+                                <code id="moxi-api-url" style="background:rgba(255,255,255,0.6);padding:4px 8px;border-radius:6px"></code>
+                            </div>
+                        </div>
+                    </div>
+                    <p><strong>请求参数：</strong></p>
+                    <ul style="margin-left:20px;margin-bottom:12px">
+                        <li><code>url</code> - 视频播放链接（官方视频页 或 直接 M3U8）</li>
+                        <li><code>type</code> - （可选）播放类型，一般留空自动判断</li>
+                    </ul>
+                    <p><strong>返回字段：</strong></p>
+                    <ul style="margin-left:20px;margin-bottom:12px">
+                        <li><code>code</code> - 200 成功 / 400 参数错误 / 404 解析失败</li>
+                        <li><code>url</code> - 解析后播放地址（一般已去广告占位）</li>
+                        <li><code>msg</code> - 返回消息</li>
+                        <li><code>jm / js</code> - 剧名 / 集数</li>
+                        <li><code>time / kfz</code> - 响应时间 / 开发者标识</li>
+                    </ul>
+                    <p><strong>返回示例：</strong></p>
+                    <pre style="background:var(--fill-lighter);padding:14px;border-radius:8px;overflow:auto;font-size:12px;line-height:1.7">{
+  "code": 200,
+  "url": "https://你的域名/mx.php?action=mxjx&url=...",
+  "msg": "解析成功",
+  "jm": "庆余年",
+  "js": "第1集",
+  "time": "2024-01-01 12:00:00",
+  "kfz": "沫兮API - 在线视频解析"
+}</pre>
+                    <div class="sub-card" style="margin-top:16px">
+                        <div class="sub-card-header">
+                            <div class="left">
+                                <span class="step-badge success">✓</span>
+                                <span class="title">已支持平台</span>
+                            </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;font-size:13px;color:var(--text-regular)">
+                            <div>• 腾讯视频 (v.qq.com)</div>
+                            <div>• 爱奇艺 (iqiyi.com)</div>
+                            <div>• 优酷 (youku.com)</div>
+                            <div>• 芒果TV (mgtv.com)</div>
+                            <div>• 哔哩哔哩 (bilibili.com)</div>
+                            <div>• 搜狐视频 (sohu.com)</div>
+                            <div>• PP视频 (pptv.com)</div>
+                            <div>• 直接 M3U8 链接</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ③ 接口测试 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge warning">②</span><span>多模式接口测试</span></span>
+                    <span class="section-caption">一键试跑解析 / 去广告 / 分析 / 官替 4 条链路</span>
+                </div>
+                <div class="input-group" style="margin-bottom:12px">
+                    <input type="text" id="moxiTestUrl" placeholder="输入视频链接，如：https://v.qq.com/x/cover/xxx.html 或 M3U8链接">
+                    <button class="btn btn-primary" onclick="testMoxiApi()">🧭 测试解析</button>
+                    <button class="btn btn-success" onclick="testMxjxApi()">🚀 测试去广告</button>
+                    <button class="btn btn-secondary" onclick="testAnalyzeApi()">🔍 测试分析</button>
+                    <button class="btn btn-warning" onclick="testOfficialInfoApi()">🔁 测试官替</button>
+                </div>
+                <div class="action-bar tight" style="margin-bottom:14px">
+                    <div style="font-size:12px;color:#909399">快捷测试：</div>
+                    <a href="javascript:void(0)" onclick="document.getElementById('moxiTestUrl').value='https://s3.bfllvip.com/video/qingyuniandiyiji/737c2ec959ce/index.m3u8';testMxjxApi()" style="color:#409eff;text-decoration:none;font-size:12px">庆余年 M3U8（去广告）</a>
+                    <span style="color:#ddd;font-size:12px">|</span>
+                    <a href="javascript:void(0)" onclick="document.getElementById('moxiTestUrl').value='https://v.qq.com/x/cover/mzc00200m2v9p9i.html';testOfficialInfoApi()" style="color:#409eff;text-decoration:none;font-size:12px">腾讯视频（官替解析）</a>
+                </div>
+                <div id="moxiTestResult" style="display:none">
+                    <div id="moxiTestInfo"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-play">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🎬 播放器 & 播放测试</span>
+                        <span class="status-pill blue">DPlayer 默认</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">选择前端播放器内核，测试无广告播放效果</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item primary">
+                        <div class="overview-title">🧩 多内核支持</div>
+                        <div class="overview-desc">
+                            内置 <strong>DPlayer / Video.js / MuiPlayer / ArtPlayer / NPlayer</strong> 五套内核；默认推荐 DPlayer（弹幕 + 截图 + 移动端体验最佳）。
+                        </div>
+                    </div>
+                    <div class="overview-item warning">
+                        <div class="overview-title">🎛️ 自动播放 & 预加载</div>
+                        <div class="overview-desc">
+                            浏览器会拦截自动播放，建议<strong>移动端保持关闭</strong>；预加载选「自动」可快速起播，流量有限环境可改「仅元数据」。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 播放器设置 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>播放器参数</span></span>
+                    <span class="section-caption">内核、自动播放、预加载、API 地址</span>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>选择播放器内核 <span class="req-flag">★</span></label>
+                        <select id="playerSelect" onchange="changePlayerPreview()">
+                            <option value="dplayer">DPlayer（推荐，弹幕+截图）</option>
+                            <option value="videojs">Video.js（兼容性好）</option>
+                            <option value="muiplayer">MuiPlayer（移动端优化）</option>
+                            <option value="artplayer">ArtPlayer（功能丰富）</option>
+                            <option value="nplayer">NPlayer（轻量高效）</option>
+                        </select>
+                        <div class="form-tip">切到不同内核，下方测试区会即时生效。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>自动播放</label>
+                        <select id="playerAutoplay">
+                            <option value="false">关闭（推荐）</option>
+                            <option value="true">开启</option>
+                        </select>
+                        <div class="form-tip">移动端浏览器通常拦截自动播放，不强求。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>预加载策略</label>
+                        <select id="playerPreload">
+                            <option value="auto">自动（推荐）</option>
+                            <option value="metadata">仅元数据</option>
+                            <option value="none">不预加载</option>
+                        </select>
+                        <div class="form-tip">自动 = 有流量即预缓冲；省流量选「仅元数据」。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>API 地址（留空自动取当前域名）</label>
+                        <input type="text" id="playerApiBaseUrl" placeholder="例如：https://your-domain.com">
+                        <div class="form-tip">部署在授权 IP 服务器时可填：<code>http(s)://IP:端口</code>，否则留空。</div>
+                    </div>
+                </div>
+                <div class="action-bar with-top">
+                    <button class="btn btn-primary" onclick="savePlayerConfig()">💾 保存播放器设置</button>
+                </div>
+            </div>
+
+            <!-- ③ 播放测试 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>无广告播放测试</span></span>
+                    <span class="section-caption">粘贴一条 M3U8 直接看效果</span>
+                </div>
+                <div class="form-tip" style="margin-bottom:14px">播放链接会先经过域名规则去广告占位后再交给播放器，用于验证「规则是否真的生效」。</div>
+                <div class="input-group" style="margin-bottom:14px">
+                    <input type="text" id="playUrl" placeholder="输入 M3U8 视频链接（例如 https://.../index.m3u8）">
+                    <button class="btn btn-primary" onclick="playVideo()">▶ 立即播放</button>
+                </div>
+                <div id="playerContainer" style="display:none;margin-top:4px">
+                    <div id="videoPlayer" style="width:100%;border-radius:10px;overflow:hidden"></div>
+                    <div class="form-tip" style="margin-top:12px" id="playInfo"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-database">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🗄️ 数据库中心</span>
+                        <span class="status-pill green">SQLite 默认开箱即用</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">状态 / 表结构 / 配置 / 文件迁移 一站式管理</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item success">
+                        <div class="overview-title">📁 SQLite 默认</div>
+                        <div class="overview-desc">
+                            开箱即用，无需安装服务，数据库文件 <code>db/data.db</code>；单文件可直接备份带走，小流量站点性能完全够用。
+                        </div>
+                    </div>
+                    <div class="overview-item primary">
+                        <div class="overview-title">🔀 可切 MySQL</div>
+                        <div class="overview-desc">
+                            大流量场景切换到 MySQL 更稳，编辑 <code>db/db_config.php</code> 即可；迁移工具支持一键「文件 → 数据库」导入。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 状态 + 快捷操作 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>数据库状态 & 快捷操作</span></span>
+                    <span class="section-caption">看 4 个指标 + 一键完成常用动作</span>
+                </div>
+                <div class="stats-grid" id="dbStats" style="margin-bottom:16px">
+                    <div class="stat-card">
+                        <div class="stat-value" id="dbType">-</div>
+                        <div class="stat-label">数据库类型</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="dbStatus">-</div>
+                        <div class="stat-label">运行状态</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="dbRuleCount">-</div>
+                        <div class="stat-label">规则数量</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="dbSiteCount">-</div>
+                        <div class="stat-label">资源站数量</div>
+                    </div>
+                </div>
+                <div class="action-bar tight">
+                    <button class="btn btn-primary" onclick="checkDbStatus()">🔄 刷新状态</button>
+                    <button class="btn btn-success" onclick="showDbConfig()">⚙️ 数据库配置</button>
+                    <button class="btn btn-warning" onclick="migrateData()">📤 迁移数据</button>
+                    <button class="btn btn-secondary" onclick="initDbTables()">🧱 初始化表结构</button>
+                </div>
+            </div>
+
+            <!-- ③ 表结构检查 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>表结构检查</span></span>
+                    <span class="section-caption">自动检查是否缺少必要表/字段</span>
+                </div>
+                <div id="dbTables" style="font-size:13px;color:var(--text-regular)">加载中...</div>
+            </div>
+
+            <!-- ④ 数据库配置 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge warning">③</span><span>数据库配置</span></span>
+                    <span class="section-caption">SQLite / MySQL 二选一，只读展示</span>
+                </div>
+                <div class="form-tip" style="margin-bottom:14px">支持 SQLite（文件型，无需安装服务）和 MySQL（需要独立 MySQL 服务）两种模式。</div>
+                <div id="dbConfigPanel">
+                    <div class="action-bar tight" style="margin-bottom:16px">
+                        <label class="toggle-label" style="margin:0;display:flex;align-items:center;gap:8px">
+                            <input type="radio" name="dbType" value="sqlite" checked onchange="toggleDbType('sqlite')"> SQLite（默认）
+                        </label>
+                        <label class="toggle-label" style="margin:0;display:flex;align-items:center;gap:8px">
+                            <input type="radio" name="dbType" value="mysql" onchange="toggleDbType('mysql')"> MySQL
+                        </label>
+                    </div>
+                    <div class="sub-card">
+                        <div class="sub-card-header">
+                            <div class="left">
+                                <span class="step-badge warning">!</span>
+                                <span class="title">配置来源说明</span>
+                            </div>
+                        </div>
+                        <div class="form-tip" style="margin:0">
+                            数据库配置从 <code>db/db_config.php</code> 文件读取，后台页面<strong>只读展示</strong>；如需实际切换请直接编辑该 PHP 文件后刷新。
+                        </div>
+                    </div>
+                    <div id="sqliteConfig" style="margin-top:14px">
+                        <div class="form-group" style="margin:0">
+                            <label>SQLite · 数据库文件路径</label>
+                            <input type="text" id="sqlitePath" value="db/data.db" readonly style="background:var(--fill-lighter);color:var(--text-secondary)">
+                        </div>
+                    </div>
+                    <div id="mysqlConfig" style="display:none;margin-top:14px">
+                        <div class="inline-form-grid">
+                            <div class="form-group">
+                                <label>主机</label>
+                                <input type="text" id="mysqlHost" value="127.0.0.1" readonly style="background:var(--fill-lighter);color:var(--text-secondary)">
+                            </div>
+                            <div class="form-group">
+                                <label>端口</label>
+                                <input type="number" id="mysqlPort" value="3306" readonly style="background:var(--fill-lighter);color:var(--text-secondary)">
+                            </div>
+                            <div class="form-group">
+                                <label>数据库名</label>
+                                <input type="text" id="mysqlDbname" value="m3u8_ad" readonly style="background:var(--fill-lighter);color:var(--text-secondary)">
+                            </div>
+                            <div class="form-group">
+                                <label>用户名</label>
+                                <input type="text" id="mysqlUsername" value="root" readonly style="background:var(--fill-lighter);color:var(--text-secondary)">
+                            </div>
+                            <div class="form-group">
+                                <label>密码</label>
+                                <input type="password" id="mysqlPassword" readonly style="background:var(--fill-lighter);color:var(--text-secondary)">
+                            </div>
+                            <div class="form-group">
+                                <label>字符集</label>
+                                <input type="text" id="mysqlCharset" value="utf8mb4" readonly style="background:var(--fill-lighter);color:var(--text-secondary)">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-bar with-top">
+                        <button class="btn btn-secondary" onclick="testDbConnection()">🔍 测试连接</button>
+                        <span id="testConnResult" style="font-size:13px;color:var(--text-secondary);align-self:center"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ⑤ 数据迁移 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge danger">④</span><span>数据迁移（文件 → 数据库）</span></span>
+                    <span class="section-caption">非破坏性，原文件保留</span>
+                </div>
+                <div class="form-tip" style="margin-bottom:14px">
+                    将原有<strong>文件存储</strong>的规则、资源站、代理等数据迁移到数据库中。迁移<strong>不会删除</strong>原有文件数据，可随时回滚。
+                </div>
+                <div class="action-bar tight">
+                    <button class="btn btn-warning" onclick="migrateData()">▶ 开始迁移</button>
+                    <span id="migrateStatus" style="font-size:13px;color:var(--text-secondary);align-self:center"></span>
+                </div>
+                <div id="migrateResult" style="margin-top:16px;display:none">
+                    <pre style="background:var(--fill-lighter);padding:14px;border-radius:8px;font-size:12px;white-space:pre-wrap;word-wrap:break-word"></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-update">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🧭 系统更新 & 维护</span>
+                        <span class="status-pill info">版本/备份/缓存一站搞定</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">日常运维操作面板：版本对比、备份、缓存清理</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item info">
+                        <div class="overview-title">📦 一键在线更新</div>
+                        <div class="overview-desc">
+                            自动对比当前与 GitHub 最新 Release 版本号，有更新时「立即更新」按钮会亮起；<strong>更新前请先做完整备份</strong>。
+                        </div>
+                    </div>
+                    <div class="overview-item warning">
+                        <div class="overview-title">🧹 缓存 & 完整性</div>
+                        <div class="overview-desc">
+                            更新后页面没变化？先清浏览器 / Service Worker 缓存；再跑<strong>完整性检查</strong>看授权/核心文件是否损坏。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 版本信息 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>系统版本 & 在线更新</span></span>
+                    <span class="section-caption">首次进入会自动检查一次</span>
+                </div>
+                <div class="stats-grid" id="versionStats" style="margin-bottom:16px">
+                    <div class="stat-card">
+                        <div class="stat-value" id="currentVersion">-</div>
+                        <div class="stat-label">当前版本</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="latestVersion">-</div>
+                        <div class="stat-label">最新版本</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="updateStatus">检查中...</div>
+                        <div class="stat-label">更新状态</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="githubStatus">检查中...</div>
+                        <div class="stat-label">GitHub 连接</div>
+                    </div>
+                </div>
+                <div class="action-bar tight">
+                    <button class="btn btn-primary" onclick="checkUpdate()">🔍 检查更新</button>
+                    <button class="btn btn-success" id="updateBtn" onclick="doUpdate()" disabled>⬇️ 立即更新</button>
+                    <button class="btn btn-secondary" onclick="createBackup()">📦 创建备份</button>
+                </div>
+            </div>
+
+            <!-- ③ 服务器信息 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>服务器信息</span></span>
+                    <span class="section-caption">PHP/操作系统/磁盘 环境信息</span>
+                </div>
+                <div id="serverInfo" style="font-size:13px;color:var(--text-regular)">加载中...</div>
+            </div>
+
+            <!-- ④ 文件夹权限 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge warning">③</span><span>文件夹权限检查</span></span>
+                    <span class="section-caption">红 = 需修复；绿 = 正常</span>
+                </div>
+                <div id="permissionInfo" style="font-size:13px;color:var(--text-regular)">加载中...</div>
+            </div>
+
+            <!-- ⑤ 缓存清理 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">④</span><span>缓存清理</span></span>
+                    <span class="section-caption">更新后页面不生效先点这里</span>
+                </div>
+                <div class="form-tip" style="margin-bottom:14px">清理浏览器缓存、Service Worker、localStorage 等，解决「明明后台代码已经更新但浏览器还是旧页面」的常见问题。</div>
+                <div class="action-bar tight">
+                    <button class="btn btn-warning" onclick="clearAllCaches()">🧹 立即清理全部缓存</button>
+                    <button class="btn btn-secondary" onclick="clearBrowserCache()">清理浏览器缓存</button>
+                    <button class="btn btn-secondary" onclick="clearServiceWorker()">清理 Service Worker</button>
+                </div>
+                <div id="cacheClearResult" style="margin-top:14px;font-size:12px;color:var(--text-regular)"></div>
+            </div>
+
+            <!-- ⑥ 完整性检查 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge danger">⑤</span><span>系统完整性检查</span></span>
+                    <span class="section-caption">授权 / 核心文件 / 运行状态</span>
+                </div>
+                <div class="form-tip" style="margin-bottom:14px">检查授权文件、核心文件完整性和系统状态，出问题时先来这里跑一遍做初诊。</div>
+                <div class="action-bar tight">
+                    <button class="btn btn-primary" onclick="checkIntegrity()">🔎 检查系统完整性</button>
+                </div>
+                <div id="integrityResult" style="margin-top:14px;font-size:12px;color:var(--text-regular)"></div>
+            </div>
+
+            <!-- ⑦ 更新结果 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge plain">⑥</span><span>更新结果输出</span></span>
+                    <span class="section-caption">点了「立即更新」后看这里</span>
+                </div>
+                <div id="updateResult" style="font-size:12px;color:var(--text-regular)"></div>
+            </div>
+
+            <!-- ⑧ 备份管理 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">⑦</span><span>备份管理</span></span>
+                    <span class="section-caption">更新前强烈建议先备份一份</span>
+                </div>
+                <div id="backupList"></div>
+            </div>
+        </div>
+
+        <!-- 自动更新 / 维护（显示进度条） -->
+        <div class="page" id="page-autoupdate">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🛠️ 自动维护中心</span>
+                        <span class="status-pill purple">进度条可视化</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">8 步日常维护流程一键跑完，后台队列 + 前端进度</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item primary">
+                        <div class="overview-title">🧱 8 步维护流水线</div>
+                        <div class="overview-desc">
+                            语法检查 → 数据库迁移 → 官替纠偏/刷新 → AI 学习 → AI 旧样本清理 → 资源站巡检 → 规则健康检查，<strong>顺序执行可单步也可全跑</strong>。
+                        </div>
+                    </div>
+                    <div class="overview-item warning">
+                        <div class="overview-title">📊 进度可视化</div>
+                        <div class="overview-desc">
+                            顶部总进度条 + 每步状态行（成功=绿 / 失败=红 / 运行中=蓝呼吸灯）+ 终端风格彩色日志，每一步跑到哪了一目了然。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 任务参数 + 进度 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>选择任务 & 启动</span></span>
+                    <span class="section-caption">可单步跑，也可一键全流程</span>
+                </div>
+                <div class="form-tip" style="margin-bottom:14px">
+                    推荐每周跑一次「全部」：数据库会补齐迁移、官替站域名会自动纠错、AI 学习最新热门剧、资源站自动标记不可用源。
+                </div>
+                <div class="action-bar" style="margin-bottom:16px;flex-wrap:wrap;align-items:center">
+                    <div style="font-size:13px;color:var(--text-regular);font-weight:600">任务类型:</div>
+                    <select id="gxAction" class="gx-select" style="padding:10px 12px;border:1px solid var(--border-base);border-radius:8px;background:#fff;font-size:13px;min-width:260px">
+                        <option value="all">全部 (7 步一条龙)</option>
+                        <option value="check">① 语法检查 check</option>
+                        <option value="migrate">② 数据库迁移 migrate</option>
+                        <option value="official_refresh">③ 官替纠偏/刷新 official_refresh</option>
+                        <option value="ai_learn">④ AI 学习 ai_learn</option>
+                        <option value="ai_cleanup">⑤ AI 旧样本清理 ai_cleanup</option>
+                        <option value="site_check">⑥ 资源站健康巡检 site_check</option>
+                        <option value="rule_check">⑦ 域名规则健康检查 rule_check</option>
+                        <option value="status">只看上次执行结果 status</option>
+                    </select>
+                    <div style="font-size:13px;color:var(--text-regular)">最大处理数:</div>
+                    <input type="number" id="gxMax" value="5" min="1" max="30" style="width:100px;padding:10px 12px;border:1px solid var(--border-base);border-radius:8px;font-size:13px">
+                    <label class="toggle-label" style="display:flex;align-items:center;gap:8px;margin:0">
+                        <input type="checkbox" id="gxForce"> 强制重跑 (force)
+                    </label>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-left:auto">
+                        <button class="btn btn-primary" id="gxStartBtn" onclick="gxStartTask()">▶ 开始执行</button>
+                        <button class="btn btn-secondary" onclick="gxRefreshProgress()">🔃 刷新进度</button>
+                        <button class="btn btn-danger" id="gxStopBtn" style="display:none" onclick="gxStopTask()">⛔ 停止轮询</button>
+                    </div>
+                </div>
+
+                <!-- 任务概览 -->
+                <div id="gxOverview" class="sub-card" style="margin-bottom:18px">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge info">ℹ</span>
+                            <span class="title">当前任务信息</span>
+                        </div>
+                    </div>
+                    <div class="form-tip" style="margin:0">暂无运行任务，点击「开始执行」启动。</div>
+                </div>
+
+                <!-- 总进度条 -->
+                <div style="margin-bottom:18px">
+                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
+                        <span id="gxPctText" style="font-weight:600;color:var(--text-primary)">总进度：0%</span>
+                        <span id="gxStepText" style="color:var(--text-secondary)">等待启动…</span>
+                    </div>
+                    <div style="width:100%;height:24px;background:var(--fill-lighter);border-radius:12px;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.05)">
+                        <div id="gxProgressBar" style="width:0%;height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:12px;transition:width .35s ease;position:relative;">
+                            <div style="position:absolute;inset:0;background-image:linear-gradient(45deg,rgba(255,255,255,.25) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.25) 50%,rgba(255,255,255,.25) 75%,transparent 75%);background-size:24px 24px;animation:gx-bar-stripes 1s linear infinite;opacity:.7;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤进度（每步卡片） -->
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge success">②</span>
+                            <span class="title">步骤详情</span>
+                        </div>
+                    </div>
+                    <div id="gxStepsList" style="margin-top:8px">
+                        <div style="color:var(--text-secondary);font-size:13px;padding:8px 4px">等待启动…</div>
+                    </div>
+                </div>
+
+                <!-- 彩色日志 -->
+                <div class="sub-card" style="margin-top:14px">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge plain">③</span>
+                            <span class="title">📜 运行日志</span>
+                        </div>
+                        <div class="right" style="display:flex;gap:8px">
+                            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('gxLog').innerHTML=''">清空</button>
+                            <button class="btn btn-sm btn-secondary" onclick="gxToggleAutoScroll()" id="gxAutoScrollBtn">自动滚动: 开</button>
+                        </div>
+                    </div>
+                    <div id="gxLog" class="gx-log"></div>
+                </div>
+            </div>
+            <style>
+                @keyframes gx-bar-stripes { from{background-position:0 0} to{background-position:48px 0} }
+            </style>
+        </div>
+
+        <div class="page" id="page-announcement">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">📢 公告管理中心</span>
+                        <span class="status-pill info">本地优先 + 远程兜底</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">从远程自动同步 + 手动新增，双向维护</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item success">
+                        <div class="overview-title">🤝 本地 + 远程双源</div>
+                        <div class="overview-desc">
+                            先读本地 <code>gg.txt</code>，空或异常再依次走 <strong>GitHub → jsDelivr → fastly → 备用</strong> 4 条远程链路，一条命中就停止。
+                        </div>
+                    </div>
+                    <div class="overview-item warning">
+                        <div class="overview-title">✏️ 可手动新增/编辑</div>
+                        <div class="overview-desc">
+                            想写自己的专属公告？点「添加公告」后保存，<strong>本地文件会覆盖远程结果</strong>，让自己站点的公告优先级最高。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 操作区 + 统计 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>操作面板 & 统计</span></span>
+                    <span class="section-caption">同步 / 新增 / 保存，一气呵成</span>
+                </div>
+                <div class="action-bar tight" style="margin-bottom:14px">
+                    <button class="btn btn-primary" onclick="loadAnnouncementList()">📄 刷新公告列表</button>
+                    <button class="btn btn-success" onclick="refreshRemoteAnnouncement()">🔄 从远程同步</button>
+                    <button class="btn btn-warning" onclick="showAddAnnouncementModal()">➕ 添加公告</button>
+                    <button class="btn btn-primary" onclick="saveAnnouncements()">💾 保存全部修改</button>
+                </div>
+                <div id="announcementStats" style="font-size:13px;color:var(--text-regular)">加载中...</div>
+            </div>
+
+            <!-- ③ 公告列表 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>公告列表</span></span>
+                    <span class="section-caption">可行内编辑，右上角置顶/删除按钮</span>
+                </div>
+                <div id="announcementList" style="max-height:500px;overflow-y:auto">
+                    <div style="text-align:center;padding:40px;color:var(--text-secondary)">加载中...</div>
+                </div>
+            </div>
+
+            <!-- ④ 公告源说明 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge warning">③</span><span>公告源与优先级</span></span>
+                    <span class="section-caption">读取顺序：本地 → 远程 1→2→3→4</span>
+                </div>
+                <div class="form-tip" style="margin-bottom:14px">公告优先从本地读取，本地无数据时自动从远程源获取。多个远程源<strong>按顺序依次尝试</strong>，只要一条成功就停止。</div>
+                <div class="sub-card">
+                    <div style="font-size:13px;line-height:2;color:var(--text-regular)">
+                        <div>📌 <strong>第 1 优先（本地）：</strong> <code>gg.txt</code>（存在即直接返回）</div>
+                        <div>🌐 <strong>第 2 优先：</strong> GitHub Raw</div>
+                        <div>🌐 <strong>第 3 优先：</strong> jsDelivr CDN（国内访问稳定）</div>
+                        <div>🌐 <strong>第 4 优先：</strong> fastly CDN</div>
+                        <div>🌐 <strong>第 5 优先：</strong> 备用服务器</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-auth">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🔑 授权中心</span>
+                        <span class="status-pill warning">本地校验 + 可选远程校</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">文件存在性 → 本地签名 → 远程服务器，三层校验链路</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item success">
+                        <div class="overview-title">✅ 默认本地校验</div>
+                        <div class="overview-desc">
+                            默认只做<strong>授权文件存在 + 签名比对</strong>两层校验，不联网不依赖外部服务；离线 / 内网环境也能正常用。
+                        </div>
+                    </div>
+                    <div class="overview-item warning">
+                        <div class="overview-title">🌐 可选远程验证</div>
+                        <div class="overview-desc">
+                            勾上「启用远程验证」后会额外连授权服务器核对时间戳 / 域名绑定；<strong>正式上线建议开启</strong>，避免授权文件被四处传播。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 状态概览 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>授权状态概览</span></span>
+                    <span class="section-caption">4 个指标一眼判断是否正常</span>
+                </div>
+                <div class="stats-grid" id="authStats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="sqFileStatus">检查中...</div>
+                        <div class="stat-label">授权文件</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="localAuthStatus">检查中...</div>
+                        <div class="stat-label">本地验证</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="remoteAuthStatus">检查中...</div>
+                        <div class="stat-label">远程验证</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="authVersion">-</div>
+                        <div class="stat-label">当前版本</div>
+                    </div>
+                </div>
+                <div class="action-bar tight" style="margin-top:14px">
+                    <button class="btn btn-secondary" onclick="refreshAuthInfo()">🔄 刷新全部状态</button>
+                </div>
+            </div>
+
+            <!-- ③ 本地/远程信息 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>本地 & 远程授权详情</span></span>
+                    <span class="section-caption">展开看授权主体/到期/校验项</span>
+                </div>
+                <div class="sub-card">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge info">A</span>
+                            <span class="title">本地授权信息（存在 sq.txt 就会读到）</span>
+                        </div>
+                    </div>
+                    <div id="localAuthInfo" style="font-size:13px;color:var(--text-regular);margin:0">加载中...</div>
+                </div>
+                <div class="sub-card" style="margin-top:14px">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge warning">B</span>
+                            <span class="title">远程服务器信息（需启用远程验证才有效）</span>
+                        </div>
+                    </div>
+                    <div id="remoteAuthInfo" style="font-size:13px;color:var(--text-regular);margin:0">加载中...</div>
+                </div>
+            </div>
+
+            <!-- ④ 授权配置 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge warning">③</span><span>授权配置</span></span>
+                    <span class="section-caption">服务器地址 + 校验开关</span>
+                </div>
+                <div class="inline-form-grid">
+                    <div class="form-group">
+                        <label>授权服务器 IP</label>
+                        <input type="text" id="authServerIp" placeholder="例如：114.134.184.91">
+                        <div class="form-tip">远程验证要连接的服务器地址。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>授权服务器端口</label>
+                        <input type="text" id="authServerPort" placeholder="例如：9001">
+                        <div class="form-tip">一般由授权方提供。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>授权文件名</label>
+                        <input type="text" id="authFile" placeholder="例如：sq.txt">
+                        <div class="form-tip">项目根目录下的授权文件。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>对比文件名</label>
+                        <input type="text" id="authFileCompare" placeholder="例如：sq.txt">
+                        <div class="form-tip">用于一致性校验的比对文件。</div>
+                    </div>
+                </div>
+                <div class="sub-card" style="margin-top:4px">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge info">C</span>
+                            <span class="title">校验开关</span>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:4px">
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:8px;margin:0">
+                            <input type="checkbox" id="enableRemoteVerify">
+                            <span>启用远程验证（联网到授权服务器二次核对）</span>
+                        </label>
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:8px;margin:0">
+                            <input type="checkbox" id="enableTimestampCheck">
+                            <span>启用时间戳检查（防止重放旧授权包）</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="action-bar with-top">
+                    <button class="btn btn-primary" onclick="saveAuthConfig()">💾 保存配置</button>
+                    <button class="btn btn-secondary" onclick="refreshAuthInfo()">🔄 刷新状态</button>
+                </div>
+            </div>
+
+            <!-- ⑤ 授权码录入 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge danger">④</span><span>设置 / 生成授权码</span></span>
+                    <span class="section-caption">拿到授权码后贴这里保存</span>
+                </div>
+                <div class="form-group">
+                    <label>输入授权码</label>
+                    <textarea id="authCodeInput" placeholder="请输入授权码...（拿到的授权字符串整段粘贴）" rows="5"></textarea>
+                </div>
+                <div class="action-bar tight">
+                    <button class="btn btn-success" onclick="setAuthCode()">✅ 设置授权码</button>
+                    <button class="btn btn-secondary" onclick="generateAuthCode()">🧪 生成测试授权码</button>
+                </div>
+                <div class="form-tip" style="margin-top:14px">
+                    授权异常 / 需要授权 / 商务合作请联系 QQ：<strong>2094332348</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-ai_skip">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">🤖 AI 智能去广告（核心入口）</span>
+                        <span class="status-pill purple">5 步流水线一键</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">分析 → 识簇 → 出规则 → 过滤 → 学习</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item primary">
+                        <div class="overview-title">🧠 5 种处理模式</div>
+                        <div class="overview-desc">
+                            <strong>一键智能处理 = 4 个子动作串跑</strong>；也可单独点「AI 去广告 / 智能分析 / 专业检测」，支持<strong>安全守护</strong>（不误删正片）与<strong>自动学习</strong>（下次更快）。
+                        </div>
+                    </div>
+                    <div class="overview-item warning">
+                        <div class="overview-title">📋 结果 → 规则 → 沉淀</div>
+                        <div class="overview-desc">
+                            处理完直接出<strong>纯净播放链接</strong>，同时生成 4 类规则（DISCONTINUITY 正则 / 时长 / 序列号 / 文件名），点「智能生成规则」即可写入规则库长期复用。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 操作卡（保留渐变主题色） -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>输入视频 & 选择处理模式</span></span>
+                    <span class="section-caption">紫色主题 = AI 智能去广告主入口</span>
+                </div>
+                <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);color:white;padding:20px;border-radius:12px;margin-bottom:20px">
+                    <div style="font-size:18px;font-weight:600;margin-bottom:8px">🧠 AI 智能处理引擎</div>
+                    <div style="font-size:13px;opacity:0.9">一站式：自动<strong>分析 → 识别广告簇 → 生成规则 → 过滤 → 自动学习</strong>，全流程可视化进度。</div>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="aiSkipUrl" placeholder="输入 M3U8 视频链接，例如：https://example.com/video/index.m3u8">
+                    <button class="btn btn-primary" style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border:none" onclick="aiSmartProcess()">✨ 一键智能处理</button>
+                    <button class="btn btn-success" onclick="aiSkipVideo()">🚀 AI 去广告</button>
+                    <button class="btn btn-secondary" onclick="aiSmartAnalyze()">🔍 智能分析</button>
+                    <button class="btn btn-warning" onclick="aiProDetect()">🔬 专业检测</button>
+                </div>
+                <div class="sub-card" style="margin-top:14px">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge warning">A</span>
+                            <span class="title">处理开关（建议默认全勾）</span>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:4px">
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiSkipSafeguard" checked> 启用安全守护（不删正片）
+                        </label>
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiSkipAutoLearn" checked> 自动学习规则（下次更快）
+                        </label>
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiSkipAutoSave"> 自动保存规则（入库）
+                        </label>
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiSkipDeepAnalysis"> 深度分析模式（更慢更准）
+                        </label>
+                    </div>
+                </div>
+                <div id="smartProcessSteps" style="display:none;margin-top:16px;padding:14px;background:#f5f7fa;border-radius:8px">
+                    <div style="font-weight:600;color:#303133;margin-bottom:10px">⚡ 智能处理进度</div>
+                    <div id="smartProcessStepList" style="font-size:13px;color:#606266">
+                        <div style="padding:4px 0">⏳ 正在初始化...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="aiSkipResult" style="display:none">
+                <div class="stats-grid" id="aiSkipStats"></div>
+
+                <!-- ③ 结果 -->
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>处理结果（可直接播放）</span></span>
+                        <span class="section-caption">复制 / 新窗口 / 内置播放 / 下载 4 种入口</span>
+                    </div>
+                    <div class="sub-card">
+                        <div class="sub-card-header">
+                            <div class="left">
+                                <span class="step-badge success">B</span>
+                                <span class="title">无广告播放链接（点一下可复制）</span>
+                            </div>
+                        </div>
+                        <div style="margin:0">
+                            <code id="aiSkipOutputUrl" style="background:#f5f7fa;padding:8px 12px;border-radius:6px;word-break:break-all;display:block;cursor:pointer" onclick="copyText(this.textContent)" title="点击复制"></code>
+                        </div>
+                    </div>
+                    <div class="action-bar with-top">
+                        <button class="btn btn-secondary" onclick="copyText(document.getElementById('aiSkipOutputUrl').textContent)">📋 复制链接</button>
+                        <button class="btn btn-primary" onclick="window.open(document.getElementById('aiSkipOutputUrl').textContent, '_blank')">🔗 新窗口播放</button>
+                        <button class="btn btn-success" onclick="playAiSkipVideo()">▶️ 内置播放</button>
+                        <button class="btn btn-secondary" onclick="downloadAiSkipM3u8()">💾 下载M3U8</button>
+                    </div>
+                    <div id="aiSkipPlayerContainer" style="display:none;margin-top:16px">
+                        <div id="aiSkipVideoPlayer" style="width:100%;height:360px;border-radius:10px;overflow:hidden;background:#000"></div>
+                        <div style="margin-top:8px;font-size:12px;color:var(--text-secondary)" id="aiSkipPlayStatus"></div>
+                    </div>
+                </div>
+
+                <div class="card" id="proDetectCard" style="display:none">
+                    <div class="card-title"><span class="step-title"><span class="step-badge danger">③</span><span>🔬 专业广告检测报告</span></span>
+                        <span class="section-caption">仅「专业检测」模式会生成</span>
+                    </div>
+                    <div id="proDetectResult" style="margin-bottom:16px"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge warning">④</span><span>🎯 广告簇分析</span></span>
+                        <span class="section-caption">把结构相似的广告段归成一簇，便于批量去</span>
+                    </div>
+                    <div id="aiSkipAdClusters" style="margin-bottom:16px">
+                        <div style="text-align:center;color:var(--text-secondary);padding:20px">加载中...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge primary">⑤</span><span>⚙️ 自动生成去广告规则</span></span>
+                        <span class="section-caption">出 4 类规则，写进规则库就能长期生效</span>
+                    </div>
+                    <div class="form-tip" style="margin-bottom:14px">基于视频内容智能分析，自动生成：<strong>DISCONTINUITY 正则 / 时长 / 序列号 / 文件名</strong> 4 类规则，命中后同类视频秒级去广告。</div>
+                    <div class="action-bar tight" style="margin-bottom:14px">
+                        <button class="btn btn-primary" onclick="aiSkipGenerateRules()">🤖 智能生成规则</button>
+                        <button class="btn btn-success" onclick="goToRules()">🔧 跳转规则管理</button>
+                    </div>
+                    <div id="aiSkipGeneratedRules" style="display:none">
+                        <div class="tab-bar">
+                            <div class="tab-item active" onclick="switchGenRuleTab(this, 'discontinuity')">DISCONTINUITY 正则</div>
+                            <div class="tab-item" onclick="switchGenRuleTab(this, 'duration')">时长规则</div>
+                            <div class="tab-item" onclick="switchGenRuleTab(this, 'sequence')">序列号规则</div>
+                            <div class="tab-item" onclick="switchGenRuleTab(this, 'filename')">文件名规则</div>
+                        </div>
+                        <div id="genRuleContent" style="margin-top:12px"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge info">⑥</span><span>AI 识别详情（4 个视角）</span></span>
+                        <span class="section-caption">Tab 切换看广告段 / 正片段 / MD5 / 明细</span>
+                    </div>
+                    <div class="tab-bar">
+                        <div class="tab-item active" onclick="switchAiSkipTab(this, 'ad')">广告片段</div>
+                        <div class="tab-item" onclick="switchAiSkipTab(this, 'content')">内容片段</div>
+                        <div class="tab-item" onclick="switchAiSkipTab(this, 'md5')">MD5特征码</div>
+                        <div class="tab-item" onclick="switchAiSkipTab(this, 'detail')">识别详情</div>
+                    </div>
+                    <div class="segment-list" id="aiSkipSegmentList"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge purple">⑦</span><span>快捷操作</span></span>
+                        <span class="section-caption">一键跳转到其他 AI 模块</span>
+                    </div>
+                    <div class="action-bar tight">
+                        <button class="btn btn-secondary" onclick="aiSkipGenerateRules()">📋 生成规则</button>
+                        <button class="btn btn-success" onclick="goToRules()">🔧 规则管理</button>
+                        <button class="btn btn-secondary" onclick="aiSkipToInsert()">📺 检测插播</button>
+                        <button class="btn btn-secondary" onclick="aiSkipToWatermark()">💧 水印处理</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-ai_insert">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">📺 AI 插播识别（片头/片尾/中间广告）</span>
+                        <span class="status-pill danger">精准定位插播位置</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">粉紫渐变主题，MD5 + 极速双模式</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item danger">
+                        <div class="overview-title">🏷️ 识别 3 类插播</div>
+                        <div class="overview-desc">
+                            <strong>片头 / 片尾 / 中间插播</strong>三种位置独立开关，外加 <strong>MD5 特征识别</strong>（常见资源站同款广告秒中）和 <strong>⚡ 极速模式</strong>（采样更少更快）。
+                        </div>
+                    </div>
+                    <div class="overview-item warning">
+                        <div class="overview-title">🚀 一键跳过插播</div>
+                        <div class="overview-desc">
+                            识别完直接点「一键跳过插播」生成<strong>纯净版 M3U8 链接</strong>；还可以一键跳到去广告 / 水印处理做二次净化。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 操作卡 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>输入视频 & 勾选要识别的插播类型</span></span>
+                    <span class="section-caption">粉色渐变 = 插播识别主题</span>
+                </div>
+                <div style="background:linear-gradient(135deg, #f093fb 0%, #f5576c 100%);color:white;padding:20px;border-radius:12px;margin-bottom:20px">
+                    <div style="font-size:18px;font-weight:600;margin-bottom:8px">智能插播检测引擎</div>
+                    <div style="font-size:13px;opacity:0.9">自动识别：<strong>片头片尾广告 / 中间插播 / 跑马灯</strong>，精准定位插播位置和时长，一键生成纯净版播放链接。</div>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="aiInsertUrl" placeholder="输入 M3U8 视频链接，检测插播内容">
+                    <button class="btn btn-primary" onclick="aiInsertDetect()">🔍 检测插播</button>
+                    <button class="btn btn-success" onclick="aiInsertMd5Analyze()">🔬 MD5分析</button>
+                </div>
+                <div class="sub-card" style="margin-top:14px">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge warning">A</span>
+                            <span class="title">检测开关（默认全开，按需关掉不想识别的类型）</span>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:4px">
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiInsertOpening" checked> 检测片头广告
+                        </label>
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiInsertEnding" checked> 检测片尾广告
+                        </label>
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiInsertMiddle" checked> 检测中间插播
+                        </label>
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiInsertMd5Mode" checked> MD5 特征识别（推荐开）
+                        </label>
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiInsertFastMode" checked> ⚡ 极速模式（采样更少更快）
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div id="aiInsertResult" style="display:none">
+                <div class="stats-grid" id="aiInsertStats"></div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>插播检测结果</span></span>
+                        <span class="section-caption">会列出每一段插播：位置 / 时长 / 类型</span>
+                    </div>
+                    <div id="aiInsertList"></div>
+                </div>
+
+                <div class="card" id="aiInsertMd5Card" style="display:none">
+                    <div class="card-title"><span class="step-title"><span class="step-badge warning">③</span><span>🔬 MD5 特征码分析</span></span>
+                        <span class="section-caption">只在「MD5分析」按钮点了才出现</span>
+                    </div>
+                    <div id="aiInsertMd5Content"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge primary">④</span><span>一键净化 & 跨模块跳转</span></span>
+                        <span class="section-caption">跳过插播 → 去广告 → 水印处理，串成流水线</span>
+                    </div>
+                    <div class="action-bar tight">
+                        <button class="btn btn-primary" onclick="aiInsertSkip()">🚀 一键跳过插播</button>
+                        <button class="btn btn-secondary" onclick="aiInsertToSkip()">🤖 去广告处理</button>
+                        <button class="btn btn-secondary" onclick="aiInsertToWatermark()">💧 水印处理</button>
+                    </div>
+                    <div id="aiInsertOutput" style="margin-top:16px;display:none">
+                        <div class="sub-card">
+                            <div class="sub-card-header">
+                                <div class="left">
+                                    <span class="step-badge success">B</span>
+                                    <span class="title">纯净版播放链接（点击复制）</span>
+                                </div>
+                            </div>
+                            <div style="margin:0">
+                                <code id="aiInsertOutputUrl" style="background:#f5f7fa;padding:8px 12px;border-radius:6px;word-break:break-all;display:block;cursor:pointer" onclick="copyText(this.textContent)" title="点击复制"></code>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-ai_subtitle">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">📝 AI 滚动字幕广告分析</span>
+                        <span class="status-pill success">顶部/底部/中间全覆盖</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">青绿渐变主题，采样数可调，附置信度</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item success">
+                        <div class="overview-title">📊 2 档检测 + 6 档采样</div>
+                        <div class="overview-desc">
+                            <strong>快速模式（10段）/ 深度模式（20段）</strong>两档，采样段数可在 5~30 段自定义；段数越多越准但越慢，一般 10 段是甜点。
+                        </div>
+                    </div>
+                    <div class="overview-item info">
+                        <div class="overview-title">🎯 4 类输出</div>
+                        <div class="overview-desc">
+                            给出<strong>是否有字幕广告 / 滚动检测 / 置信度 / 耗时</strong> 6 项指标，并展示「广告区域分布」「广告文字样本」「采样片段详情」三重证据链。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 操作卡 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>输入视频 & 选择检测强度</span></span>
+                    <span class="section-caption">青绿渐变 = 字幕广告分析主题</span>
+                </div>
+                <div style="background:linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);color:#333;padding:20px;border-radius:12px;margin-bottom:20px">
+                    <div style="font-size:18px;font-weight:600;margin-bottom:8px">智能滚动字幕广告检测</div>
+                    <div style="font-size:13px;opacity:0.85">识别<strong>顶部 / 底部滚动文字 / 插播字幕</strong>等非正片内容，支持多模式检测和<strong>置信度评估</strong>，分析结果可一键复制。</div>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="aiSubtitleUrl" placeholder="输入视频链接或 M3U8 地址，分析滚动字幕广告">
+                    <button class="btn btn-primary" onclick="aiSubtitleAnalyze()">⚡ 快速分析</button>
+                </div>
+                <div class="sub-card" style="margin-top:14px">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge warning">A</span>
+                            <span class="title">检测参数（2 个下拉）</span>
+                        </div>
+                    </div>
+                    <div class="inline-form-grid" style="margin-top:4px">
+                        <div class="form-group">
+                            <label>检测模式</label>
+                            <select id="aiSubtitleMode" style="padding:8px 12px;border:1px solid var(--border-base);border-radius:6px;font-size:13px;background:white">
+                                <option value="fast">快速模式（采样10段，快）</option>
+                                <option value="deep">深度模式（采样20段，准）</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>采样片段数</label>
+                            <select id="aiSubtitleSamples" style="padding:8px 12px;border:1px solid var(--border-base);border-radius:6px;font-size:13px;background:white">
+                                <option value="5">5 段（超快粗检）</option>
+                                <option value="10" selected>10 段（推荐）</option>
+                                <option value="20">20 段（深度）</option>
+                                <option value="30">30 段（极致慢检）</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <span style="color:var(--text-secondary);font-size:12px">📌 一键示例：</span>
+                    <a href="javascript:void(0)" onclick="document.getElementById('aiSubtitleUrl').value='https://v.qq.com/x/cover/mzc00200m2v9p9i.html';aiSubtitleAnalyze()" style="color:var(--primary);text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid var(--primary-lighter, #d9ecff);border-radius:6px">腾讯视频</a>
+                    <span style="color:var(--border-base);font-size:12px">|</span>
+                    <a href="javascript:void(0)" onclick="document.getElementById('aiSubtitleUrl').value='https://www.iqiyi.com/v_1f0q2q3q3q8.html';aiSubtitleAnalyze()" style="color:var(--primary);text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid var(--primary-lighter, #d9ecff);border-radius:6px">爱奇艺</a>
+                </div>
+            </div>
+
+            <div id="aiSubtitleResult" style="display:none">
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>分析结果（6 项关键指标）</span></span>
+                        <span class="section-caption">指标卡以灰底方块展示，一眼看清有无广告</span>
+                    </div>
+                    <div id="aiSubtitleStatus"></div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:16px">
+                        <div class="overview-item info" style="padding:14px;margin:0;min-height:auto">
+                            <div class="overview-title" style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">是否有字幕广告</div>
+                            <div id="aiSubtitleHasAd" style="font-size:18px;font-weight:600">-</div>
+                        </div>
+                        <div class="overview-item primary" style="padding:14px;margin:0;min-height:auto">
+                            <div class="overview-title" style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">检测模式</div>
+                            <div id="aiSubtitleModeResult" style="font-size:18px;font-weight:600">-</div>
+                        </div>
+                        <div class="overview-item warning" style="padding:14px;margin:0;min-height:auto">
+                            <div class="overview-title" style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">滚动检测</div>
+                            <div id="aiSubtitleScroll" style="font-size:18px;font-weight:600">-</div>
+                        </div>
+                        <div class="overview-item success" style="padding:14px;margin:0;min-height:auto">
+                            <div class="overview-title" style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">置信度</div>
+                            <div id="aiSubtitleConfidence" style="font-size:18px;font-weight:600">-</div>
+                        </div>
+                        <div class="overview-item danger" style="padding:14px;margin:0;min-height:auto">
+                            <div class="overview-title" style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">处理耗时</div>
+                            <div id="aiSubtitleTime" style="font-size:18px;font-weight:600">-</div>
+                        </div>
+                        <div class="overview-item purple" style="padding:14px;margin:0;min-height:auto">
+                            <div class="overview-title" style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">采样片段</div>
+                            <div id="aiSubtitleSamplesResult" style="font-size:18px;font-weight:600">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" id="aiSubtitleRegionsCard" style="display:none">
+                    <div class="card-title"><span class="step-title"><span class="step-badge warning">③</span><span>广告区域分布</span></span>
+                        <span class="section-caption">看广告集中在屏幕顶部 / 底部 / 中间？</span>
+                    </div>
+                    <div id="aiSubtitleRegions"></div>
+                </div>
+
+                <div class="card" id="aiSubtitleAdTextsCard" style="display:none">
+                    <div class="card-title"><span class="step-title"><span class="step-badge danger">④</span><span>检测到的广告文字样本</span></span>
+                        <span class="section-caption">把 OCR 抓到的广告文本一条条列出来</span>
+                    </div>
+                    <div id="aiSubtitleAdTexts" style="display:flex;flex-direction:column;gap:8px"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge info">⑤</span><span>采样片段详情</span></span>
+                        <span class="section-caption">共 <span id="aiSubtitleSampleCount">0</span> 个采样片段，可滚动查看</span>
+                    </div>
+                    <div id="aiSubtitleSampleList" style="max-height:400px;overflow-y:auto"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge purple">⑥</span><span>快捷操作</span></span>
+                        <span class="section-caption">复制结果 / 去广告 / 重跑 三入口</span>
+                    </div>
+                    <div class="action-bar tight">
+                        <button class="btn btn-secondary" onclick="aiSubtitleCopyResult()">📋 复制结果</button>
+                        <button class="btn btn-primary" onclick="aiSubtitleGoSkip()">🤖 跳 AI 去广告</button>
+                        <button class="btn btn-success" onclick="aiSubtitleReAnalyze()">🔄 重新分析</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="page-ai_watermark">
+            <!-- ① 概览卡 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:18px">💧 AI 水印净化（链接/文件名/Referer）</span>
+                        <span class="status-pill info">常见参数库自动命中</span>
+                    </div>
+                    <span style="font-size:12px;color:#909399;font-weight:normal">蓝青渐变主题，处理前后链接并排对比</span>
+                </div>
+                <div class="overview-grid">
+                    <div class="overview-item info">
+                        <div class="overview-title">🧼 3 类净化可独立开关</div>
+                        <div class="overview-desc">
+                            <strong>① URL 水印参数（wmark/from/...）</strong>去除；<strong>② TS 文件名里的水印</strong>处理；<strong>③ Referer 自动修正</strong>，默认全开。
+                        </div>
+                    </div>
+                    <div class="overview-item success">
+                        <div class="overview-title">📚 内置水印参数库</div>
+                        <div class="overview-desc">
+                            已收录<strong>主流资源站常见水印参数</strong>，命中后直接自动去除；结果卡片里会展示参数库列表，可对照确认是否识别到位。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② 操作卡 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">①</span><span>输入待净化的视频链接</span></span>
+                    <span class="section-caption">蓝青渐变 = 水印处理主题</span>
+                </div>
+                <div style="background:linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);color:white;padding:20px;border-radius:12px;margin-bottom:20px">
+                    <div style="font-size:18px;font-weight:600;margin-bottom:8px">智能水印处理引擎</div>
+                    <div style="font-size:13px;opacity:0.9">三种净化同时作用：<strong>① URL 水印参数去除 ② TS 文件名水印处理 ③ 播放链接 + Referer 净化</strong>，已收录常见水印参数库自动命中。</div>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="aiWatermarkUrl" placeholder="输入视频链接或播放地址，进行水印处理">
+                    <button class="btn btn-primary" onclick="aiWatermarkProcess()">✨ 处理水印</button>
+                </div>
+                <div class="sub-card" style="margin-top:14px">
+                    <div class="sub-card-header">
+                        <div class="left">
+                            <span class="step-badge warning">A</span>
+                            <span class="title">净化项（建议默认全开）</span>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:4px">
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiWatermarkUrlParams" checked> 去除 URL 水印参数（?wmark/...）
+                        </label>
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiWatermarkFilename" checked> 文件名水印处理（TS 名称清洗）
+                        </label>
+                        <label class="toggle-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text-regular)">
+                            <input type="checkbox" id="aiWatermarkReferer" checked> 自动处理 Referer（防盗链修复）
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div id="aiWatermarkResult" style="display:none">
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge success">②</span><span>处理前后对比（一目了然）</span></span>
+                        <span class="section-caption">灰色 = 原始，绿色 = 净化后（点一下可复制）</span>
+                    </div>
+                    <div class="sub-card">
+                        <div class="sub-card-header">
+                            <div class="left">
+                                <span class="step-badge info">B</span>
+                                <span class="title">原始链接（净化前）</span>
+                            </div>
+                        </div>
+                        <div style="margin:0">
+                            <code id="aiWatermarkOriginalUrl" style="background:#f5f7fa;padding:8px 12px;border-radius:6px;word-break:break-all;display:block;font-size:12px"></code>
+                        </div>
+                    </div>
+                    <div class="sub-card" style="margin-top:14px">
+                        <div class="sub-card-header">
+                            <div class="left">
+                                <span class="step-badge success">C</span>
+                                <span class="title">处理后链接（点击复制）</span>
+                            </div>
+                        </div>
+                        <div style="margin:0">
+                            <code id="aiWatermarkOutputUrl" style="background:#ecfdf5;padding:8px 12px;border-radius:6px;word-break:break-all;display:block;cursor:pointer;color:#059669" onclick="copyText(this.textContent)" title="点击复制"></code>
+                        </div>
+                    </div>
+                    <div style="margin-top:14px" id="aiWatermarkDetails"></div>
+                    <div class="action-bar with-top">
+                        <button class="btn btn-secondary" onclick="copyText(document.getElementById('aiWatermarkOutputUrl').textContent)">📋 复制链接</button>
+                        <button class="btn btn-primary" onclick="window.open(document.getElementById('aiWatermarkOutputUrl').textContent, '_blank')">🔗 新窗口打开</button>
+                        <button class="btn btn-success" onclick="aiWatermarkToSkip()">🤖 继续做去广告</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="step-title"><span class="step-badge warning">③</span><span>水印参数库（命中对照）</span></span>
+                        <span class="section-caption">已收录常见水印参数，自动识别并去除</span>
+                    </div>
+                    <div id="aiWatermarkLibList"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+        </main>
+    </div>
+
+    <div class="mobile-bottom-nav" id="mobileBottomNav">
+        <div class="mobile-nav-items">
+            <div class="mobile-nav-item active" data-page="dashboard" onclick="mobileNavTo('dashboard')">
+                <div class="nav-icon">🏠</div>
+                <div>首页</div>
+            </div>
+            <div class="mobile-nav-item" data-page="ai_skip" onclick="mobileNavTo('ai_skip')">
+                <div class="nav-icon">🤖</div>
+                <div>AI去广告</div>
+            </div>
+            <div class="mobile-nav-item" data-page="analyze" onclick="mobileNavTo('analyze')">
+                <div class="nav-icon">🎯</div>
+                <div>分析</div>
+            </div>
+            <div class="mobile-nav-item" data-page="rules" onclick="mobileNavTo('rules')">
+                <div class="nav-icon">📋</div>
+                <div>规则</div>
+            </div>
+            <div class="mobile-nav-item" data-page="history" onclick="mobileNavTo('history')">
+                <div class="nav-icon">📜</div>
+                <div>历史</div>
+            </div>
+            <div class="mobile-nav-item" data-page="autoupdate" onclick="mobileNavTo('autoupdate')">
+                <div class="nav-icon">🔄</div>
+                <div>自动更新</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <div id="updateModal" class="update-modal-overlay" style="display:none" onclick="if(event.target===this)hideUpdateModal()">
+        <div class="update-modal">
+            <div class="update-modal-header">
+                <div class="update-modal-icon">🎉</div>
+                <div class="update-modal-title">发现新版本</div>
+                <button class="update-modal-close" onclick="hideUpdateModal()">✕</button>
+            </div>
+            <div class="update-modal-body">
+                <div class="update-version-info">
+                    <div class="version-row">
+                        <span class="version-label">当前版本</span>
+                        <span class="version-value current" id="modalCurrentVersion">-</span>
+                    </div>
+                    <div class="version-arrow">↓</div>
+                    <div class="version-row">
+                        <span class="version-label">最新版本</span>
+                        <span class="version-value latest" id="modalLatestVersion">-</span>
+                    </div>
+                </div>
+                <div class="update-meta" id="modalUpdateMeta"></div>
+                <div class="update-changelog-title">
+                    <span>📋 更新内容</span>
+                    <span class="changelog-count" id="changelogCount"></span>
+                </div>
+                <div class="update-changelog" id="modalChangelog">
+                    <div style="text-align:center;color:#909399;padding:20px">加载中...</div>
+                </div>
+            </div>
+            <div class="update-modal-footer">
+                <button class="btn btn-secondary" onclick="hideUpdateModal()">稍后再说</button>
+                <button class="btn btn-primary" onclick="doUpdateFromModal()">立即更新</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .update-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .update-modal {
+            background: #fff;
+            border-radius: 16px;
+            width: 480px;
+            max-width: 90vw;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s ease;
+        }
+        .update-modal-header {
+            background: var(--primary-gradient, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
+            color: white;
+            padding: 24px 24px 20px;
+            position: relative;
+        }
+        .update-modal-icon {
+            font-size: 36px;
+            margin-bottom: 8px;
+        }
+        .update-modal-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+        .update-modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        .update-modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .update-modal-body {
+            padding: 20px 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .update-version-info {
+            background: #f5f7fa;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .version-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+        }
+        .version-label {
+            color: #909399;
+            font-size: 13px;
+        }
+        .version-value {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .version-value.current {
+            color: #909399;
+            background: #f4f4f5;
+        }
+        .version-value.latest {
+            color: #67c23a;
+            background: #f0f9eb;
+        }
+        .version-arrow {
+            text-align: center;
+            color: #67c23a;
+            font-size: 18px;
+            margin: 2px 0;
+        }
+        .update-meta {
+            color: #909399;
+            font-size: 12px;
+            margin-bottom: 16px;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .update-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .update-changelog-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: #303133;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #ebeef5;
+        }
+        .changelog-count {
+            font-size: 12px;
+            color: #909399;
+            font-weight: normal;
+            background: #ecf5ff;
+            color: #409eff;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .update-changelog {
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .changelog-item {
+            display: flex;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f2f6fc;
+        }
+        .changelog-item:last-child {
+            border-bottom: none;
+        }
+        .changelog-type {
+            flex-shrink: 0;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+            height: fit-content;
+            margin-top: 1px;
+        }
+        .changelog-content {
+            flex: 1;
+            min-width: 0;
+        }
+        .changelog-msg {
+            font-size: 13px;
+            color: #303133;
+            line-height: 1.5;
+            word-break: break-all;
+        }
+        .changelog-meta {
+            font-size: 11px;
+            color: #c0c4cc;
+            margin-top: 2px;
+        }
+        .changelog-meta span + span::before {
+            content: '·';
+            margin: 0 4px;
+        }
+        .update-modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #ebeef5;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+    </style>
+
+    <script>
+        const API_BASE = (function() {
+            const protocol = window.location.protocol;
+            const host = window.location.host;
+            const path = window.location.pathname;
+            const baseDir = path.substring(0, path.lastIndexOf('/'));
+            return protocol + '//' + host + baseDir + '/mx.php';
+        })();
+
+        const MENU_CONFIG = [
+            {
+                group: '工作台',
+                items: [
+                    { page: 'dashboard', icon: '🏠', text: '数据概览', badge: 'NEW' },
+                    { page: 'history', icon: '📜', text: '分析历史' },
+                    { page: 'batch', icon: '📦', text: '批量分析' },
+                ]
+            },
+            {
+                group: 'AI智能处理',
+                items: [
+                    { page: 'ai_skip', icon: '🤖', text: 'AI自动去广告', badge: 'HOT' },
+                    { page: 'ai_insert', icon: '📺', text: 'AI插播识别' },
+                    { page: 'ai_subtitle', icon: '📝', text: 'AI滚动字幕' },
+                    { page: 'ai_watermark', icon: '💧', text: 'AI水印处理' },
+                ]
+            },
+            {
+                group: '核心功能',
+                items: [
+                    { page: 'analyze', icon: '🎯', text: '视频分析' },
+                    { page: 'rules', icon: '📋', text: '规则管理' },
+                ]
+            },
+            {
+                group: '资源管理',
+                items: [
+                    { page: 'sites', icon: '🌐', text: '资源站管理' },
+                    { page: 'ai_autolearn', icon: '🧠', text: 'AI自动学习', badge: 'NEW' },
+                    { page: 'official_sites', icon: '⭐', text: '推荐采集' },
+                    { page: 'official_replace', icon: '🔄', text: '官替管理' },
+                ]
+            },
+            {
+                group: '接口工具',
+                items: [
+                    { page: 'moxi_api', icon: '⚡', text: '沫兮API' },
+                    { page: 'sniffer', icon: '🔍', text: '嗅探设置' },
+
+                    { icon: '📚', text: 'API文档', action: "window.open('api_doc.php', '_blank')" },
+                    { icon: '🔌', text: '代理池管理', action: "location.href='proxy/proxy_admin.php'" },
+                ]
+            },
+            {
+                group: '系统管理',
+                items: [
+                    { page: 'database', icon: '🗄️', text: '数据库管理' },
+                    { page: 'announcement', icon: '📢', text: '公告管理' },
+                    { page: 'play', icon: '▶️', text: '在线播放' },
+                    { page: 'update', icon: '🔧', text: '系统更新' },
+                    { page: 'autoupdate', icon: '🔄', text: '自动更新/维护', badge: '进度条' },
+                    { page: 'auth', icon: '🔐', text: '授权管理' },
+                ]
+            }
+        ];
+
+        function renderSidebarMenu() {
+            const container = document.getElementById('sidebarMenu');
+            if (!container) return;
+            let html = '';
+            MENU_CONFIG.forEach(group => {
+                html += '<div class="menu-group">';
+                html += '<div class="menu-group-title">' + escapeHtml(group.group) + '</div>';
+                group.items.forEach(item => {
+                    const dataPage = item.page ? ' data-page="' + item.page + '"' : '';
+                    const onclick = item.action ? ' onclick="' + item.action + '"' : '';
+                    const activeClass = item.page === 'dashboard' ? ' active' : '';
+                    const badgeHtml = item.badge ? '<span class="menu-badge">' + escapeHtml(item.badge) + '</span>' : '';
+                    html += '<div class="nav-item' + activeClass + '"' + dataPage + onclick + '>';
+                    html += '<span class="menu-icon">' + item.icon + '</span>';
+                    html += '<span class="menu-text">' + escapeHtml(item.text) + '</span>';
+                    html += badgeHtml;
+                    html += '</div>';
+                });
+                html += '</div>';
+            });
+            container.innerHTML = html;
+        }
+
+        let currentAnalysis = null;
+        let currentSegmentTab = 'ad';
+        let editingRules = null;
+        let dp = null;
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.textContent = message;
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        /**
+         * 在指定容器内显示「请稍后 + 进度条」
+         * @param {HTMLElement|string} container 容器元素或其 ID
+         * @param {Object} opts
+         *   label:       文案（默认"请稍候，正在处理中..."）
+         *   total:       总数量（有确定进度时传；不传则用不确定进度动画）
+         *   current:     当前进度（0 起步）
+         *   extraText:   附加在进度条下方的文字（如 0/10 并发:3）
+         *   indeterminateClass: 仅作样式标记
+         * @returns {function} update({ current, total, label, extraText, done }) 调用此函数更新进度，done=true 时清空
+         */
+        function showLoadingWithProgress(container, opts = {}) {
+            const el = typeof container === 'string' ? document.getElementById(container) : container;
+            if (!el) return function () {};
+
+            const labelText = opts.label || '请稍候，正在处理中...';
+            const total = opts.total ? Math.max(1, parseInt(opts.total, 10) || 0) : 0;
+            const current = Math.max(0, parseInt(opts.current, 10) || 0);
+            const hasDeterminate = total > 0;
+            const pct = hasDeterminate ? Math.min(100, Math.round(current * 100 / total)) : 0;
+            const extra = opts.extraText || '';
+
+            el.innerHTML = `
+                <div class="loading-wrapper">
+                    <div class="loading-label">${escapeHtml(labelText)}</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill ${hasDeterminate ? '' : 'indeterminate'}"
+                             data-progress-fill
+                             style="width:${pct}%"></div>
+                    </div>
+                    <div class="progress-bar-text" data-progress-text>
+                        ${hasDeterminate ? (pct + ' %  (' + current + '/' + total + ')') : '正在处理中，请稍候...'}
+                        ${extra ? '  ·  ' + escapeHtml(extra) : ''}
+                    </div>
+                </div>
+            `;
+
+            return function update(state = {}) {
+                if (state.done) { el.innerHTML = ''; return; }
+                const fill = el.querySelector('[data-progress-fill]');
+                const text = el.querySelector('[data-progress-text]');
+                const lab = el.querySelector('.loading-label');
+                if (state.label != null && lab) lab.firstChild
+                    ? lab.childNodes[0].nodeValue = state.label
+                    : lab.innerHTML = escapeHtml(state.label);
+
+                const newTotal = state.total != null ? Math.max(1, parseInt(state.total, 10) || 0) : total;
+                const newCurrent = state.current != null ? Math.max(0, parseInt(state.current, 10) || 0) : current;
+                const newExtra = state.extraText != null ? state.extraText : extra;
+                const newDeterminate = newTotal > 0;
+
+                if (fill) {
+                    if (newDeterminate) {
+                        fill.classList.remove('indeterminate');
+                        const np = Math.min(100, Math.round(newCurrent * 100 / newTotal));
+                        fill.style.position = '';
+                        fill.style.left = '';
+                        fill.style.width = np + '%';
+                    } else {
+                        fill.classList.add('indeterminate');
+                        fill.style.width = '';
+                    }
+                }
+                if (text) {
+                    text.innerHTML = newDeterminate
+                        ? (Math.min(100, Math.round(newCurrent * 100 / newTotal)) + ' %  (' + newCurrent + '/' + newTotal + ')'
+                           + (newExtra ? '  ·  ' + escapeHtml(newExtra) : ''))
+                        : ('正在处理中，请稍候...' + (newExtra ? '  ·  ' + escapeHtml(newExtra) : ''));
+                }
+            };
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function handleNavClick(item) {
+            if (!item.dataset.page) return;
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            item.classList.add('active');
+            const pageId = 'page-' + item.dataset.page;
+            const pageEl = document.getElementById(pageId);
+            if (pageEl) pageEl.classList.add('active');
+            const page = item.dataset.page;
+            if (page === 'rules') refreshRules();
+            if (page === 'sites') refreshSites();
+            if (page === 'ai_autolearn') refreshAiAutoLearn();
+            if (page === 'auth') refreshAuthInfo();
+            if (page === 'update') { checkUpdate(); loadVersion(); loadBackupList(); }
+            if (page === 'database') checkDbStatus();
+            if (page === 'sniffer') loadSnifferConfig();
+        }
+
+        document.addEventListener('click', (e) => {
+            const item = e.target.closest('.nav-item');
+            if (item && item.dataset.page) {
+                handleNavClick(item);
+            }
+        });
+
+        async function analyzeVideo() {
+            const url = document.getElementById('analyzeUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '分析中...';
+            document.getElementById('analyzeResult').style.display = 'none';
+            try {
+                const res = await fetch(API_BASE + '?action=analyze&url=' + encodeURIComponent(url));
+
+                let data;
+                let text;
+                try {
+                    text = await res.text();
+                    data = JSON.parse(text);
+                } catch (jsonErr) {
+                    throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                }
+
+                if (!data.success) throw new Error(data.message);
+                currentAnalysis = data;
+                renderAnalysis(data);
+                document.getElementById('analyzeResult').style.display = 'block';
+                saveToHistory(url, 'analyze', data);
+                showToast('分析完成', 'success');
+            } catch (e) {
+                showToast('分析失败: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '开始分析';
+            }
+        }
+
+        let analyzeBaseUrl = '';
+
+        function renderAnalysis(data) {
+            const url = document.getElementById('analyzeUrl').value.trim();
+            analyzeBaseUrl = API_BASE + '?action=mxjx&url=' + encodeURIComponent(url);
+            updateAnalyzeMxjxUrl();
+
+            const bannerEl = document.getElementById('fastModeBanner');
+            const detailGrid = document.getElementById('detailGrid');
+            const segmentCard = document.querySelector('#page-analyze .card:nth-of-type(4)');
+            const actionCard = document.querySelector('#page-analyze .card:nth-of-type(5)');
+
+            if (data.fastMode) {
+                bannerEl.style.display = 'flex';
+                bannerEl.innerHTML = `
+                    <div class="icon">⚡</div>
+                    <div class="content">
+                        <div class="title">快速模式 - 已有域名规则<span class="domain-tag">${data.domain}</span></div>
+                        <div class="desc">${data.message || '检测到已有域名规则，使用规则快速去广告，无需重复分析'}</div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="goToRules()">查看规则</button>
+                `;
+                if (detailGrid) detailGrid.style.display = 'none';
+                if (segmentCard) segmentCard.style.display = 'none';
+            } else {
+                bannerEl.style.display = 'none';
+                if (detailGrid) detailGrid.style.display = 'grid';
+                if (segmentCard) segmentCard.style.display = 'block';
+            }
+
+            const stats = data.stats;
+            const pct = stats.totalSegments > 0 ? (stats.adSegments / stats.totalSegments * 100).toFixed(1) : 0;
+
+            if (data.fastMode) {
+                document.getElementById('statsGrid').innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.totalSegments}</div>
+                        <div class="stat-label">总片段数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value danger">${stats.adSegments}</div>
+                        <div class="stat-label">广告片段数 (${pct}%)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value success">${stats.keptSegments}</div>
+                        <div class="stat-label">保留片段数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value warning">${(stats.savedDuration / 60).toFixed(1)}分钟</div>
+                        <div class="stat-label">节省时长</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value success">${stats.adPercentage}%</div>
+                        <div class="stat-label">广告占比</div>
+                    </div>
+                `;
+            } else {
+                document.getElementById('statsGrid').innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.totalSegments}</div>
+                        <div class="stat-label">总片段数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value danger">${stats.adSegments}</div>
+                        <div class="stat-label">广告片段数 (${pct}%)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value warning">${stats.discontinuityCount}</div>
+                        <div class="stat-label">DISCONTINUITY 标记</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.sequenceJumpCount}</div>
+                        <div class="stat-label">序列号跳跃</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value success">${stats.adClusterCount}</div>
+                        <div class="stat-label">广告聚类</div>
+                    </div>
+                `;
+            }
+
+            if (data.fastMode) return;
+
+            const jumps = data.sequenceJumps;
+            const jumpHtml = jumps.length === 0
+                ? '<div class="empty">未检测到明显序列号跳跃</div>'
+                : jumps.map(j => `
+                    <div class="jump-item">
+                        <div style="font-family:monospace;font-size:11px;color:#909399;margin-bottom:4px">
+                            索引 ${j.index}
+                        </div>
+                        <div>
+                            <span style="font-family:monospace">${basename(j.prevUri)}</span>
+                            <span class="jump-arrow"> → </span>
+                            <span style="font-family:monospace">${basename(j.currentUri)}</span>
+                        </div>
+                        <div style="margin-top:4px;color:#e6a23c">
+                            跳跃: ${j.jump > 0 ? '+' : ''}${j.jump} (${j.prevSeq} → ${j.currentSeq})
+                        </div>
+                    </div>
+                `).join('');
+            document.getElementById('jumpList').innerHTML = jumpHtml;
+
+            const dist = data.durationDistribution;
+            if (dist && dist.buckets) {
+                const buckets = Object.entries(dist.buckets).sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
+                const maxCount = Math.max(...buckets.map(b => b[1]));
+                const chartHtml = buckets.map(([dur, count]) => {
+                    const h = (count / maxCount * 100);
+                    return `<div class="bar" style="height:${h}%" title="时长: ${dur}s, 数量: ${count}"></div>`;
+                }).join('');
+                document.getElementById('durationChart').innerHTML = chartHtml;
+                document.getElementById('durationStats').innerHTML = `
+                    最短: ${dist.min.toFixed(2)}s | 最长: ${dist.max.toFixed(2)}s | 平均: ${dist.avg.toFixed(2)}s
+                `;
+            }
+
+            renderSegmentList();
+
+            const learnStatusEl = document.getElementById('learnStatus');
+            const learnBtn = document.getElementById('learnBtn');
+            if (learnStatusEl && learnBtn) {
+                if (data.fastMode) {
+                    learnBtn.style.display = 'none';
+                    learnStatusEl.style.display = 'block';
+                    learnStatusEl.innerHTML = '<span style="color:#67c23a">✅ 快速模式：已有域名规则，直接使用规则去广告</span>（学习次数: ' + (data.learn_count || 0) + '次）';
+                } else if (data.autoLearned) {
+                    learnBtn.style.display = 'none';
+                    learnStatusEl.style.display = 'block';
+                    learnStatusEl.innerHTML = '<span style="color:#67c23a">✅ 自动学习完成，规则已更新</span>（学习次数: ' + (data.learn_count || 0) + '次）';
+                } else {
+                    learnBtn.style.display = 'inline-block';
+                    learnStatusEl.style.display = 'none';
+                }
+            }
+        }
+
+        function basename(path) {
+            return path.split('/').pop();
+        }
+
+        function switchSegmentTab(el, tab) {
+            document.querySelectorAll('#page-analyze .tab-item').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            currentSegmentTab = tab;
+            renderSegmentList();
+        }
+
+        function renderSegmentList() {
+            if (!currentAnalysis) return;
+            const listEl = document.getElementById('segmentList');
+
+            if (currentSegmentTab === 'ad') {
+                const ads = currentAnalysis.adSegments;
+                if (!ads || ads.length === 0) {
+                    listEl.innerHTML = '<div class="empty">未检测到广告片段</div>';
+                    return;
+                }
+                listEl.innerHTML = ads.map((s, idx) => {
+                    const uri = s.uri || (s.segment && s.segment.uri) || '';
+                    const duration = s.duration || (s.segment && s.segment.duration) || 0;
+                    const matchedRules = s.matchedRules || [];
+                    return `
+                    <div class="segment-item ad">
+                        <div>
+                            <span class="segment-name">${basename(uri) || ('片段#' + idx)}</span>
+                            ${matchedRules.map(r => `<span class="tag tag-red">${r.name}</span>`).join('')}
+                        </div>
+                        <span class="segment-duration">${parseFloat(duration).toFixed(2)}s</span>
+                    </div>
+                `}).join('');
+            } else if (currentSegmentTab === 'cluster') {
+                const clusters = currentAnalysis.adClusters;
+                if (!clusters || clusters.length === 0) {
+                    listEl.innerHTML = '<div class="empty">无广告聚类</div>';
+                    return;
+                }
+                let totalAdDuration = 0;
+                const ads = currentAnalysis.adSegments || [];
+                ads.forEach(s => {
+                    const dur = s.duration || (s.segment && s.segment.duration) || 0;
+                    totalAdDuration += dur;
+                });
+                listEl.innerHTML = clusters.map((c, i) => {
+                    return `
+                        <div class="segment-item ad">
+                            <div>
+                                <span class="tag tag-red">聚类 #${i + 1}</span>
+                                <span style="margin-left:8px">索引 ${c.start} - ${c.end}</span>
+                            </div>
+                            <span class="segment-duration">${c.count}个片段 / ${parseFloat(c.duration || 0).toFixed(2)}s</span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                const segs = currentAnalysis.allSegments;
+                if (!segs || segs.length === 0) {
+                    listEl.innerHTML = '<div class="empty">无片段数据</div>';
+                    return;
+                }
+                listEl.innerHTML = segs.map((s, i) => {
+                    const index = s.index ?? s.i ?? i;
+                    const isAd = s.isAd ?? (s.a === 1) ?? false;
+                    const uri = s.uri || (s.segment && s.segment.uri) || '';
+                    const duration = s.duration || (s.segment && s.segment.duration) || s.d || 0;
+                    const matchedRules = s.matchedRules || [];
+                    const discontinuity = s.discontinuity || (s.segment && s.segment.discontinuity) || false;
+                    return `
+                    <div class="segment-item ${isAd ? 'ad' : ''}">
+                        <div>
+                            <span style="color:#909399;font-size:11px;margin-right:8px">#${index}</span>
+                            <span class="segment-name">${basename(uri) || ('片段#' + index)}</span>
+                            ${isAd && matchedRules.length > 0 ? matchedRules.map(r => `<span class="tag tag-red">${r.name}</span>`).join('') : ''}
+                            ${discontinuity ? '<span class="tag tag-orange">DISCON</span>' : ''}
+                        </div>
+                        <span class="segment-duration">${parseFloat(duration).toFixed(2)}s</span>
+                    </div>
+                `}).join('');
+            }
+        }
+
+        async function generateRules() {
+            if (!currentAnalysis) { showToast('请先分析视频', 'error'); return; }
+            try {
+                const res = await fetch(API_BASE + '?action=rules/generate&url=' + encodeURIComponent(currentAnalysis.url));
+
+                let data;
+                let text;
+                try {
+                    text = await res.text();
+                    data = JSON.parse(text);
+                } catch (jsonErr) {
+                    throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                }
+
+                if (!data.success) throw new Error(data.message);
+                editingRules = data.rules;
+                document.querySelector('.nav-item[data-page="rules"]').click();
+                showRuleEditor(data.rules, true);
+                showToast('规则已生成，请编辑保存', 'success');
+            } catch (e) {
+                showToast('生成规则失败: ' + e.message, 'error');
+            }
+        }
+
+        async function learnRules() {
+            if (!currentAnalysis) { showToast('请先分析视频', 'error'); return; }
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '学习中...';
+            try {
+                const learnUrl = currentAnalysis.mediaUrl || currentAnalysis.url;
+                const res = await fetch(API_BASE + '?action=rules/learn&url=' + encodeURIComponent(learnUrl));
+
+                let data;
+                let text;
+                try {
+                    text = await res.text();
+                    data = JSON.parse(text);
+                } catch (jsonErr) {
+                    throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                }
+
+                if (!data.success) throw new Error(data.message);
+                const learnStatusEl = document.getElementById('learnStatus');
+                if (learnStatusEl) {
+                    learnStatusEl.style.display = 'block';
+                    learnStatusEl.innerHTML = '<span style="color:#67c23a">✅ 学习完成，规则已更新</span>（学习次数: ' + data.learn_count + '次）';
+                }
+                btn.style.display = 'none';
+                showToast('规则学习成功', 'success');
+            } catch (e) {
+                showToast('学习失败: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '学习并更新规则';
+            }
+        }
+
+        function goToRules() {
+            document.querySelector('.nav-item[data-page="rules"]').click();
+        }
+
+        let currentAiSkipData = null;
+        let aiSkipSegmentTab = 'ad';
+
+        async function aiSmartProcess() {
+            const url = document.getElementById('aiSkipUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+
+            const autoSave = document.getElementById('aiSkipAutoSave').checked;
+
+            document.getElementById('smartProcessSteps').style.display = 'block';
+            document.getElementById('smartProcessStepList').innerHTML = '<div style="padding:4px 0">⏳ 正在初始化...</div>';
+            document.getElementById('aiSkipResult').style.display = 'none';
+
+            try {
+                const params = new URLSearchParams({
+                    action: 'ai/smart_process',
+                    url: url,
+                    mode: 'full',
+                    auto_save: autoSave ? '1' : '0'
+                });
+
+                const res = await fetch(API_BASE + '?' + params.toString());
+                const data = await res.json();
+
+                if (!data.success) throw new Error(data.message || '处理失败');
+
+                const result = data.data;
+
+                if (result.steps && result.steps.length > 0) {
+                    document.getElementById('smartProcessStepList').innerHTML = result.steps.map(s =>
+                        '<div style="padding:4px 0">' + s + '</div>'
+                    ).join('');
+                }
+
+                currentAiSkipData = {
+                    data: {
+                        stats: result.stats || {},
+                        process_time: result.process_time ? result.process_time + 'ms' : '0ms',
+                        adClusters: result.ad_clusters || [],
+                        ad_clusters: result.ad_clusters || [],
+                        discontinuityRegexRules: result.discontinuity_regex_rules || [],
+                        discontinuity_regex_rules: result.discontinuity_regex_rules || [],
+                        rules: result.auto_rules?.rules || result.auto_rules || [],
+                        ad_segments: (result.filtered?.removedSegments || []).map(s => ({
+                            uri: s.uri,
+                            duration: s.duration,
+                            mediaSequence: s.mediaSequence,
+                            isAd: true,
+                            adReasons: s.adInfo?.matchedRules || []
+                        })),
+                        content_segments: (result.filtered?.segments || []).map(s => ({
+                            uri: s.uri,
+                            duration: s.duration,
+                            mediaSequence: s.mediaSequence,
+                            isAd: false
+                        }))
+                    }
+                };
+
+                renderAiSkipResult(currentAiSkipData);
+                document.getElementById('aiSkipResult').style.display = 'block';
+                document.getElementById('aiSkipOutputUrl').textContent = API_BASE + '?action=mxjx&url=' + encodeURIComponent(url);
+
+                saveToHistory(url, 'ai_smart', data);
+                showToast('✨ 智能处理完成！', 'success');
+
+            } catch (e) {
+                document.getElementById('smartProcessStepList').innerHTML += '<div style="padding:4px 0;color:#f56c6c">❌ 处理失败: ' + e.message + '</div>';
+                showToast('处理失败: ' + e.message, 'error');
+            }
+        }
+
+        async function aiSmartAnalyze() {
+            const url = document.getElementById('aiSkipUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+
+            document.getElementById('smartProcessSteps').style.display = 'block';
+            document.getElementById('smartProcessStepList').innerHTML = '<div style="padding:4px 0">🔍 正在进行智能分析...</div>';
+            document.getElementById('aiSkipResult').style.display = 'none';
+
+            try {
+                const params = new URLSearchParams({
+                    action: 'ai/smart_process',
+                    url: url,
+                    mode: 'analyze'
+                });
+
+                const res = await fetch(API_BASE + '?' + params.toString());
+                const data = await res.json();
+
+                if (!data.success) throw new Error(data.message || '分析失败');
+
+                const result = data.data;
+
+                document.getElementById('smartProcessStepList').innerHTML =
+                    '<div style="padding:4px 0">✅ 解析完成，共 ' + (result.total_segments || 0) + ' 个片段</div>' +
+                    '<div style="padding:4px 0">🔍 智能分析完成</div>' +
+                    '<div style="padding:4px 0">🎯 识别出 ' + (result.ad_clusters || []).length + ' 个广告片段集群</div>' +
+                    '<div style="padding:4px 0">⚙️ 生成 ' + (result.discontinuity_regex_rules || []).length + ' 条 DISCONTINUITY 正则规则</div>' +
+                    '<div style="padding:4px 0">✨ 分析完成！</div>';
+
+                currentAiSkipData = {
+                    data: {
+                        stats: {
+                            totalSegments: result.total_segments || 0,
+                            adSegments: result.ad_summary?.ad_count || 0,
+                            ad_percentage: result.ad_summary?.ad_percentage || 0,
+                            discontinuity_count: result.analysis?.discontinuityCount || 0,
+                            ad_cluster_count: (result.ad_clusters || []).length
+                        },
+                        process_time: '0ms',
+                        adClusters: result.ad_clusters || [],
+                        ad_clusters: result.ad_clusters || [],
+                        discontinuityRegexRules: result.discontinuity_regex_rules || [],
+                        discontinuity_regex_rules: result.discontinuity_regex_rules || [],
+                        rules: result.auto_rules?.rules || result.auto_rules || [],
+                        ad_segments: [],
+                        content_segments: []
+                    }
+                };
+
+                renderAiSkipAdClusters(currentAiSkipData);
+                renderAiSkipGeneratedRules(currentAiSkipData);
+                document.getElementById('aiSkipResult').style.display = 'block';
+
+                saveToHistory(url, 'ai_analyze', data);
+                showToast('🔍 智能分析完成！', 'success');
+
+            } catch (e) {
+                document.getElementById('smartProcessStepList').innerHTML += '<div style="padding:4px 0;color:#f56c6c">❌ 分析失败: ' + e.message + '</div>';
+                showToast('分析失败: ' + e.message, 'error');
+            }
+        }
+
+        async function aiProDetect() {
+            const url = document.getElementById('aiSkipUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+
+            document.getElementById('smartProcessSteps').style.display = 'block';
+            document.getElementById('smartProcessStepList').innerHTML = '<div style="padding:4px 0">🔬 正在进行专业级广告检测...</div>';
+            document.getElementById('proDetectCard').style.display = 'none';
+            document.getElementById('aiSkipResult').style.display = 'none';
+
+            try {
+                const params = new URLSearchParams({
+                    action: 'ai/pro_detect',
+                    url: url
+                });
+
+                const res = await fetch(API_BASE + '?' + params.toString());
+                const data = await res.json();
+
+                if (!data.success) throw new Error(data.message || '检测失败');
+
+                const result = data.data;
+                const pro = result.professional_analysis || {};
+
+                document.getElementById('smartProcessStepList').innerHTML =
+                    '<div style="padding:4px 0">✅ 解析完成，共 ' + (result.total_segments || 0) + ' 个片段</div>' +
+                    '<div style="padding:4px 0">🔬 统计学异常检测完成</div>' +
+                    '<div style="padding:4px 0">📊 时长聚类分析完成</div>' +
+                    '<div style="padding:4px 0">🔀 DISCONTINUITY 上下文分析完成</div>' +
+                    '<div style="padding:4px 0">🎯 识别 ' + (pro.ad_segment_count || 0) + ' 个广告片段</div>' +
+                    '<div style="padding:4px 0">📦 ' + (pro.ad_cluster_count || 0) + ' 个广告簇</div>' +
+                    '<div style="padding:4px 0">✨ 专业检测完成！</div>';
+
+                renderProDetectResult(pro);
+                document.getElementById('proDetectCard').style.display = 'block';
+                document.getElementById('aiSkipResult').style.display = 'block';
+
+                // 同时渲染广告簇和规则
+                currentAiSkipData = {
+                    data: {
+                        stats: {
+                            totalSegments: result.total_segments || 0,
+                            adSegments: pro.ad_segment_count || 0,
+                            ad_percentage: pro.ad_percentage || 0,
+                            ad_cluster_count: pro.ad_cluster_count || 0
+                        },
+                        process_time: '0ms',
+                        adClusters: result.ad_clusters || [],
+                        ad_clusters: result.ad_clusters || [],
+                        discontinuityRegexRules: result.discontinuity_regex_rules || [],
+                        discontinuity_regex_rules: result.discontinuity_regex_rules || [],
+                        rules: result.auto_rules?.rules || result.auto_rules || [],
+                        ad_segments: (pro.ad_segments || []).map(s => ({
+                            uri: s.uri,
+                            duration: s.duration,
+                            mediaSequence: s.index,
+                            isAd: true,
+                            adReasons: s.reasons || [],
+                            score: s.score,
+                            confidence: s.confidence
+                        })),
+                        content_segments: (pro.content_segments || []).map(s => ({
+                            uri: s.uri,
+                            duration: s.duration,
+                            mediaSequence: s.index,
+                            isAd: false,
+                            score: s.score
+                        }))
+                    }
+                };
+                renderAiSkipAdClusters(currentAiSkipData);
+                renderAiSkipGeneratedRules(currentAiSkipData);
+                renderAiSkipSegmentList();
+
+                saveToHistory(url, 'pro_detect', data);
+                showToast('🔬 专业检测完成！', 'success');
+
+            } catch (e) {
+                document.getElementById('smartProcessStepList').innerHTML += '<div style="padding:4px 0;color:#f56c6c">❌ 检测失败: ' + e.message + '</div>';
+                showToast('检测失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderProDetectResult(pro) {
+            const container = document.getElementById('proDetectResult');
+            if (!pro || !pro.success) {
+                container.innerHTML = '<div style="text-align:center;color:#909399;padding:20px">暂无专业检测数据</div>';
+                return;
+            }
+
+            const stats = pro.duration_stats || {};
+            const conf = pro.confidence_summary || {};
+            const details = pro.analysis_details || {};
+
+            let html = '';
+
+            // 统计概览
+            html += '<div class="stats-grid" style="margin-bottom:16px">';
+            html += '<div class="stat-card"><div class="stat-value" style="color:#667eea">' + (pro.total_segments || 0) + '</div><div class="stat-label">总片段</div></div>';
+            html += '<div class="stat-card"><div class="stat-value" style="color:#f56c6c">' + (pro.ad_segment_count || 0) + '</div><div class="stat-label">广告片段</div></div>';
+            html += '<div class="stat-card"><div class="stat-value" style="color:#67c23a">' + (pro.content_segment_count || 0) + '</div><div class="stat-label">内容片段</div></div>';
+            html += '<div class="stat-card"><div class="stat-value" style="color:#e6a23c">' + (pro.ad_percentage || 0) + '%</div><div class="stat-label">广告占比</div></div>';
+            html += '</div>';
+
+            // 时长统计
+            html += '<div style="padding:12px;background:#f5f7fa;border-radius:8px;margin-bottom:12px">';
+            html += '<div style="font-weight:600;color:#303133;margin-bottom:8px">📊 时长统计分析</div>';
+            html += '<div style="font-size:12px;color:#606266;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px">';
+            html += '<div>均值: ' + (stats.mean || 0) + 's</div>';
+            html += '<div>中位数: ' + (stats.median || 0) + 's</div>';
+            html += '<div>标准差: ' + (stats.stddev || 0) + '</div>';
+            html += '<div>众数: ' + (stats.mode || 0) + 's</div>';
+            html += '<div>最小: ' + (stats.min || 0) + 's</div>';
+            html += '<div>最大: ' + (stats.max || 0) + 's</div>';
+            html += '<div>Q1: ' + (stats.q1 || 0) + 's</div>';
+            html += '<div>Q3: ' + (stats.q3 || 0) + 's</div>';
+            html += '</div></div>';
+
+            // 置信度分布
+            if (conf.very_high !== undefined) {
+                html += '<div style="padding:12px;background:#f5f7fa;border-radius:8px;margin-bottom:12px">';
+                html += '<div style="font-weight:600;color:#303133;margin-bottom:8px">🎯 置信度分布</div>';
+                html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+                html += '<span class="badge badge-danger">极高 ' + (conf.very_high || 0) + '</span>';
+                html += '<span class="badge badge-warning">高 ' + (conf.high || 0) + '</span>';
+                html += '<span class="badge badge-primary">中 ' + (conf.medium || 0) + '</span>';
+                html += '<span class="badge badge-info">低 ' + (conf.low || 0) + '</span>';
+                html += '<span class="badge badge-success">极低 ' + (conf.very_low || 0) + '</span>';
+                html += '</div></div>';
+            }
+
+            // 检测维度
+            if (details.statistical) {
+                const statAnomalies = details.statistical || {};
+                const anomalyCount = Object.keys(statAnomalies).length;
+                html += '<div style="padding:12px;background:#f5f7fa;border-radius:8px;margin-bottom:12px">';
+                html += '<div style="font-weight:600;color:#303133;margin-bottom:8px">🔬 检测维度</div>';
+                html += '<div style="font-size:12px;color:#606266;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px">';
+                html += '<div>📈 统计学异常: ' + anomalyCount + ' 个片段</div>';
+                const clusters = details.duration_clusters || {};
+                html += '<div>📊 时长聚类: 广告群 ' + (clusters.ad_cluster?.count || 0) + ' / 内容群 ' + (clusters.content_cluster?.count || 0) + '</div>';
+                const disc = details.discontinuity || {};
+                html += '<div>🔀 DISCONTINUITY: ' + (disc.count || 0) + ' 个标记, ' + (disc.ad_ranges?.length || 0) + ' 个广告范围</div>';
+                const seq = details.sequence || {};
+                html += '<div>🔢 序列号异常: ' + Object.keys(seq).length + ' 个</div>';
+                html += '</div></div>';
+            }
+
+            // 广告簇列表
+            if (pro.ad_clusters && pro.ad_clusters.length > 0) {
+                html += '<div style="font-weight:600;color:#303133;margin-bottom:8px">📦 广告簇详情</div>';
+                pro.ad_clusters.forEach((cluster, i) => {
+                    const posColor = cluster.position_type === 'opening' ? '#e6a23c' :
+                                     cluster.position_type === 'ending' ? '#909399' : '#f56c6c';
+                    html += '<div style="padding:12px;background:#fef0f0;border-radius:8px;margin-bottom:8px;border-left:4px solid ' + posColor + '">';
+                    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">';
+                    html += '<span style="font-weight:600">广告簇 #' + (i + 1) + ' · ' + (cluster.position || '未知') + '</span>';
+                    html += '<div style="display:flex;gap:6px">';
+                    html += '<span class="badge badge-danger">' + cluster.segment_count + ' 片段</span>';
+                    html += '<span class="badge badge-warning">评分 ' + (cluster.avg_score || 0) + '</span>';
+                    html += '<span class="badge badge-info">' + (cluster.total_duration || 0).toFixed(1) + 's</span>';
+                    html += '</div></div>';
+                    html += '<div style="font-size:12px;color:#606266">片段 #' + cluster.start + ' - #' + cluster.end + '，平均时长 ' + (cluster.avg_duration || 0) + 's</div>';
+                    if (cluster.reasons && cluster.reasons.length > 0) {
+                        html += '<div style="font-size:11px;color:#909399;margin-top:4px">原因: ' + cluster.reasons.join(', ') + '</div>';
+                    }
+                    html += '</div>';
+                });
+            }
+
+            container.innerHTML = html;
+        }
+
+        async function aiSkipVideo() {
+            const url = document.getElementById('aiSkipUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'AI处理中...';
+            document.getElementById('aiSkipResult').style.display = 'none';
+            try {
+                const safeguard = document.getElementById('aiSkipSafeguard').checked;
+                const autoLearn = document.getElementById('aiSkipAutoLearn').checked;
+                const deepAnalysis = document.getElementById('aiSkipDeepAnalysis').checked;
+                
+                const params = new URLSearchParams({
+                    action: 'ai/skip',
+                    url: url,
+                    safeguard: safeguard ? '1' : '0',
+                    auto_learn: autoLearn ? '1' : '0',
+                    deep_analysis: deepAnalysis ? '1' : '0'
+                });
+                
+                const res = await fetch(API_BASE + '?' + params.toString());
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                }
+
+                if (!data.success) throw new Error(data.message || '处理失败');
+                currentAiSkipData = data;
+                renderAiSkipResult(data);
+                document.getElementById('aiSkipResult').style.display = 'block';
+                saveToHistory(url, 'ai_skip', data);
+                showToast('AI去广告完成', 'success');
+            } catch (e) {
+                showToast('处理失败: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 AI 去广告';
+            }
+        }
+
+        function renderAiSkipResult(data) {
+            const url = document.getElementById('aiSkipUrl').value.trim();
+            const outputUrl = API_BASE + '?action=mxjx&url=' + encodeURIComponent(url);
+            document.getElementById('aiSkipOutputUrl').textContent = outputUrl;
+            
+            const stats = data.data?.stats || data.stats || {};
+            const statsHtml = `
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#667eea">${stats.totalSegments || stats.total_segments || 0}</div>
+                    <div class="stat-label">总片段数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#f56c6c">${stats.adSegments || stats.ad_segments || 0}</div>
+                    <div class="stat-label">广告片段</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#67c23a">${stats.keptSegments || stats.kept_segments || 0}</div>
+                    <div class="stat-label">保留片段</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#e6a23c">${(stats.adPercentage || stats.ad_percentage || 0).toFixed?.(1) || 0}%</div>
+                    <div class="stat-label">广告占比</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#409eff">${(stats.savedDuration || stats.saved_duration || 0).toFixed?.(1) || 0}s</div>
+                    <div class="stat-label">节省时长</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#909399">${data.data?.processTime || data.process_time || '0'}ms</div>
+                    <div class="stat-label">处理耗时</div>
+                </div>
+            `;
+            document.getElementById('aiSkipStats').innerHTML = statsHtml;
+            
+            renderAiSkipAdClusters(data);
+            renderAiSkipGeneratedRules(data);
+            renderAiSkipSegmentList();
+        }
+
+        function renderAiSkipAdClusters(data) {
+            const container = document.getElementById('aiSkipAdClusters');
+            const adClusters = data.data?.adClusters || data.data?.ad_clusters || [];
+            
+            if (adClusters.length === 0) {
+                container.innerHTML = '<div style="text-align:center;color:#67c23a;padding:20px">✅ 未检测到明显的广告簇</div>';
+                return;
+            }
+
+            let html = '<div style="margin-bottom:12px;font-size:13px;color:#606266">共检测到 <b style="color:#f56c6c">' + adClusters.length + '</b> 个广告片段集群</div>';
+            html += adClusters.map((cluster, i) => {
+                const positionMap = {
+                    'opening': '片头',
+                    'ending': '片尾',
+                    'middle': '中间',
+                    'unknown': '未知位置'
+                };
+                const posText = positionMap[cluster.position] || cluster.position || cluster.position_label || '未知';
+                const posColor = cluster.position === 'opening' || cluster.position_type === 'opening' ? '#e6a23c' : 
+                                 cluster.position === 'ending' || cluster.position_type === 'ending' ? '#909399' : 
+                                 '#f56c6c';
+
+                const confidence = cluster.confidence ?? 70;
+                const confColor = confidence >= 90 ? '#67c23a' : confidence >= 75 ? '#e6a23c' : confidence >= 60 ? '#f56c6c' : '#909399';
+
+                let discInfo = '';
+                if (cluster.has_discontinuity || cluster.discontinuity_count > 0) {
+                    discInfo = `<div style="display:flex;gap:6px;flex-wrap:wrap">
+                        <span class="badge badge-danger">DISCONTINUITY ×${cluster.discontinuity_count || 1}</span>
+                        ${cluster.discontinuity_positions && cluster.discontinuity_positions.length > 0 
+                            ? '<span class="badge badge-info">位置: #' + cluster.discontinuity_positions.join(',#') + '</span>' 
+                            : ''}
+                    </div>`;
+                }
+
+                let segmentList = '';
+                if (cluster.segments && cluster.segments.length > 0) {
+                    segmentList = '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #ebeef5">';
+                    segmentList += '<div style="font-size:11px;color:#909399;margin-bottom:4px">片段详情:</div>';
+                    segmentList += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+                    cluster.segments.forEach((seg, si) => {
+                        const discMark = seg.discontinuity ? '<span style="color:#f56c6c;margin-left:2px">🔀</span>' : '';
+                        segmentList += `<span style="font-size:11px;background:#fff;padding:2px 6px;border-radius:4px;border:1px solid #e4e7ed;color:#606266">
+                            #${seg.index} ${seg.duration}s${discMark}
+                        </span>`;
+                    });
+                    segmentList += '</div></div>';
+                }
+
+                return `
+                    <div style="padding:14px;background:#fef0f0;border-radius:10px;margin-bottom:10px;border-left:4px solid ${posColor}">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+                            <div style="font-weight:600;color:#303133">第 ${i + 1} 个广告簇 · ${posText}</div>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                <span class="badge badge-danger">${cluster.segment_count || cluster.count || 0} 个片段</span>
+                                <span class="badge badge-warning">${(cluster.total_duration || cluster.duration || 0).toFixed?.(1) || 0}s</span>
+                                <span class="badge" style="background:${confColor};color:white">置信度 ${confidence}%</span>
+                            </div>
+                        </div>
+                        <div style="font-size:12px;color:#606266;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px">
+                            <div>📊 平均时长: ${(cluster.avg_duration || cluster.avg_segment_duration || 0).toFixed?.(2) || 0}s</div>
+                            <div>📍 起始索引: #${cluster.start_index ?? cluster.start ?? '-'}</div>
+                            <div>📍 结束索引: #${cluster.end_index ?? cluster.end ?? '-'}</div>
+                            ${discInfo}
+                        </div>
+                        ${segmentList}
+                    </div>
+                `;
+            }).join('');
+            container.innerHTML = html;
+        }
+
+        let genRuleTab = 'discontinuity';
+
+        function switchGenRuleTab(el, tab) {
+            genRuleTab = tab;
+            document.querySelectorAll('#aiSkipGeneratedRules .tab-item').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            renderGenRuleContent();
+        }
+
+        function renderAiSkipGeneratedRules(data) {
+            const container = document.getElementById('aiSkipGeneratedRules');
+            const regexRules = data.data?.discontinuityRegexRules || data.data?.discontinuity_regex_rules || [];
+            
+            if (regexRules.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.style.display = 'block';
+            currentGenRuleData = data;
+            renderGenRuleContent();
+        }
+
+        let currentGenRuleData = null;
+
+        function renderGenRuleContent() {
+            const container = document.getElementById('genRuleContent');
+            const data = currentGenRuleData;
+            if (!data) return;
+
+            const regexRules = data.data?.discontinuityRegexRules || data.data?.discontinuity_regex_rules || [];
+            const rules = data.data?.rules || [];
+
+            if (genRuleTab === 'discontinuity') {
+                if (regexRules.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;color:#909399;padding:20px">暂未生成 DISCONTINUITY 正则规则</div>';
+                    return;
+                }
+                container.innerHTML = regexRules.map((rule, i) => {
+                    const conf = rule.confidence || 80;
+                    const confColor = conf === 100 ? '#67c23a' : conf >= 95 ? '#54a0ff' : conf >= 90 ? '#e6a23c' : conf >= 80 ? '#f56c6c' : '#909399';
+                    const confLabel = conf === 100 ? '极高' : conf >= 95 ? '很高' : conf >= 90 ? '高' : conf >= 80 ? '中' : '低';
+
+                    let extraInfo = '';
+                    if (rule.exact_duration) {
+                        extraInfo += `<div style="font-size:11px;color:#54a0ff;margin-top:4px">🎯 精确时长: ${rule.exact_duration}秒（数据来源: ${rule.duration_sources}个片段）</div>`;
+                    }
+                    if (rule.uniform_duration) {
+                        extraInfo += `<div style="font-size:11px;color:#54a0ff;margin-top:4px">📊 统一时长: ${rule.uniform_duration}秒</div>`;
+                    }
+                    if (rule.expected_count) {
+                        extraInfo += `<div style="font-size:11px;color:#54a0ff;margin-top:4px">🔢 预期片段数: ${rule.expected_count}个</div>`;
+                    }
+                    if (rule.discontinuity_pair_count) {
+                        extraInfo += `<div style="font-size:11px;color:#54a0ff;margin-top:4px">🔀 DISCONTINUITY 对: ${rule.discontinuity_pair_count}组</div>`;
+                    }
+
+                    return `
+                    <div style="padding:14px;background:#f5f7fa;border-radius:10px;margin-bottom:10px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+                            <div style="font-weight:600;color:#303133">${rule.name || '规则 ' + (i + 1)}</div>
+                            <div style="display:flex;gap:6px">
+                                <span class="badge" style="background:${confColor};color:white;font-weight:bold">${confLabel} ${conf}%</span>
+                            </div>
+                        </div>
+                        <div style="font-size:12px;color:#606266;margin-bottom:8px">${rule.description || ''}</div>
+                        <div style="background:#fff;padding:10px 12px;border-radius:6px;border:1px solid #e4e7ed;margin-bottom:8px">
+                            <div style="font-size:12px;color:#909399;margin-bottom:4px">正则表达式</div>
+                            <code style="font-family:monospace;font-size:12px;color:#f56c6c;word-break:break-all;display:block">${escapeHtml(rule.pattern || '')}</code>
+                        </div>
+                        ${rule.example ? `<div style="font-size:11px;color:#909399;margin-bottom:8px">示例: ${escapeHtml(rule.example)}</div>` : ''}
+                        ${extraInfo}
+                        <div style="display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onclick="copyText('${rule.pattern ? rule.pattern.replace(/'/g, "\\'") : ''}')">📋 复制正则</button>
+                            <button class="btn btn-success" style="font-size:12px;padding:4px 10px" onclick="saveGeneratedRule('regex', ${i})">💾 保存规则</button>
+                        </div>
+                    </div>
+                `}).join('');
+            } else if (genRuleTab === 'duration') {
+                const durationRules = rules.filter(r => r.category === 'duration' || r.type === 'duration');
+                if (durationRules.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;color:#909399;padding:20px">暂未生成时长规则</div>';
+                    return;
+                }
+                container.innerHTML = durationRules.map((rule, i) => {
+                    const conf = rule.confidence || 75;
+                    const confColor = conf >= 90 ? '#67c23a' : conf >= 75 ? '#e6a23c' : '#f56c6c';
+                    return `
+                    <div style="padding:14px;background:#f5f7fa;border-radius:10px;margin-bottom:10px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                            <div style="font-weight:600;color:#303133">${rule.name || '时长规则 ' + (i + 1)}</div>
+                            <span class="badge" style="background:${confColor};color:white">${conf}%</span>
+                        </div>
+                        <div style="font-size:12px;color:#606266">${rule.description || rule.reason || ''}</div>
+                        <div style="font-size:11px;color:#909399;margin-top:4px">
+                            ${rule.operator ? `条件: 时长 ${rule.operator} ${rule.threshold}秒` : ''}
+                            ${rule.weight ? ` · 权重: ${rule.weight}` : ''}
+                        </div>
+                    </div>
+                `}).join('');
+            } else if (genRuleTab === 'sequence') {
+                const seqRules = rules.filter(r => r.category === 'sequence' || r.type === 'sequence_jump');
+                if (seqRules.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;color:#909399;padding:20px">暂未生成序列号规则</div>';
+                    return;
+                }
+                container.innerHTML = seqRules.map((rule, i) => {
+                    const conf = rule.confidence || 80;
+                    const confColor = conf >= 90 ? '#67c23a' : conf >= 75 ? '#e6a23c' : '#f56c6c';
+                    const dirText = rule.direction === 'forward' ? '向前跳跃' : '向后跳跃';
+                    return `
+                    <div style="padding:14px;background:#f5f7fa;border-radius:10px;margin-bottom:10px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                            <div style="font-weight:600;color:#303133">${rule.name || '序列号规则 ' + (i + 1)}</div>
+                            <span class="badge" style="background:${confColor};color:white">${conf}%</span>
+                        </div>
+                        <div style="font-size:12px;color:#606266">${rule.description || rule.reason || ''}</div>
+                        <div style="font-size:11px;color:#909399;margin-top:4px">
+                            方向: ${dirText} · 阈值: ${rule.threshold || '100000'} · 权重: ${rule.weight || 90}
+                        </div>
+                    </div>
+                `}).join('');
+            } else if (genRuleTab === 'filename') {
+                const nameRules = rules.filter(r => r.category === 'filename' || r.type === 'filename' || r.type === 'pattern');
+                if (nameRules.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;color:#909399;padding:20px">暂未生成文件名规则</div>';
+                    return;
+                }
+                container.innerHTML = nameRules.map((rule, i) => {
+                    const conf = rule.confidence || 80;
+                    const confColor = conf >= 90 ? '#67c23a' : conf >= 75 ? '#e6a23c' : '#f56c6c';
+                    return `
+                    <div style="padding:14px;background:#f5f7fa;border-radius:10px;margin-bottom:10px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                            <div style="font-weight:600;color:#303133">${rule.name || '文件名规则 ' + (i + 1)}</div>
+                            <span class="badge" style="background:${confColor};color:white">${conf}%</span>
+                        </div>
+                        <div style="font-size:12px;color:#606266">${rule.description || rule.reason || ''}</div>
+                        ${rule.pattern ? `
+                        <div style="background:#fff;padding:8px 10px;border-radius:6px;border:1px solid #e4e7ed;margin-top:6px">
+                            <div style="font-size:11px;color:#909399;margin-bottom:2px">匹配模式</div>
+                            <code style="font-family:monospace;font-size:11px;color:#54a0ff">${escapeHtml(rule.pattern)}</code>
+                        </div>
+                        ` : ''}
+                        ${rule.weight ? `<div style="font-size:11px;color:#909399;margin-top:4px">权重: ${rule.weight}</div>` : ''}
+                    </div>
+                `}).join('');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(text));
+            return div.innerHTML;
+        }
+
+        function saveGeneratedRule(type, index) {
+            const url = document.getElementById('aiSkipUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            showToast('正在保存规则...', 'info');
+            fetch(API_BASE + '?action=rules/learn&url=' + encodeURIComponent(url))
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && !data.skipped) {
+                        showToast('规则已保存到规则库（学习次数: ' + (data.learn_count || 1) + '）', 'success');
+                    } else if (data.skipped) {
+                        showToast('保存跳过: ' + (data.reason || '未知原因'), 'warning');
+                    } else {
+                        showToast('保存失败: ' + (data.message || data.reason || '未知错误'), 'error');
+                    }
+                })
+                .catch(e => showToast('保存失败: ' + e.message, 'error'));
+        }
+
+        function switchAiSkipTab(el, tab) {
+            aiSkipSegmentTab = tab;
+            document.querySelectorAll('#page-ai_skip .tab-item').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            renderAiSkipSegmentList();
+        }
+
+        function renderAiSkipSegmentList() {
+            const data = currentAiSkipData;
+            if (!data) return;
+            const container = document.getElementById('aiSkipSegmentList');
+            const adSegments = data.data?.adSegments || data.data?.ad_segments || [];
+            const contentSegments = data.data?.contentSegments || data.data?.content_segments || [];
+            
+            if (aiSkipSegmentTab === 'ad') {
+                if (adSegments.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;color:#67c23a;padding:30px">✅ 未检测到广告片段</div>';
+                    return;
+                }
+                container.innerHTML = adSegments.slice(0, 50).map((seg, i) => `
+                    <div class="segment-item">
+                        <div class="segment-index">#${i + 1}</div>
+                        <div class="segment-info">
+                            <div class="segment-name">${seg.uri || seg.url || 'ad_' + i + '.ts'}</div>
+                            <div class="segment-meta">
+                                <span>时长: ${(seg.duration || 0).toFixed(3)}s</span>
+                                <span>序号: ${seg.mediaSequence ?? seg.sequence ?? '-'}</span>
+                            </div>
+                        </div>
+                        <div class="segment-badges">
+                            ${seg.isAd ? '<span class="badge badge-danger">广告</span>' : ''}
+                        </div>
+                    </div>
+                `).join('');
+                if (adSegments.length > 50) {
+                    container.innerHTML += `<div style="text-align:center;color:#909399;padding:12px;font-size:12px">仅显示前 50 条，共 ${adSegments.length} 条</div>`;
+                }
+            } else if (aiSkipSegmentTab === 'content') {
+                if (contentSegments.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;color:#f56c6c;padding:30px">⚠️ 未找到内容片段</div>';
+                    return;
+                }
+                container.innerHTML = contentSegments.slice(0, 50).map((seg, i) => `
+                    <div class="segment-item">
+                        <div class="segment-index">#${i + 1}</div>
+                        <div class="segment-info">
+                            <div class="segment-name">${seg.uri || seg.url || 'content_' + i + '.ts'}</div>
+                            <div class="segment-meta">
+                                <span>时长: ${(seg.duration || 0).toFixed(3)}s</span>
+                                <span>序号: ${seg.mediaSequence ?? seg.sequence ?? '-'}</span>
+                            </div>
+                        </div>
+                        <div class="segment-badges">
+                            <span class="badge badge-success">内容</span>
+                        </div>
+                    </div>
+                `).join('');
+                if (contentSegments.length > 50) {
+                    container.innerHTML += `<div style="text-align:center;color:#909399;padding:12px;font-size:12px">仅显示前 50 条，共 ${contentSegments.length} 条</div>`;
+                }
+            } else if (aiSkipSegmentTab === 'md5') {
+                const md5Data = currentMd5Data;
+                if (!md5Data) {
+                    container.innerHTML = '<div style="text-align:center;color:#909399;padding:30px">点击「🔬 MD5分析」按钮开始分析</div>';
+                    return;
+                }
+                
+                const adCandidates = md5Data.ad_candidates || [];
+                const contentCandidates = md5Data.content_candidates || [];
+                const md5Details = md5Data.md5_details || [];
+                
+                let md5Html = '<div style="margin-bottom:16px">';
+                md5Html += '<div style="font-weight:600;color:#303133;margin-bottom:12px">🎯 广告候选MD5特征码</div>';
+                if (adCandidates.length === 0) {
+                    md5Html += '<div style="color:#67c23a;padding:12px;background:#f0f9eb;border-radius:6px">未检测到重复的广告候选MD5</div>';
+                } else {
+                    md5Html += adCandidates.map((cand, i) => `
+                        <div style="padding:12px;background:#fef0f0;border-radius:8px;margin-bottom:8px">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+                                <div style="font-family:monospace;font-size:12px;color:#f56c6c;word-break:break-all">#${i + 1} ${cand.md5}</div>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                    <span class="badge badge-danger">重复${cand.count}次</span>
+                                    <span class="badge badge-warning">${cand.avg_duration}s/片</span>
+                                    <span class="badge badge-info">共${cand.total_duration}s</span>
+                                </div>
+                            </div>
+                            <div style="font-size:12px;color:#606266">
+                                出现位置: ${cand.segments?.map(s => '#' + (s.index + 1)).join(', ') || '-'}
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                md5Html += '</div>';
+                
+                md5Html += '<div style="margin-bottom:16px">';
+                md5Html += '<div style="font-weight:600;color:#303133;margin-bottom:12px">✅ 内容候选MD5特征码</div>';
+                if (contentCandidates.length === 0) {
+                    md5Html += '<div style="color:#909399;padding:12px;background:#f5f7fa;border-radius:6px">未检测到内容候选</div>';
+                } else {
+                    md5Html += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+                    md5Html += contentCandidates.slice(0, 20).map((cand, i) => `
+                        <div style="padding:6px 10px;background:#f0f9eb;border-radius:4px;font-family:monospace;font-size:11px;color:#67c23a">
+                            ${cand.md5.substring(0, 16)}... (${cand.count}次)
+                        </div>
+                    `).join('');
+                    md5Html += '</div>';
+                    if (contentCandidates.length > 20) {
+                        md5Html += `<div style="margin-top:8px;font-size:12px;color:#909399">仅显示前20个，共${contentCandidates.length}个</div>`;
+                    }
+                }
+                md5Html += '</div>';
+                
+                md5Html += '<div>';
+                md5Html += '<div style="font-weight:600;color:#303133;margin-bottom:12px">📋 片段MD5详情</div>';
+                md5Html += '<div style="max-height:300px;overflow-y:auto">';
+                md5Html += md5Details.slice(0, 50).map((detail, i) => {
+                    const isAd = adCandidates.some(c => c.md5 === detail.md5);
+                    return `
+                        <div class="segment-item">
+                            <div class="segment-index">#${detail.index + 1}</div>
+                            <div class="segment-info">
+                                <div class="segment-name" style="font-family:monospace;font-size:12px">${detail.md5 || '计算失败'}</div>
+                                <div class="segment-meta">
+                                    <span>时长: ${(detail.duration || 0).toFixed(3)}s</span>
+                                    <span>${detail.uri?.substring?.(0, 30) || ''}${detail.uri?.length > 30 ? '...' : ''}</span>
+                                </div>
+                            </div>
+                            <div class="segment-badges">
+                                ${isAd ? '<span class="badge badge-danger">广告候选</span>' : '<span class="badge badge-success">内容</span>'}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                md5Html += '</div>';
+                if (md5Details.length > 50) {
+                    md5Html += `<div style="text-align:center;color:#909399;padding:12px;font-size:12px">仅显示前 50 条，共 ${md5Details.length} 条</div>`;
+                }
+                md5Html += '</div>';
+                
+                container.innerHTML = md5Html;
+            } else {
+                const analysis = data.data?.analysis || data.analysis || {};
+                const methods = data.data?.methods || data.methods || [];
+                let detailHtml = '<div style="font-size:13px;color:#606266">';
+                detailHtml += '<div style="margin-bottom:12px;font-weight:600;color:#303133">AI识别方式：</div>';
+                detailHtml += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">';
+                detailHtml += '<span class="badge badge-primary">时长检测</span>';
+                detailHtml += '<span class="badge badge-warning">不连续标记</span>';
+                detailHtml += '<span class="badge badge-danger">序列号跳跃</span>';
+                detailHtml += '<span class="badge badge-info">文件名模式</span>';
+                detailHtml += '</div>';
+                
+                if (analysis.durationStats) {
+                    detailHtml += '<div style="margin-bottom:12px"><strong>时长统计：</strong></div>';
+                    detailHtml += `<div>平均时长: ${analysis.durationStats.avg?.toFixed(3) || 0}s</div>`;
+                    detailHtml += `<div>最小时长: ${analysis.durationStats.min?.toFixed(3) || 0}s</div>`;
+                    detailHtml += `<div>最大时长: ${analysis.durationStats.max?.toFixed(3) || 0}s</div>`;
+                }
+                
+                detailHtml += '</div>';
+                container.innerHTML = detailHtml;
+            }
+        }
+
+        function playAiSkipVideo() {
+            const url = document.getElementById('aiSkipOutputUrl').textContent;
+            if (!url) return;
+            document.getElementById('aiSkipPlayerContainer').style.display = 'block';
+            document.getElementById('aiSkipPlayStatus').textContent = '正在加载视频...';
+            if (window.dplayerScriptLoaded) {
+                initAiSkipPlayer(url);
+            } else {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js';
+                script.onload = () => {
+                    window.dplayerScriptLoaded = true;
+                    initAiSkipPlayer(url);
+                };
+                document.head.appendChild(script);
+            }
+        }
+
+        function initAiSkipPlayer(url) {
+            const container = document.getElementById('aiSkipVideoPlayer');
+            const statusEl = document.getElementById('aiSkipPlayStatus');
+            container.innerHTML = '';
+            
+            let firstFrameReady = false;
+            let playAttempted = false;
+            let posterGenerated = false;
+            let hls = null;
+
+            const generatePoster = function(video) {
+                if (posterGenerated || !video) return;
+                if (video.readyState >= 2 && video.videoWidth > 0) {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 640;
+                        canvas.height = 360;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, 640, 360);
+                        const posterUrl = canvas.toDataURL('image/jpeg', 0.8);
+                        posterGenerated = true;
+                        
+                        const posterImg = container.querySelector('.dplayer-video-wrap .dplayer-poster');
+                        if (posterImg) {
+                            posterImg.style.backgroundImage = 'url(' + posterUrl + ')';
+                            posterImg.style.backgroundSize = 'cover';
+                            posterImg.style.backgroundPosition = 'center';
+                        }
+                    } catch(e) {
+                        console.warn('生成海报图失败:', e);
+                    }
+                }
+            };
+
+            const tryPlay = function(video) {
+                if (playAttempted) return;
+                if (firstFrameReady && video && video.paused) {
+                    playAttempted = true;
+                    video.play().catch(function(e) {
+                        console.warn('自动播放被阻止:', e);
+                        if (statusEl) statusEl.textContent = '点击播放按钮开始播放';
+                    });
+                }
+            };
+
+            const hlsConfig = {
+                enableWorker: true,
+                lowLatencyMode: false,
+                maxBufferLength: 60,
+                maxMaxBufferLength: 900,
+                minBufferLength: 5,
+                maxBufferSize: 120 * 1000 * 1000,
+                maxBufferHole: 0.3,
+                highBufferWatchdogPeriod: 0.5,
+                startLevel: -1,
+                capLevelToPlayerSize: true,
+                liveSyncDurationCount: 3,
+                liveMaxLatencyDurationCount: 10,
+                fragLoadingTimeOut: 30000,
+                manifestLoadingTimeOut: 20000,
+                levelLoadingTimeOut: 15000,
+                backBufferLength: 60,
+                startFragPrefetch: true,
+                enableSoftwareAES: true,
+                abrEwmaDefaultEstimate: 2000000,
+                abrBandWidthFactor: 0.75,
+                abrEwmaFastLive: 3.0,
+                abrEwmaSlowLive: 9.0,
+                maxFragLookUpTolerance: 0.2,
+                enableCEA708Captions: false,
+                enableWebVTT: false,
+                enableIMSC1: false,
+                renderTextTracksNatively: false,
+                xhrSetup: function(xhr) {
+                    xhr.withCredentials = false;
+                    xhr.timeout = 30000;
+                }
+            };
+
+            const aiSkipDp = new DPlayer({
+                container: container,
+                video: {
+                    url: url,
+                    type: 'customHls',
+                    customType: {
+                        customHls: function(video, dp) {
+                            if (Hls.isSupported()) {
+                                hls = new Hls(hlsConfig);
+                                hls.loadSource(url);
+                                hls.attachMedia(video);
+                                dp.hls = hls;
+
+                                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                                    if (statusEl) statusEl.textContent = '视频解析完成，缓冲中...';
+                                });
+
+                                hls.on(Hls.Events.FRAG_LOADED, function() {
+                                    firstFrameReady = true;
+                                    generatePoster(video);
+                                    if (!playAttempted && statusEl) {
+                                        statusEl.textContent = '首帧加载完成';
+                                    }
+                                    tryPlay(video);
+                                });
+
+                                hls.on(Hls.Events.FRAG_BUFFERED, function() {
+                                    generatePoster(video);
+                                });
+
+                                hls.on(Hls.Events.ERROR, function(event, data) {
+                                    console.error('HLS 错误:', data.type, data.details);
+                                    if (data.fatal) {
+                                        switch (data.type) {
+                                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                                if (statusEl) statusEl.textContent = '网络错误，正在恢复...';
+                                                try { hls.startLoad(); } catch(e) {}
+                                                break;
+                                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                                if (statusEl) statusEl.textContent = '媒体错误，正在恢复...';
+                                                try { hls.recoverMediaError(); } catch(e) {}
+                                                break;
+                                            default:
+                                                if (statusEl) statusEl.textContent = '视频加载失败';
+                                        }
+                                    }
+                                });
+
+                                video.addEventListener('loadedmetadata', function() {
+                                    generatePoster(video);
+                                });
+
+                                video.addEventListener('canplay', function() {
+                                    generatePoster(video);
+                                });
+
+                                video.addEventListener('playing', function() {
+                                    if (statusEl) statusEl.textContent = '正在播放';
+                                });
+
+                                video.addEventListener('waiting', function() {
+                                    if (statusEl) statusEl.textContent = '缓冲中...';
+                                });
+
+                                video.addEventListener('ended', function() {
+                                    if (statusEl) statusEl.textContent = '播放结束';
+                                });
+                            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                                video.src = url;
+                                video.addEventListener('loadedmetadata', function() {
+                                    generatePoster(video);
+                                    firstFrameReady = true;
+                                    tryPlay(video);
+                                });
+                            }
+                        }
+                    }
+                },
+                autoplay: false,
+                theme: '#667eea',
+                lang: 'zh-cn',
+                screenshot: true,
+                hotkey: true,
+                preload: 'auto',
+                volume: 0.7,
+                mutex: true,
+                playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 2],
+                danmaku: {
+                    id: 'ai_skip_player_' + Date.now(),
+                    api: 'https://api.prprpr.me/dplayer/',
+                    user: '游客'
+                }
+            });
+
+            aiSkipDp.on('play', function() {
+                if (statusEl) statusEl.textContent = '正在播放';
+            });
+
+            aiSkipDp.on('pause', function() {
+                if (statusEl) statusEl.textContent = '已暂停';
+            });
+
+            aiSkipDp.on('loadedmetadata', function() {
+                generatePoster(aiSkipDp.video);
+            });
+        }
+
+        function downloadAiSkipM3u8() {
+            const url = document.getElementById('aiSkipOutputUrl').textContent;
+            if (!url) return;
+            window.open(url, '_blank');
+        }
+
+        function aiSkipGenerateRules() {
+            const url = document.getElementById('aiSkipUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            showToast('正在生成规则...', 'info');
+            fetch(API_BASE + '?action=rules/generate&url=' + encodeURIComponent(url))
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('规则生成成功，共 ' + (data.ruleCount || data.data?.ruleCount || 0) + ' 条规则', 'success');
+                        currentGenRuleData = { data: data };
+                        document.getElementById('aiSkipGeneratedRules').style.display = 'block';
+                        renderGenRuleContent();
+                    } else {
+                        showToast('生成失败: ' + data.message, 'error');
+                    }
+                })
+                .catch(e => showToast('生成失败: ' + e.message, 'error'));
+        }
+
+        function aiSkipToInsert() {
+            const url = document.getElementById('aiSkipUrl').value.trim();
+            document.getElementById('aiInsertUrl').value = url;
+            document.querySelector('.nav-item[data-page="ai_insert"]').click();
+        }
+
+        function aiSkipToWatermark() {
+            const url = document.getElementById('aiSkipUrl').value.trim();
+            document.getElementById('aiWatermarkUrl').value = url;
+            document.querySelector('.nav-item[data-page="ai_watermark"]').click();
+        }
+
+        let currentMd5Data = null;
+
+        async function aiMd5Analyze() {
+            const url = document.getElementById('aiSkipUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            const saveMd5 = document.getElementById('aiSkipSaveMd5').checked;
+            const fastMode = document.getElementById('aiSkipFastMode').checked;
+            
+            showToast('正在进行MD5特征码分析' + (fastMode ? '（极速模式）' : '') + '，请稍候...', 'info');
+            document.getElementById('aiSkipResult').style.display = 'block';
+            document.getElementById('aiSkipStats').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#e6a23c">⏳</div>
+                    <div class="stat-label">分析中...</div>
+                </div>
+            `;
+            aiSkipSegmentTab = 'md5';
+            document.querySelectorAll('#page-ai_skip .tab-item').forEach((t, i) => {
+                t.classList.toggle('active', i === 2);
+            });
+            document.getElementById('aiSkipSegmentList').innerHTML = `
+                <div style="text-align:center;color:#909399;padding:40px">
+                    <div style="font-size:32px;margin-bottom:16px">🔬</div>
+                    <div style="font-size:14px;margin-bottom:8px">极速MD5分析中，通常 2-5 秒...</div>
+                    <div style="font-size:12px;color:#c0c4cc">并发下载 + 智能采样 + 仅下载文件头</div>
+                </div>
+            `;
+            
+            try {
+                const params = new URLSearchParams({
+                    action: 'ai/md5_analyze',
+                    url: url,
+                    save: saveMd5 ? '1' : '0',
+                    fast: fastMode ? '1' : '0'
+                });
+                
+                const res = await fetch(API_BASE + '?' + params.toString());
+                const data = await res.json();
+                
+                if (!data.success) throw new Error(data.message || '分析失败');
+                currentMd5Data = data.data;
+                
+                renderMd5Stats(data.data);
+                renderAiSkipSegmentList();
+                
+                showToast('MD5特征码分析完成，耗时 ' + data.data.process_time, 'success');
+            } catch (e) {
+                document.getElementById('aiSkipSegmentList').innerHTML = '<div style="color:#f56c6c;padding:20px;text-align:center">分析失败: ' + e.message + '</div>';
+                showToast('分析失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderMd5Stats(data) {
+            const statsHtml = `
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#667eea">${data.total_segments || 0}</div>
+                    <div class="stat-label">总片段数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#67c23a">${data.analyzed_segments || 0}</div>
+                    <div class="stat-label">已分析</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#409eff">${data.unique_md5 || 0}</div>
+                    <div class="stat-label">唯一MD5</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#f56c6c">${data.ad_candidate_count || 0}</div>
+                    <div class="stat-label">广告候选</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#e6a23c">${data.content_candidate_count || 0}</div>
+                    <div class="stat-label">内容候选</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#909399">${data.process_time || '0ms'}</div>
+                    <div class="stat-label">分析耗时</div>
+                </div>
+            `;
+            document.getElementById('aiSkipStats').innerHTML = statsHtml;
+        }
+
+        let currentAiInsertData = null;
+
+        async function aiInsertDetect() {
+            const url = document.getElementById('aiInsertUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '检测中...';
+            document.getElementById('aiInsertResult').style.display = 'none';
+            try {
+                const opening = document.getElementById('aiInsertOpening').checked;
+                const ending = document.getElementById('aiInsertEnding').checked;
+                const middle = document.getElementById('aiInsertMiddle').checked;
+                
+                const params = new URLSearchParams({
+                    action: 'ai/insert_detect',
+                    url: url,
+                    opening: opening ? '1' : '0',
+                    ending: ending ? '1' : '0',
+                    middle: middle ? '1' : '0'
+                });
+                
+                const res = await fetch(API_BASE + '?' + params.toString());
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                }
+
+                if (!data.success) throw new Error(data.message || '检测失败');
+                currentAiInsertData = data;
+                renderAiInsertResult(data);
+                document.getElementById('aiInsertResult').style.display = 'block';
+                showToast('插播检测完成', 'success');
+            } catch (e) {
+                showToast('检测失败: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔍 检测插播';
+            }
+        }
+
+        function renderAiInsertResult(data) {
+            const insertions = data.data?.insertions || data.insertions || [];
+            const totalInsertions = insertions.length;
+            const totalDuration = insertions.reduce((sum, item) => sum + (item.duration || 0), 0);
+            
+            const statsHtml = `
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#f56c6c">${totalInsertions}</div>
+                    <div class="stat-label">插播数量</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#e6a23c">${totalDuration.toFixed(1)}s</div>
+                    <div class="stat-label">插播总时长</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#67c23a">${data.data?.openingCount || 0}</div>
+                    <div class="stat-label">片头插播</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#409eff">${data.data?.middleCount || 0}</div>
+                    <div class="stat-label">中间插播</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color:#909399">${data.data?.endingCount || 0}</div>
+                    <div class="stat-label">片尾插播</div>
+                </div>
+            `;
+            document.getElementById('aiInsertStats').innerHTML = statsHtml;
+            
+            const listHtml = insertions.length === 0 
+                ? '<div style="text-align:center;color:#67c23a;padding:30px">✅ 未检测到插播内容</div>'
+                : insertions.map((item, i) => `
+                    <div style="padding:12px;background:#f5f7fa;border-radius:8px;margin-bottom:8px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                            <div style="font-weight:600;color:#303133">${item.type === 'opening' ? '片头插播' : item.type === 'ending' ? '片尾插播' : '第' + (i+1) + '处插播'}</div>
+                            <span class="badge badge-danger">${(item.duration || 0).toFixed(1)}s</span>
+                        </div>
+                        <div style="font-size:12px;color:#606266">
+                            位置: 第 ${item.startIndex || 0} - ${item.endIndex || 0} 片段
+                            ${item.reason ? ' | 原因: ' + item.reason : ''}
+                        </div>
+                    </div>
+                `).join('');
+            document.getElementById('aiInsertList').innerHTML = listHtml;
+        }
+
+        function aiInsertSkip() {
+            const url = document.getElementById('aiInsertUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            const outputUrl = API_BASE + '?action=mxjx&url=' + encodeURIComponent(url);
+            document.getElementById('aiInsertOutputUrl').textContent = outputUrl;
+            document.getElementById('aiInsertOutput').style.display = 'block';
+            showToast('已生成纯净版链接', 'success');
+        }
+
+        function aiInsertToSkip() {
+            const url = document.getElementById('aiInsertUrl').value.trim();
+            document.getElementById('aiSkipUrl').value = url;
+            document.querySelector('.nav-item[data-page="ai_skip"]').click();
+        }
+
+        async function aiInsertMd5Analyze() {
+            const url = document.getElementById('aiInsertUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            const fastMode = document.getElementById('aiInsertFastMode').checked;
+            
+            showToast('正在进行MD5特征码分析' + (fastMode ? '（极速模式）' : '') + '，请稍候...', 'info');
+            document.getElementById('aiInsertResult').style.display = 'block';
+            document.getElementById('aiInsertMd5Card').style.display = 'block';
+            document.getElementById('aiInsertMd5Content').innerHTML = `
+                <div style="text-align:center;color:#909399;padding:30px">
+                    <div style="font-size:24px;margin-bottom:12px">🔬</div>
+                    <div>极速分析中，通常 2-5 秒...</div>
+                    <div style="margin-top:8px;font-size:12px;color:#c0c4cc">并发下载 + 智能采样</div>
+                </div>
+            `;
+            
+            try {
+                const params = new URLSearchParams({
+                    action: 'ai/md5_analyze',
+                    url: url,
+                    fast: fastMode ? '1' : '0'
+                });
+                
+                const res = await fetch(API_BASE + '?' + params.toString());
+                const data = await res.json();
+                
+                if (!data.success) throw new Error(data.message || '分析失败');
+                
+                const md5Data = data.data;
+                const adCandidates = md5Data.ad_candidates || [];
+                
+                let html = '<div style="margin-bottom:12px;display:flex;gap:16px;flex-wrap:wrap">';
+                html += `<div><strong>分析片段:</strong> ${md5Data.analyzed_segments || 0}</div>`;
+                html += `<div><strong>唯一MD5:</strong> ${md5Data.unique_md5 || 0}</div>`;
+                html += `<div><strong>广告候选:</strong> <span style="color:#f56c6c">${md5Data.ad_candidate_count || 0}</span></div>`;
+                html += '</div>';
+                
+                if (adCandidates.length === 0) {
+                    html += '<div style="color:#67c23a;padding:12px;background:#f0f9eb;border-radius:6px">未检测到重复的广告候选MD5</div>';
+                } else {
+                    html += '<div style="max-height:300px;overflow-y:auto">';
+                    adCandidates.forEach((cand, i) => {
+                        html += `
+                            <div style="padding:10px;background:#fef0f0;border-radius:6px;margin-bottom:6px">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:4px">
+                                    <div style="font-family:monospace;font-size:11px;color:#f56c6c;word-break:break-all">#${i + 1} ${cand.md5}</div>
+                                    <div style="display:flex;gap:4px">
+                                        <span class="badge badge-danger">${cand.count}次</span>
+                                        <span class="badge badge-warning">${cand.avg_duration}s</span>
+                                    </div>
+                                </div>
+                                <div style="font-size:11px;color:#606266">
+                                    位置: ${cand.segments?.map(s => '#' + (s.index + 1)).join(', ') || '-'}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+                
+                document.getElementById('aiInsertMd5Content').innerHTML = html;
+                showToast('MD5特征码分析完成', 'success');
+            } catch (e) {
+                document.getElementById('aiInsertMd5Content').innerHTML = '<div style="color:#f56c6c;padding:12px">分析失败: ' + e.message + '</div>';
+                showToast('分析失败: ' + e.message, 'error');
+            }
+        }
+
+        function aiInsertToWatermark() {
+            const url = document.getElementById('aiInsertUrl').value.trim();
+            document.getElementById('aiWatermarkUrl').value = url;
+            document.querySelector('.nav-item[data-page="ai_watermark"]').click();
+        }
+
+        const WATERMARK_PARAMS = [
+            { name: 'wsip', desc: '水印IP参数' },
+            { name: 'wsh' , desc: '水印哈希参数' },
+            { name: 'wsTime', desc: '水印时间参数' },
+            { name: 'sign', desc: '签名参数' },
+            { name: 'wd', desc: '水印域名参数' },
+            { name: 'hd', desc: '清晰度参数（非水印）' },
+            { name: 'chyuan', desc: '来源参数' },
+            { name: 'x-play', desc: '播放器参数' },
+            { name: 'k_ft', desc: '防盗链参数' },
+            { name: 'k_id', desc: '防盗链ID' },
+        ];
+
+        let aiSubtitleLastData = null;
+
+        async function aiSubtitleAnalyze() {
+            const url = document.getElementById('aiSubtitleUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+
+            const mode = document.getElementById('aiSubtitleMode').value;
+            const samples = document.getElementById('aiSubtitleSamples').value;
+
+            const resultEl = document.getElementById('aiSubtitleResult');
+            const statusEl = document.getElementById('aiSubtitleStatus');
+            resultEl.style.display = 'block';
+            statusEl.innerHTML = '<div style="background:#ecf5ff;padding:12px;border-radius:8px;border:1px solid #d9ecff;color:#409eff;font-size:13px">⏳ 正在分析滚动字幕广告，请稍候...</div>';
+
+            try {
+                const apiUrl = API_BASE + '?action=ai/subtitle_detect&url=' + encodeURIComponent(url)
+                    + '&mode=' + mode + '&samples=' + samples + '&_t=' + Date.now();
+                const res = await fetch(apiUrl);
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (jsonErr) {
+                    throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                }
+
+                if (!data.success) {
+                    statusEl.innerHTML = '<div style="background:#fef0f0;padding:12px;border-radius:8px;border:1px solid #fbc4c4;color:#f56c6c;font-size:13px">✗ 分析失败: ' + escapeHtml(data.message || '') + '</div>';
+                    return;
+                }
+
+                aiSubtitleLastData = data.data;
+                aiSubtitleRenderResult(data.data);
+            } catch (e) {
+                statusEl.innerHTML = '<div style="background:#fef0f0;padding:12px;border-radius:8px;border:1px solid #fbc4c4;color:#f56c6c;font-size:13px">✗ 请求失败: ' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        function aiSubtitleRenderResult(d) {
+            const statusEl = document.getElementById('aiSubtitleStatus');
+            const hasAd = d.has_subtitle_ad;
+
+            if (hasAd) {
+                statusEl.innerHTML = '<div style="background:#fef0f0;padding:12px;border-radius:8px;border:1px solid #fbc4c4;color:#f56c6c;font-size:13px">⚠ 检测到滚动字幕广告（置信度 ' + d.confidence + '%）</div>';
+            } else {
+                statusEl.innerHTML = '<div style="background:#f0f9eb;padding:12px;border-radius:8px;border:1px solid #e1f3d8;color:#67c23a;font-size:13px">✓ 未检测到滚动字幕广告</div>';
+            }
+
+            document.getElementById('aiSubtitleHasAd').innerHTML = hasAd
+                ? '<span style="color:#f56c6c">检测到广告</span>'
+                : '<span style="color:#67c23a">未检测到</span>';
+            document.getElementById('aiSubtitleModeResult').textContent = d.detection_mode === 'fast' ? '快速模式' : '深度模式';
+            document.getElementById('aiSubtitleScroll').innerHTML = d.scrolling_detected
+                ? '<span style="color:#e6a23c">滚动中</span>'
+                : '<span style="color:#67c23a">无滚动</span>';
+            document.getElementById('aiSubtitleConfidence').textContent = d.confidence + '%';
+            document.getElementById('aiSubtitleTime').textContent = d.process_time;
+            document.getElementById('aiSubtitleSamplesResult').textContent = d.sample_count + ' / ' + d.total_segments;
+
+            const regionsCard = document.getElementById('aiSubtitleRegionsCard');
+            const regionsEl = document.getElementById('aiSubtitleRegions');
+            if (d.ad_regions && Object.keys(d.ad_regions).length > 0) {
+                regionsCard.style.display = 'block';
+                const regionNames = {
+                    'top': '顶部区域',
+                    'bottom': '底部区域',
+                    'top_scroll': '顶部滚动',
+                    'bottom_scroll': '底部滚动'
+                };
+                let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">';
+                let total = 0;
+                Object.values(d.ad_regions).forEach(function(v) { total += v; });
+                Object.keys(d.ad_regions).forEach(function(key) {
+                    const count = d.ad_regions[key];
+                    const pct = total > 0 ? Math.round(count / total * 100) : 0;
+                    const name = regionNames[key] || key;
+                    html += '<div style="background:#fff;border:1px solid #e4e7ed;border-radius:8px;padding:12px">'
+                        + '<div style="font-size:12px;color:#909399;margin-bottom:4px">' + escapeHtml(name) + '</div>'
+                        + '<div style="font-size:20px;font-weight:600;color:#f56c6c">' + count + ' 次</div>'
+                        + '<div style="margin-top:6px;background:#f0f2f5;border-radius:4px;height:6px;overflow:hidden">'
+                        + '<div style="background:linear-gradient(90deg,#f56c6c,#e6a23c);height:100%;width:' + pct + '%"></div>'
+                        + '</div></div>';
+                });
+                html += '</div>';
+                regionsEl.innerHTML = html;
+            } else {
+                regionsCard.style.display = 'none';
+            }
+
+            const adTextsCard = document.getElementById('aiSubtitleAdTextsCard');
+            const adTextsEl = document.getElementById('aiSubtitleAdTexts');
+            if (d.ad_text_samples && d.ad_text_samples.length > 0) {
+                adTextsCard.style.display = 'block';
+                let html = '';
+                d.ad_text_samples.forEach(function(t, i) {
+                    html += '<div style="background:#fef0f0;border-left:4px solid #f56c6c;padding:10px 14px;border-radius:0 6px 6px 0;font-size:13px;color:#606266">'
+                        + '<span style="color:#f56c6c;font-weight:600">#' + (i+1) + '</span> ' + escapeHtml(t)
+                        + '</div>';
+                });
+                adTextsEl.innerHTML = html;
+            } else {
+                adTextsCard.style.display = 'none';
+            }
+
+            document.getElementById('aiSubtitleSampleCount').textContent = d.sampled_segments ? d.sampled_segments.length : 0;
+            const sampleListEl = document.getElementById('aiSubtitleSampleList');
+            if (d.sampled_segments && d.sampled_segments.length > 0) {
+                let html = '<table style="width:100%;border-collapse:collapse;font-size:13px">'
+                    + '<thead><tr style="background:#f5f7fa">'
+                    + '<th style="padding:10px;text-align:left;border-bottom:1px solid #ebeef5;color:#606266;font-weight:500">#</th>'
+                    + '<th style="padding:10px;text-align:left;border-bottom:1px solid #ebeef5;color:#606266;font-weight:500">片段索引</th>'
+                    + '<th style="padding:10px;text-align:left;border-bottom:1px solid #ebeef5;color:#606266;font-weight:500">时长</th>'
+                    + '<th style="padding:10px;text-align:left;border-bottom:1px solid #ebeef5;color:#606266;font-weight:500">广告</th>'
+                    + '<th style="padding:10px;text-align:left;border-bottom:1px solid #ebeef5;color:#606266;font-weight:500">区域</th>'
+                    + '<th style="padding:10px;text-align:left;border-bottom:1px solid #ebeef5;color:#606266;font-weight:500">置信度</th>'
+                    + '</tr></thead><tbody>';
+                d.sampled_segments.forEach(function(s, i) {
+                    const adColor = s.has_ad ? '#f56c6c' : '#67c23a';
+                    html += '<tr style="border-bottom:1px solid #f5f7fa">'
+                        + '<td style="padding:10px;color:#909399">' + (i+1) + '</td>'
+                        + '<td style="padding:10px;color:#606266">' + s.index + '</td>'
+                        + '<td style="padding:10px;color:#606266">' + s.duration + 's</td>'
+                        + '<td style="padding:10px;color:' + adColor + ';font-weight:500">' + (s.has_ad ? '是' : '否') + '</td>'
+                        + '<td style="padding:10px;color:#606266">' + escapeHtml(s.region || '-') + '</td>'
+                        + '<td style="padding:10px;color:#606266">' + s.confidence + '%</td>'
+                        + '</tr>';
+                });
+                html += '</tbody></table>';
+                sampleListEl.innerHTML = html;
+            }
+        }
+
+        function aiSubtitleCopyResult() {
+            if (!aiSubtitleLastData) { showToast('暂无结果', 'error'); return; }
+            copyText(JSON.stringify(aiSubtitleLastData, null, 2));
+            showToast('分析结果已复制', 'success');
+        }
+
+        function aiSubtitleGoSkip() {
+            const url = document.getElementById('aiSubtitleUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            document.getElementById('aiSkipUrl').value = url;
+            document.querySelector('.nav-item[data-page="ai_skip"]').click();
+        }
+
+        function aiSubtitleReAnalyze() {
+            aiSubtitleAnalyze();
+        }
+
+        function aiWatermarkProcess() {
+            const url = document.getElementById('aiWatermarkUrl').value.trim();
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            document.getElementById('aiWatermarkResult').style.display = 'block';
+            document.getElementById('aiWatermarkOriginalUrl').textContent = url;
+            
+            let processedUrl = url;
+            let removedParams = [];
+            let addedParams = [];
+            
+            const removeParams = document.getElementById('aiWatermarkUrlParams').checked;
+            const handleReferer = document.getElementById('aiWatermarkReferer').checked;
+            
+            if (removeParams) {
+                try {
+                    const urlObj = new URL(url);
+                    const paramsToRemove = [];
+                    WATERMARK_PARAMS.forEach(wm => {
+                        if (urlObj.searchParams.has(wm.name)) {
+                            paramsToRemove.push(wm.name + '=' + urlObj.searchParams.get(wm.name));
+                            urlObj.searchParams.delete(wm.name);
+                        }
+                    });
+                    removedParams = paramsToRemove;
+                    processedUrl = urlObj.toString();
+                } catch (e) {
+                }
+            }
+            
+            document.getElementById('aiWatermarkOutputUrl').textContent = processedUrl;
+            
+            let detailsHtml = '';
+            if (removedParams.length > 0) {
+                detailsHtml += `<div style="margin-bottom:12px"><div style="font-weight:600;color:#f56c6c;margin-bottom:6px">已去除的水印参数:</div>`;
+                detailsHtml += `<div style="display:flex;gap:6px;flex-wrap:wrap">`;
+                removedParams.forEach(p => {
+                    detailsHtml += `<span class="badge badge-danger">${p.substring(0, 30)}${p.length > 30 ? '...' : ''}</span>`;
+                });
+                detailsHtml += `</div></div>`;
+            } else {
+                detailsHtml += `<div style="color:#67c23a;margin-bottom:12px">✅ 未检测到水印参数</div>`;
+            }
+            
+            document.getElementById('aiWatermarkDetails').innerHTML = detailsHtml;
+            
+            const libHtml = WATERMARK_PARAMS.map(wm => `
+                <div style="display:inline-block;background:#f5f7fa;padding:6px 12px;border-radius:6px;margin:4px;font-size:12px">
+                    <strong>${wm.name}</strong> - ${wm.desc}
+                </div>
+            `).join('');
+            document.getElementById('aiWatermarkLibList').innerHTML = libHtml;
+            
+            showToast('水印处理完成', 'success');
+        }
+
+        function aiWatermarkToSkip() {
+            const url = document.getElementById('aiWatermarkOutputUrl').textContent || document.getElementById('aiWatermarkUrl').value.trim();
+            document.getElementById('aiSkipUrl').value = url;
+            document.querySelector('.nav-item[data-page="ai_skip"]').click();
+        }
+
+        function playVideo() {
+            const playPageActive = document.querySelector('.nav-item[data-page="play"]')?.classList.contains('active');
+            let url;
+            if (playPageActive) {
+                url = document.getElementById('playUrl')?.value?.trim();
+            } else {
+                url = document.getElementById('analyzeUrl')?.value?.trim() || document.getElementById('playUrl')?.value?.trim();
+            }
+            if (!url) { showToast('请输入视频链接', 'error'); return; }
+            document.querySelector('.nav-item[data-page="play"]').click();
+            document.getElementById('playUrl').value = url;
+            const mxjxUrl = API_BASE + '?action=mxjx&url=' + encodeURIComponent(url);
+            document.getElementById('playerContainer').style.display = 'block';
+            document.getElementById('playInfo').innerHTML = `
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+                    <span style="color:#606266">无广告链接:</span>
+                    <code id="playMxjxUrl" style="background:#f5f7fa;padding:4px 8px;border-radius:4px;word-break:break-all;flex:1;min-width:200px;cursor:pointer" onclick="copyText('${mxjxUrl}')" title="点击复制">${mxjxUrl}</code>
+                    <button class="btn btn-sm btn-secondary" onclick="copyText('${mxjxUrl}')">复制链接</button>
+                    <button class="btn btn-sm btn-primary" onclick="window.open('${mxjxUrl}', '_blank')">新窗口打开</button>
+                </div>
+                <div id="playStatus" style="margin-top:8px;color:#909399;font-size:12px">正在加载视频...</div>
+            `;
+
+            if (dp) {
+                try { dp.destroy(); } catch(e) {}
+                dp = null;
+            }
+
+            if (typeof Hls === 'undefined') {
+                document.getElementById('playStatus').innerHTML = '<span style="color:#f56c6c">错误: hls.js 加载失败，请检查网络或刷新页面</span>';
+                showToast('hls.js 加载失败', 'error');
+                return;
+            }
+            if (typeof DPlayer === 'undefined') {
+                document.getElementById('playStatus').innerHTML = '<span style="color:#f56c6c">错误: DPlayer 加载失败，请检查网络或刷新页面</span>';
+                showToast('DPlayer 加载失败', 'error');
+                return;
+            }
+
+            try {
+                const hlsConfig = {
+                    enableWorker: true,
+                    lowLatencyMode: false,
+                    maxBufferLength: 60,
+                    maxMaxBufferLength: 900,
+                    minBufferLength: 5,
+                    maxBufferSize: 120 * 1000 * 1000,
+                    maxBufferHole: 0.3,
+                    highBufferWatchdogPeriod: 0.5,
+                    startLevel: -1,
+                    capLevelToPlayerSize: true,
+                    liveSyncDurationCount: 3,
+                    liveMaxLatencyDurationCount: 10,
+                    fragLoadingTimeOut: 30000,
+                    manifestLoadingTimeOut: 20000,
+                    levelLoadingTimeOut: 15000,
+                    backBufferLength: 60,
+                    startFragPrefetch: true,
+                    enableSoftwareAES: true,
+                    abrEwmaDefaultEstimate: 2000000,
+                    abrBandWidthFactor: 0.75,
+                    abrEwmaFastLive: 3.0,
+                    abrEwmaSlowLive: 9.0,
+                    maxFragLookUpTolerance: 0.2,
+                    enableCEA708Captions: false,
+                    enableWebVTT: false,
+                    enableIMSC1: false,
+                    renderTextTracksNatively: false,
+                    xhrSetup: function(xhr) {
+                        xhr.withCredentials = false;
+                        xhr.timeout = 30000;
+                    }
+                };
+
+                let firstFrameReady = false;
+                let playAttempted = false;
+
+                const tryPlay = function() {
+                    if (playAttempted) return;
+                    if (firstFrameReady && dp && dp.video && dp.video.paused) {
+                        playAttempted = true;
+                        dp.video.play().catch(function(e) {
+                            console.warn('自动播放被阻止:', e);
+                            document.getElementById('playStatus').innerHTML = '<span style="color:#e6a23c">视频已加载，点击播放按钮开始播放</span>';
+                            showToast('点击播放按钮开始播放', 'warning');
+                        });
+                    }
+                };
+
+                const containerEl = document.getElementById('dplayer') || document.getElementById('videoPlayer');
+                dp = new DPlayer({
+                    container: containerEl,
+                    video: {
+                        url: mxjxUrl,
+                        type: 'customHls',
+                        customType: {
+                            customHls: function(video, player) {
+                                if (Hls.isSupported()) {
+                                    const hls = new Hls(hlsConfig);
+                                    hls.loadSource(video.src);
+                                    hls.attachMedia(video);
+                                    player.hls = hls;
+
+                                    hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
+                                        console.log('HLS 清单解析完成, 共', data.levels.length, '个清晰度');
+                                        document.getElementById('playStatus').innerHTML = '<span style="color:#e6a23c">视频解析完成，正在缓冲首帧...</span>';
+                                    });
+
+                                    hls.on(Hls.Events.FRAG_LOADED, function(event, data) {
+                                        console.log('片段加载完成, 索引:', data.frag.sn, '时长:', data.frag.duration.toFixed(2) + 's');
+                                        firstFrameReady = true;
+                                        if (!playAttempted) {
+                                            document.getElementById('playStatus').innerHTML = '<span style="color:#67c23a">首帧加载完成，即将播放...</span>';
+                                        }
+                                        tryPlay();
+                                    });
+
+                                    hls.on(Hls.Events.LEVEL_SWITCHED, function(event, data) {
+                                        console.log('清晰度切换到:', data.level);
+                                    });
+
+                                    hls.on(Hls.Events.ERROR, function(event, data) {
+                                        console.error('HLS 错误:', data.type, data.details, data.fatal ? '(致命)' : '');
+                                        if (data.fatal) {
+                                            switch (data.type) {
+                                                case Hls.ErrorTypes.NETWORK_ERROR:
+                                                    document.getElementById('playStatus').innerHTML = '<span style="color:#f56c6c">网络错误，正在尝试恢复...</span>';
+                                                    try {
+                                                        hls.startLoad();
+                                                    } catch(e) {
+                                                        document.getElementById('playStatus').innerHTML = '<span style="color:#f56c6c">网络错误，请检查网络或尝试刷新</span>';
+                                                        showToast('网络错误，视频加载失败', 'error');
+                                                    }
+                                                    break;
+                                                case Hls.ErrorTypes.MEDIA_ERROR:
+                                                    document.getElementById('playStatus').innerHTML = '<span style="color:#f56c6c">媒体错误，正在尝试恢复...</span>';
+                                                    try {
+                                                        hls.recoverMediaError();
+                                                    } catch(e) {
+                                                        try {
+                                                            hls.swapAudioCodec();
+                                                            hls.recoverMediaError();
+                                                        } catch(e2) {
+                                                            setTimeout(function() {
+                                                                if (dp) {
+                                                                    try { dp.destroy(); } catch(e) {}
+                                                                    dp = null;
+                                                                }
+                                                                playVideo();
+                                                            }, 1000);
+                                                        }
+                                                    }
+                                                    break;
+                                                default:
+                                                    document.getElementById('playStatus').innerHTML = '<span style="color:#f56c6c">视频加载失败，请尝试重新加载</span>';
+                                                    showToast('视频加载失败', 'error');
+                                                    break;
+                                            }
+                                        }
+                                    });
+                                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                                    video.src = mxjxUrl;
+                                    video.addEventListener('loadedmetadata', function() {
+                                        firstFrameReady = true;
+                                        document.getElementById('playStatus').innerHTML = '<span style="color:#67c23a">视频加载完成，即将播放...</span>';
+                                        tryPlay();
+                                    });
+                                    video.addEventListener('playing', function() {
+                                        document.getElementById('playStatus').innerHTML = '<span style="color:#67c23a">正在播放...</span>';
+                                    });
+                                }
+                            }
+                        }
+                    },
+                    autoplay: false,
+                    preload: 'auto',
+                    muted: false,
+                    theme: '#667eea',
+                    lang: 'zh-cn',
+                    screenshot: true,
+                    hotkey: true,
+                    volume: 0.7,
+                    playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 2],
+                    mutex: true,
+                    airplay: true
+                });
+
+                let statusUpdated = false;
+
+                dp.on('loadstart', function() {
+                    if (!statusUpdated) {
+                        document.getElementById('playStatus').innerHTML = '<span style="color:#e6a23c">开始加载视频...</span>';
+                    }
+                });
+
+                dp.on('playing', function() {
+                    statusUpdated = true;
+                    document.getElementById('playStatus').innerHTML = '<span style="color:#67c23a">正在播放...</span>';
+                });
+
+                dp.on('pause', function() {
+                    if (statusUpdated) {
+                        document.getElementById('playStatus').innerHTML = '<span style="color:#909399">已暂停</span>';
+                    }
+                });
+
+                dp.on('waiting', function() {
+                    if (statusUpdated) {
+                        document.getElementById('playStatus').innerHTML = '<span style="color:#e6a23c">缓冲中...</span>';
+                    }
+                });
+
+                dp.on('play', function() {
+                    statusUpdated = true;
+                    document.getElementById('playStatus').innerHTML = '<span style="color:#67c23a">正在播放...</span>';
+                });
+
+                dp.on('error', function() {
+                    if (!statusUpdated) {
+                        document.getElementById('playStatus').innerHTML = '<span style="color:#f56c6c">播放器错误，请检查视频链接</span>';
+                        showToast('播放器错误，请检查视频链接', 'error');
+                    }
+                });
+
+                setTimeout(function() {
+                    if (!playAttempted && dp && dp.video && dp.video.readyState >= 2 && dp.video.paused) {
+                        playAttempted = true;
+                        statusUpdated = true;
+                        document.getElementById('playStatus').innerHTML = '<span style="color:#67c23a">视频加载成功，点击播放按钮开始播放</span>';
+                        dp.video.play().catch(function() {});
+                    }
+                }, 10000);
+            } catch (e) {
+                document.getElementById('playStatus').innerHTML = '<span style="color:#f56c6c">播放器初始化失败: ' + e.message + '</span>';
+                showToast('播放失败: ' + e.message, 'error');
+            }
+        }
+
+        let analyzeDp = null;
+        let analyzeHls = null;
+        let analyzeLoadTimeout = null;
+
+        function clearAnalyzeLoadTimeout() {
+            if (analyzeLoadTimeout) {
+                clearTimeout(analyzeLoadTimeout);
+                analyzeLoadTimeout = null;
+            }
+        }
+
+        function getAnalyzeMxjxUrl() {
+            if (!analyzeBaseUrl) return '';
+            const useProxy = document.getElementById('analyzeUseProxy')?.checked;
+            if (useProxy) {
+                const proxySel = document.getElementById('analyzeProxyServer');
+                const proxy = proxySel?.value;
+                if (proxy) {
+                    const sep = analyzeBaseUrl.includes('?') ? '&' : '?';
+                    return analyzeBaseUrl + sep + 'proxy=' + encodeURIComponent(proxy);
+                }
+            }
+            return analyzeBaseUrl;
+        }
+
+        function toggleAutoProxy() {
+            autoSwitchProxy = document.getElementById('analyzeAutoProxy')?.checked ?? true;
+            if (autoSwitchProxy) {
+                autoSelectFastestProxy();
+            }
+            updateAnalyzeMxjxUrl();
+        }
+
+        function onProxySelectChange() {
+            updateAnalyzeMxjxUrl();
+        }
+
+        async function autoSelectFastestProxy() {
+            const autoChecked = document.getElementById('analyzeAutoProxy')?.checked;
+            if (!autoChecked) return;
+            const proxySel = document.getElementById('analyzeProxyServer');
+            if (!proxySel) return;
+            const fastest = await getFastestProxy();
+            if (fastest && proxySel.value !== fastest) {
+                proxySel.value = fastest;
+            }
+        }
+
+        function updateAnalyzeMxjxUrl() {
+            const url = getAnalyzeMxjxUrl();
+            const el = document.getElementById('analyzeMxjxUrl');
+            if (el && url) {
+                el.textContent = url;
+            }
+            const proxySel = document.getElementById('analyzeProxyServer');
+            const useProxy = document.getElementById('analyzeUseProxy')?.checked;
+            const checkBtn = document.getElementById('checkProxyBtn');
+            const autoProxyLabel = document.getElementById('analyzeAutoProxyLabel');
+            if (proxySel) {
+                proxySel.style.display = useProxy ? 'inline-block' : 'none';
+            }
+            if (checkBtn) {
+                checkBtn.style.display = useProxy ? 'inline-block' : 'none';
+            }
+            if (autoProxyLabel) {
+                autoProxyLabel.style.display = useProxy ? 'flex' : 'none';
+            }
+        }
+
+        function playAnalyzeVideo() {
+            analyzeProxyRetryCount = 0;
+            const url = getAnalyzeMxjxUrl();
+            if (!url) {
+                showToast('请先分析视频', 'error');
+                return;
+            }
+            const container = document.getElementById('analyzePlayerContainer');
+            const statusEl = document.getElementById('analyzePlayStatus');
+            if (container) {
+                container.style.display = 'block';
+            }
+            if (statusEl) {
+                statusEl.innerHTML = '<span style="color:#e6a23c">正在加载播放器...</span>';
+            }
+
+            if (analyzeDp) {
+                try { analyzeDp.destroy(); } catch(e) {}
+                analyzeDp = null;
+            }
+            if (analyzeHls) {
+                try { analyzeHls.destroy(); } catch(e) {}
+                analyzeHls = null;
+            }
+            clearAnalyzeLoadTimeout();
+
+            if (typeof DPlayer === 'undefined' || typeof Hls === 'undefined') {
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color:#f56c6c">播放器库加载失败，请刷新页面</span>';
+                }
+                showToast('播放器库加载失败', 'error');
+                return;
+            }
+
+            try {
+                const hlsConfig = {
+                    enableWorker: true,
+                    lowLatencyMode: false,
+                    maxBufferLength: 60,
+                    maxMaxBufferLength: 900,
+                    minBufferLength: 5,
+                    maxBufferSize: 120 * 1000 * 1000,
+                    maxBufferHole: 0.3,
+                    highBufferWatchdogPeriod: 0.5,
+                    startLevel: -1,
+                    capLevelToPlayerSize: true,
+                    liveSyncDurationCount: 3,
+                    liveMaxLatencyDurationCount: 10,
+                    fragLoadingTimeOut: 30000,
+                    manifestLoadingTimeOut: 20000,
+                    levelLoadingTimeOut: 15000,
+                    backBufferLength: 60,
+                    startFragPrefetch: true,
+                    enableSoftwareAES: true,
+                    abrEwmaDefaultEstimate: 2000000,
+                    abrBandWidthFactor: 0.75,
+                    abrEwmaFastLive: 3.0,
+                    abrEwmaSlowLive: 9.0,
+                    maxFragLookUpTolerance: 0.2,
+                    enableCEA708Captions: false,
+                    enableWebVTT: false,
+                    enableIMSC1: false,
+                    renderTextTracksNatively: false,
+                    xhrSetup: function(xhr) {
+                        xhr.withCredentials = false;
+                        xhr.timeout = 30000;
+                    }
+                };
+
+                let hlsReady = false;
+                let firstFrameReady = false;
+                let playAttempted = false;
+
+                const tryPlay = function() {
+                    if (playAttempted) return;
+                    if (firstFrameReady && analyzeDp && analyzeDp.video && analyzeDp.video.paused) {
+                        playAttempted = true;
+                        analyzeDp.video.play().catch(function(e) {
+                            console.warn('自动播放被阻止:', e);
+                            if (statusEl) statusEl.innerHTML = '<span style="color:#e6a23c">视频已加载，点击播放按钮开始播放</span>';
+                            showToast('点击播放按钮开始播放', 'warning');
+                        });
+                    }
+                };
+
+                const containerEl = document.getElementById('analyzeVideoPlayer');
+                analyzeDp = new DPlayer({
+                    container: containerEl,
+                    video: {
+                        url: url,
+                        type: 'customHls',
+                        customType: {
+                            customHls: function(video, player) {
+                                if (Hls.isSupported()) {
+                                    analyzeHls = new Hls(hlsConfig);
+                                    analyzeHls.loadSource(video.src);
+                                    analyzeHls.attachMedia(video);
+                                    player.hls = analyzeHls;
+
+                                    analyzeLoadTimeout = setTimeout(function() {
+                                        if (video.readyState < 2) {
+                                            if (statusEl) statusEl.innerHTML = '<span style="color:#e6a23c">视频加载较慢，正在努力加载中...</span>';
+                                            showToast('视频加载较慢，请耐心等待...', 'warning');
+                                        }
+                                    }, 6000);
+
+                                    analyzeHls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
+                                        console.log('HLS 清单解析完成, 共', data.levels.length, '个清晰度');
+                                        hlsReady = true;
+                                        if (statusEl) statusEl.innerHTML = '<span style="color:#e6a23c">视频解析完成，正在缓冲首帧...</span>';
+                                    });
+
+                                    analyzeHls.on(Hls.Events.FRAG_LOADED, function(event, data) {
+                                        console.log('片段加载完成, 索引:', data.frag.sn, '时长:', data.frag.duration.toFixed(2) + 's');
+                                        clearAnalyzeLoadTimeout();
+                                        firstFrameReady = true;
+                                        if (statusEl && !playAttempted) {
+                                            statusEl.innerHTML = '<span style="color:#67c23a">首帧加载完成，即将播放...</span>';
+                                        }
+                                        tryPlay();
+                                    });
+
+                                    analyzeHls.on(Hls.Events.LEVEL_SWITCHED, function(event, data) {
+                                        console.log('清晰度切换到:', data.level);
+                                    });
+
+                                    analyzeHls.on(Hls.Events.ERROR, function(event, data) {
+                                        console.error('HLS 错误:', data.type, data.details, data.fatal ? '(致命)' : '');
+                                        if (data.fatal) {
+                                            clearAnalyzeLoadTimeout();
+                                            switch (data.type) {
+                                                case Hls.ErrorTypes.NETWORK_ERROR:
+                                                    if (statusEl) statusEl.innerHTML = '<span style="color:#f56c6c">网络错误，正在尝试恢复...</span>';
+                                                    let recovered = false;
+                                                    try {
+                                                        analyzeHls.startLoad();
+                                                        recovered = true;
+                                                    } catch(e) {}
+                                                    if (!recovered && trySwitchProxyForAnalyze()) {
+                                                        if (statusEl) statusEl.innerHTML = '<span style="color:#e6a23c">当前代理不可用，正在切换代理...</span>';
+                                                        showToast('代理不可用，正在自动切换...', 'warning');
+                                                        setTimeout(function() {
+                                                            if (analyzeDp) {
+                                                                try { analyzeDp.destroy(); } catch(e) {}
+                                                                analyzeDp = null;
+                                                            }
+                                                            playAnalyzeVideo();
+                                                        }, 500);
+                                                    } else if (!recovered) {
+                                                        if (statusEl) statusEl.innerHTML = '<span style="color:#f56c6c">网络错误，请检查网络或尝试刷新</span>';
+                                                        showToast('网络错误，视频加载失败', 'error');
+                                                    }
+                                                    break;
+                                                case Hls.ErrorTypes.MEDIA_ERROR:
+                                                    if (statusEl) statusEl.innerHTML = '<span style="color:#f56c6c">媒体错误，正在尝试恢复...</span>';
+                                                    try {
+                                                        analyzeHls.recoverMediaError();
+                                                    } catch(e) {
+                                                        try {
+                                                            analyzeHls.swapAudioCodec();
+                                                            analyzeHls.recoverMediaError();
+                                                        } catch(e2) {
+                                                            setTimeout(function() {
+                                                                if (analyzeDp) {
+                                                                    try { analyzeDp.destroy(); } catch(e) {}
+                                                                    analyzeDp = null;
+                                                                }
+                                                                playAnalyzeVideo();
+                                                            }, 1000);
+                                                        }
+                                                    }
+                                                    break;
+                                                default:
+                                                    if (statusEl) statusEl.innerHTML = '<span style="color:#f56c6c">视频加载失败，请尝试重新加载</span>';
+                                                    showToast('视频加载失败', 'error');
+                                                    break;
+                                            }
+                                        }
+                                    });
+                                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                                    video.src = url;
+                                    video.addEventListener('loadedmetadata', function() {
+                                        hlsReady = true;
+                                        firstFrameReady = true;
+                                        if (statusEl) statusEl.innerHTML = '<span style="color:#67c23a">视频加载完成，即将播放...</span>';
+                                        tryPlay();
+                                    });
+                                    video.addEventListener('playing', function() {
+                                        if (statusEl) statusEl.innerHTML = '<span style="color:#67c23a">正在播放...</span>';
+                                    });
+                                }
+                            }
+                        }
+                    },
+                    autoplay: false,
+                    preload: 'auto',
+                    muted: false,
+                    theme: '#667eea',
+                    lang: 'zh-cn',
+                    screenshot: true,
+                    hotkey: true,
+                    volume: 0.7,
+                    playbackSpeed: [0.5, 0.75, 1, 1.25, 1.5, 2],
+                    mutex: true,
+                    airplay: true
+                });
+
+                analyzeDp.on('loadstart', function() {
+                    if (statusEl) statusEl.innerHTML = '<span style="color:#e6a23c">开始加载视频...</span>';
+                });
+
+                analyzeDp.on('playing', function() {
+                    clearAnalyzeLoadTimeout();
+                    if (statusEl) statusEl.innerHTML = '<span style="color:#67c23a">正在播放...</span>';
+                });
+
+                analyzeDp.on('waiting', function() {
+                    if (statusEl) statusEl.innerHTML = '<span style="color:#e6a23c">缓冲中...</span>';
+                });
+
+                analyzeDp.on('play', function() {
+                    clearAnalyzeLoadTimeout();
+                    if (statusEl) statusEl.innerHTML = '<span style="color:#67c23a">正在播放...</span>';
+                });
+
+                analyzeDp.on('pause', function() {
+                    if (statusEl) statusEl.innerHTML = '<span style="color:#909399">已暂停</span>';
+                });
+
+                analyzeDp.on('error', function() {
+                    clearAnalyzeLoadTimeout();
+                    if (statusEl) statusEl.innerHTML = '<span style="color:#f56c6c">播放器错误，请检查视频链接</span>';
+                    showToast('播放器错误，请检查视频链接', 'error');
+                });
+
+                setTimeout(function() {
+                    if (analyzeDp && analyzeDp.video && analyzeDp.video.readyState >= 2 && analyzeDp.video.paused && !playAttempted) {
+                        if (statusEl) statusEl.innerHTML = '<span style="color:#e6a23c">视频已就绪，点击播放按钮开始播放</span>';
+                    }
+                }, 10000);
+            } catch (e) {
+                if (statusEl) statusEl.innerHTML = '<span style="color:#f56c6c">播放器初始化失败: ' + e.message + '</span>';
+                showToast('播放失败: ' + e.message, 'error');
+            }
+        }
+
+        async function loadPlayerConfig() {
+            try {
+                const res = await fetch(API_BASE + '?action=player/config&_t=' + Date.now());
+                const data = await res.json();
+                if (data.success && data.config) {
+                    const config = data.config;
+                    const playerSelect = document.getElementById('playerSelect');
+                    const autoplaySelect = document.getElementById('playerAutoplay');
+                    const preloadSelect = document.getElementById('playerPreload');
+                    const apiBaseUrlInput = document.getElementById('playerApiBaseUrl');
+                    
+                    if (playerSelect && config.player) {
+                        playerSelect.value = config.player;
+                    }
+                    if (autoplaySelect) {
+                        autoplaySelect.value = config.autoplay ? 'true' : 'false';
+                    }
+                    if (preloadSelect && config.preload) {
+                        preloadSelect.value = config.preload;
+                    }
+                    if (apiBaseUrlInput && config.api_base_url !== undefined) {
+                        apiBaseUrlInput.value = config.api_base_url || '';
+                    }
+                }
+            } catch (e) {
+                console.error('加载播放器配置失败:', e);
+            }
+        }
+
+        function changePlayerPreview() {
+            const player = document.getElementById('playerSelect')?.value;
+            showToast('已选择 ' + player + ' 播放器，点击保存生效', 'info');
+        }
+
+        async function savePlayerConfig() {
+            const player = document.getElementById('playerSelect')?.value;
+            const autoplay = document.getElementById('playerAutoplay')?.value === 'true';
+            const preload = document.getElementById('playerPreload')?.value;
+            const apiBaseUrl = document.getElementById('playerApiBaseUrl')?.value.trim();
+            
+            if (!player) {
+                showToast('请选择播放器', 'error');
+                return;
+            }
+            
+            try {
+                const res = await fetch(API_BASE + '?action=player/config/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        player: player,
+                        autoplay: autoplay,
+                        preload: preload,
+                        api_base_url: apiBaseUrl
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('保存成功', 'success');
+                } else {
+                    showToast(data.message || '保存失败', 'error');
+                }
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        async function loadProxyList() {
+            try {
+                const res = await fetch(API_BASE + '?action=proxy/list&_t=' + Date.now());
+                const data = await res.json();
+                if (data.success && data.proxies && data.proxies.length > 0) {
+                    proxyListCache = data.proxies;
+                    const analyzeSel = document.getElementById('analyzeProxyServer');
+                    if (analyzeSel) {
+                        const currentVal = analyzeSel.value;
+                        analyzeSel.innerHTML = '<option value="">选择代理服务器（按延迟排序）</option>';
+                        data.proxies.forEach(function(p) {
+                            const opt = document.createElement('option');
+                            opt.value = p.url;
+                            opt.dataset.id = p.id || '';
+                            opt.dataset.responseTime = p.response_time || 0;
+                            let latencyStr = '';
+                            if (p.response_time && p.response_time > 0) {
+                                latencyStr = ' ' + formatLatency(p.response_time);
+                            } else {
+                                latencyStr = ' ⏳未测速';
+                            }
+                            opt.textContent = p.name + latencyStr + ' (' + p.type.toUpperCase() + ')';
+                            analyzeSel.appendChild(opt);
+                        });
+                        if (currentVal) {
+                            analyzeSel.value = currentVal;
+                        } else if (document.getElementById('analyzeAutoProxy')?.checked) {
+                            autoSelectFastestProxy();
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('加载代理列表失败:', e);
+            }
+        }
+
+        function formatLatency(ms) {
+            if (!ms || ms <= 0) return '—';
+            if (ms < 300) return ' 🟢' + Math.round(ms) + 'ms';
+            if (ms < 1000) return ' 🟡' + Math.round(ms) + 'ms';
+            return ' 🔴' + (ms / 1000).toFixed(1) + 's';
+        }
+
+        function getLatencyColor(ms) {
+            if (!ms || ms <= 0) return '#909399';
+            if (ms < 300) return '#67c23a';
+            if (ms < 1000) return '#e6a23c';
+            return '#f56c6c';
+        }
+
+        async function checkAllProxies() {
+            const btn = document.getElementById('checkProxyBtn');
+            if (btn) {
+                btn.disabled = true;
+                const oldText = btn.textContent;
+                btn.textContent = '测速中...';
+            }
+            try {
+                const res = await fetch(API_BASE + '?action=proxy/check&_t=' + Date.now());
+                const data = await res.json();
+                if (data.success && data.results) {
+                    await loadProxyList();
+                    showToast('测速完成，共检测 ' + data.results.length + ' 个代理', 'success');
+                } else {
+                    showToast(data.message || '测速失败', 'error');
+                }
+            } catch (e) {
+                console.error('代理测速失败:', e);
+                showToast('测速失败: ' + e.message, 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '🔄 测速';
+                }
+            }
+        }
+
+        let currentProxyIndex = 0;
+        let proxyListCache = [];
+        let autoSwitchProxy = true;
+
+        async function getFastestProxy() {
+            if (proxyListCache.length === 0) {
+                try {
+                    const res = await fetch(API_BASE + '?action=proxy/list&_t=' + Date.now());
+                    const data = await res.json();
+                    if (data.success && data.proxies && data.proxies.length > 0) {
+                        proxyListCache = data.proxies;
+                    }
+                } catch (e) {
+                    console.warn('获取代理列表失败:', e);
+                }
+            }
+            if (proxyListCache.length > 0) {
+                const fast = proxyListCache.find(p => p.response_time && p.response_time > 0 && p.response_time < 3000);
+                if (fast) return fast.url;
+                return proxyListCache[0].url;
+            }
+            return '';
+        }
+
+        let analyzeProxyRetryCount = 0;
+        const MAX_PROXY_RETRIES = 3;
+
+        function trySwitchProxyForAnalyze() {
+            const useProxy = document.getElementById('analyzeUseProxy')?.checked;
+            const autoSwitch = document.getElementById('analyzeAutoProxy')?.checked;
+            if (!useProxy || !autoSwitch) return false;
+            if (analyzeProxyRetryCount >= MAX_PROXY_RETRIES) return false;
+
+            const proxySel = document.getElementById('analyzeProxyServer');
+            if (!proxySel || !proxySel.value) return false;
+
+            const nextProxy = switchToNextProxy(proxySel.value);
+            if (nextProxy && nextProxy !== proxySel.value) {
+                analyzeProxyRetryCount++;
+                proxySel.value = nextProxy;
+                console.log('自动切换代理到:', nextProxy, '(第' + analyzeProxyRetryCount + '次切换)');
+                return true;
+            }
+            return false;
+        }
+
+        async function refreshRules() {
+            try {
+                const res = await fetch(API_BASE + '?action=rules/list&_t=' + Date.now(), {
+                    cache: 'no-store',
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseErr) {
+                    console.error('规则列表响应解析失败:', text.substring(0, 500));
+                    throw new Error('服务器返回非JSON数据: ' + text.substring(0, 200));
+                }
+                if (!data.success) throw new Error(data.message || '获取失败');
+                renderRulesTable(data.rules);
+            } catch (e) {
+                console.error('获取规则列表错误:', e);
+                showToast('获取规则列表失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderRulesTable(rules) {
+            const domains = Object.keys(rules);
+            if (domains.length === 0) {
+                document.getElementById('rulesTable').innerHTML = '<div class="empty">暂无域名规则</div>';
+                return;
+            }
+            let html = '<table class="rules-table"><thead><tr><th>资源名称</th><th>域名</th><th>时长规则</th><th>DISCON规则</th><th>序列号跳跃</th><th>学习次数</th><th>更新时间</th><th>操作</th></tr></thead><tbody>';
+            for (const domain of domains) {
+                const r = rules[domain];
+                const name = escapeHtml(r.name || domain);
+                let durCount;
+                if (typeof r.duration_rule_count === 'number') {
+                    durCount = r.duration_rule_count;
+                } else if (Array.isArray(r.duration_rules)) {
+                    durCount = r.duration_rules.filter(x => x.enabled).length;
+                } else {
+                    durCount = 0;
+                }
+                let disCount;
+                if (typeof r.discontinuity_rule_count === 'number') {
+                    disCount = r.discontinuity_rule_count;
+                } else if (Array.isArray(r.discontinuity_rules)) {
+                    disCount = r.discontinuity_rules.filter(x => x.enabled).length;
+                } else {
+                    disCount = 0;
+                }
+                let seqCount;
+                if (typeof r.sequence_jump_rule_count === 'number') {
+                    seqCount = r.sequence_jump_rule_count;
+                } else if (Array.isArray(r.sequence_jump_rules)) {
+                    seqCount = r.sequence_jump_rules.filter(x => x.enabled).length;
+                } else {
+                    seqCount = 0;
+                }
+                const learnCount = r.learn_count || 0;
+                const mtime = r.last_learn_date || r.analysis_date || (r._filemtime ? new Date(r._filemtime * 1000).toLocaleString() : '-');
+                html += `
+                    <tr>
+                        <td><span style="color:#606266">${name}</span></td>
+                        <td><strong>${escapeHtml(domain)}</strong></td>
+                        <td><span class="tag tag-blue">${durCount}条</span></td>
+                        <td>${disCount > 0 ? '<span class="tag tag-orange">启用</span>' : '<span style="color:#c0c4cc">未启用</span>'}</td>
+                        <td>${seqCount > 0 ? '<span class="tag tag-red">' + seqCount + '条</span>' : '<span style="color:#c0c4cc">无</span>'}</td>
+                        <td><span class="tag tag-green">${learnCount}次</span></td>
+                        <td style="color:#909399;font-size:12px">${mtime}</td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" onclick="exportSingleRule('${escapeHtml(domain)}')">导出</button>
+                            <button class="btn btn-sm btn-secondary" onclick="editRule('${escapeHtml(domain)}')">编辑</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteRule('${escapeHtml(domain)}')">删除</button>
+                        </td>
+                    </tr>
+                `;
+            }
+            html += '</tbody></table>';
+            document.getElementById('rulesTable').innerHTML = html;
+        }
+
+        function showAddRule() {
+            editingRules = {
+                domain: '',
+                name: '',
+                duration_rules: [{ name: 'short_segment', enabled: true, type: 'duration', operator: '<', threshold: 2, reason: '极短片段 (<2秒) 可能是广告', weight: 30 }],
+                discontinuity_rules: [{ name: 'discontinuity', enabled: false, type: 'discontinuity', reason: 'DISCONTINUITY 标记表示插播切换', weight: 80 }],
+                sequence_jump_rules: [],
+                filename_patterns: [],
+                note: ''
+            };
+            showRuleEditor(editingRules, true);
+        }
+
+        async function editRule(domain) {
+            try {
+                const res = await fetch(API_BASE + '?action=rules/get&domain=' + encodeURIComponent(domain));
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                editingRules = data.rules;
+                showRuleEditor(data.rules, false);
+            } catch (e) {
+                showToast('获取规则失败: ' + e.message, 'error');
+            }
+        }
+
+        function showRuleEditor(rules, isNew) {
+            document.getElementById('ruleEditor').style.display = 'block';
+            document.getElementById('ruleEditorTitle').textContent = isNew ? '新增规则' : '编辑规则';
+            document.getElementById('ruleName').value = rules.name || '';
+            document.getElementById('ruleDomain').value = rules.domain || '';
+            document.getElementById('ruleDomain').disabled = !isNew;
+            document.getElementById('ruleNote').value = rules.note || '';
+
+            const disRules = Array.isArray(rules.discontinuity_rules) ? rules.discontinuity_rules : [];
+            const disEnabled = disRules.length > 0 && disRules[0].enabled;
+            document.getElementById('discontinuityEnabled').checked = disEnabled;
+
+            renderDurationRules(Array.isArray(rules.duration_rules) ? rules.duration_rules : []);
+            renderSeqJumpRules(Array.isArray(rules.sequence_jump_rules) ? rules.sequence_jump_rules : []);
+            renderFilenamePatterns(Array.isArray(rules.filename_patterns) ? rules.filename_patterns : []);
+        }
+
+        function cancelRuleEdit() {
+            document.getElementById('ruleEditor').style.display = 'none';
+            editingRules = null;
+        }
+
+        function renderDurationRules(rules) {
+            const container = document.getElementById('durationRules');
+            if (rules.length === 0) {
+                container.innerHTML = '<div style="color:#c0c4cc;font-size:13px;padding:8px 0">暂无时长规则</div>';
+                return;
+            }
+            container.innerHTML = rules.map((r, i) => `
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                    <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="editingRules.duration_rules[${i}].enabled = this.checked">
+                    <select onchange="editingRules.duration_rules[${i}].operator = this.value">
+                        <option value="<" ${r.operator === '<' ? 'selected' : ''}><</option>
+                        <option value=">" ${r.operator === '>' ? 'selected' : ''}>></option>
+                        <option value="<=" ${r.operator === '<=' ? 'selected' : ''}><=</option>
+                        <option value=">=" ${r.operator === '>=' ? 'selected' : ''}>>=</option>
+                        <option value="==" ${r.operator === '==' ? 'selected' : ''}>==</option>
+                    </select>
+                    <input type="number" step="0.1" value="${r.threshold}" style="width:80px;padding:6px 8px;border:1px solid #dcdfe6;border-radius:4px"
+                        onchange="editingRules.duration_rules[${i}].threshold = parseFloat(this.value)">
+                    <span style="color:#909399">秒</span>
+                    <input type="text" value="${r.reason || ''}" placeholder="说明" style="flex:1;padding:6px 8px;border:1px solid #dcdfe6;border-radius:4px"
+                        onchange="editingRules.duration_rules[${i}].reason = this.value">
+                    <button class="btn btn-sm btn-danger" onclick="removeDurationRule(${i})">删除</button>
+                </div>
+            `).join('');
+        }
+
+        function addDurationRule() {
+            if (!editingRules) editingRules = { duration_rules: [] };
+            if (!editingRules.duration_rules) editingRules.duration_rules = [];
+            editingRules.duration_rules.push({
+                name: 'duration_rule_' + Date.now(),
+                enabled: true,
+                type: 'duration',
+                operator: '<',
+                threshold: 2,
+                reason: '',
+                weight: 30
+            });
+            renderDurationRules(editingRules.duration_rules);
+        }
+
+        function removeDurationRule(idx) {
+            editingRules.duration_rules.splice(idx, 1);
+            renderDurationRules(editingRules.duration_rules);
+        }
+
+        function renderSeqJumpRules(rules) {
+            const container = document.getElementById('sequenceJumpRules');
+            if (rules.length === 0) {
+                container.innerHTML = '<div style="color:#c0c4cc;font-size:13px;padding:8px 0">暂无序列号跳跃规则</div>';
+                return;
+            }
+            container.innerHTML = rules.map((r, i) => `
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                    <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="editingRules.sequence_jump_rules[${i}].enabled = this.checked">
+                    <select onchange="editingRules.sequence_jump_rules[${i}].direction = this.value">
+                        <option value="forward" ${r.direction === 'forward' ? 'selected' : ''}>向前跳跃</option>
+                        <option value="backward" ${r.direction === 'backward' ? 'selected' : ''}>向后跳跃</option>
+                        <option value="any" ${r.direction === 'any' ? 'selected' : ''}>任意方向</option>
+                    </select>
+                    <span style="color:#909399">阈值</span>
+                    <input type="number" value="${r.threshold}" style="width:100px;padding:6px 8px;border:1px solid #dcdfe6;border-radius:4px"
+                        onchange="editingRules.sequence_jump_rules[${i}].threshold = parseInt(this.value)">
+                    <input type="text" value="${r.reason || ''}" placeholder="说明" style="flex:1;padding:6px 8px;border:1px solid #dcdfe6;border-radius:4px"
+                        onchange="editingRules.sequence_jump_rules[${i}].reason = this.value">
+                    <button class="btn btn-sm btn-danger" onclick="removeSeqJumpRule(${i})">删除</button>
+                </div>
+            `).join('');
+        }
+
+        function addSeqJumpRule() {
+            if (!editingRules) editingRules = { sequence_jump_rules: [] };
+            if (!editingRules.sequence_jump_rules) editingRules.sequence_jump_rules = [];
+            editingRules.sequence_jump_rules.push({
+                name: 'seq_jump_' + Date.now(),
+                enabled: true,
+                type: 'sequence_jump',
+                direction: 'forward',
+                threshold: 100000,
+                reason: '',
+                weight: 90
+            });
+            renderSeqJumpRules(editingRules.sequence_jump_rules);
+        }
+
+        function removeSeqJumpRule(idx) {
+            editingRules.sequence_jump_rules.splice(idx, 1);
+            renderSeqJumpRules(editingRules.sequence_jump_rules);
+        }
+
+        function renderFilenamePatterns(patterns) {
+            const container = document.getElementById('filenamePatterns');
+            if (patterns.length === 0) {
+                container.innerHTML = '<div style="color:#c0c4cc;font-size:13px;padding:8px 0">暂无文件名模式</div>';
+                return;
+            }
+            container.innerHTML = patterns.map((p, i) => `
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                    <input type="text" value="${p}" placeholder="正则模式，例如：/ad/i" style="flex:1;padding:6px 8px;border:1px solid #dcdfe6;border-radius:4px;font-family:monospace"
+                        onchange="editingRules.filename_patterns[${i}] = this.value">
+                    <button class="btn btn-sm btn-danger" onclick="removeFilenamePattern(${i})">删除</button>
+                </div>
+            `).join('');
+        }
+
+        function addFilenamePattern() {
+            if (!editingRules) editingRules = { filename_patterns: [] };
+            if (!editingRules.filename_patterns) editingRules.filename_patterns = [];
+            editingRules.filename_patterns.push('');
+            renderFilenamePatterns(editingRules.filename_patterns);
+        }
+
+        function removeFilenamePattern(idx) {
+            editingRules.filename_patterns.splice(idx, 1);
+            renderFilenamePatterns(editingRules.filename_patterns);
+        }
+
+        async function saveRule() {
+            const domain = document.getElementById('ruleDomain').value.trim();
+            if (!domain) { showToast('请输入域名', 'error'); return; }
+            if (!editingRules) editingRules = {};
+            editingRules.domain = domain;
+            editingRules.name = document.getElementById('ruleName').value.trim();
+            editingRules.note = document.getElementById('ruleNote').value;
+            const disEnabled = document.getElementById('discontinuityEnabled').checked;
+            if (!editingRules.discontinuity_rules || editingRules.discontinuity_rules.length === 0) {
+                editingRules.discontinuity_rules = [{
+                    name: 'discontinuity',
+                    enabled: disEnabled,
+                    type: 'discontinuity',
+                    reason: 'DISCONTINUITY 标记表示插播切换',
+                    weight: 80
+                }];
+            } else {
+                editingRules.discontinuity_rules[0].enabled = disEnabled;
+            }
+            try {
+                const res = await fetch(API_BASE + '?action=rules/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain: domain, rules: editingRules })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('规则保存成功', 'success');
+                cancelRuleEdit();
+                refreshRules();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteRule(domain) {
+            if (!confirm('确定要删除该域名的规则吗？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=rules/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain: domain })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('规则已删除', 'success');
+                refreshRules();
+            } catch (e) {
+                showToast('删除失败: ' + e.message, 'error');
+            }
+        }
+
+        async function clearAllRules() {
+            if (!confirm('⚠️ 确定要清理所有域名规则吗？\n\n此操作不可恢复，建议先导出备份！')) return;
+            if (!confirm('再次确认：真的要删除全部规则吗？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=rules/clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('已清理 ' + (data.cleared_count || 0) + ' 条规则', 'success');
+                refreshRules();
+            } catch (e) {
+                showToast('清理失败: ' + e.message, 'error');
+            }
+        }
+
+        async function exportAllRules() {
+            try {
+                const res = await fetch(API_BASE + '?action=rules/export&download=1&_t=' + Date.now());
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'all_rules.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('导出成功', 'success');
+            } catch (e) {
+                showToast('导出失败: ' + e.message, 'error');
+            }
+        }
+
+        async function exportSingleRule(domain) {
+            try {
+                const res = await fetch(API_BASE + '?action=rules/export&domain=' + encodeURIComponent(domain) + '&download=1&_t=' + Date.now());
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'rules_' + domain + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('导出成功', 'success');
+            } catch (e) {
+                showToast('导出失败: ' + e.message, 'error');
+            }
+        }
+
+        async function importRulesFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const importData = JSON.parse(text);
+                const res = await fetch(API_BASE + '?action=rules/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(importData)
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast(data.message || '导入成功', 'success');
+                refreshRules();
+            } catch (e) {
+                showToast('导入失败: ' + e.message, 'error');
+            } finally {
+                event.target.value = '';
+            }
+        }
+
+        let latestUpdateData = null;
+
+        function showUpdateModal(data) {
+            latestUpdateData = data;
+            const modal = document.getElementById('updateModal');
+            const latestShort = (data.latest_commit || '').substring(0, 7);
+            const currentShort = (data.current_commit || '').substring(0, 7);
+
+            const curVerEl = document.getElementById('modalCurrentVersion');
+            const latestVerEl = document.getElementById('modalLatestVersion');
+            if (curVerEl) {
+                curVerEl.textContent = (data.current_version || '-') + (currentShort ? ' (' + currentShort + ')' : '');
+            }
+            if (latestVerEl) {
+                latestVerEl.textContent = (data.latest_version || '-') + (latestShort ? ' (' + latestShort + ')' : '');
+            }
+
+            const metaEl = document.getElementById('modalUpdateMeta');
+            const metaItems = [];
+            if (data.latest_date) {
+                metaItems.push('<span>🕐 ' + new Date(data.latest_date).toLocaleString('zh-CN') + '</span>');
+            }
+            if (data.latest_message) {
+                metaItems.push('<span>📝 ' + escapeHtml(data.latest_message.substring(0, 50)) + '</span>');
+            }
+            if (metaEl) metaEl.innerHTML = metaItems.join('');
+
+            const changelog = data.changelog || [];
+            const changelogEl = document.getElementById('modalChangelog');
+            document.getElementById('changelogCount').textContent = changelog.length + ' 项更新';
+
+            if (changelog.length === 0) {
+                changelogEl.innerHTML = '<div style="text-align:center;color:#909399;padding:20px">暂无更新记录</div>';
+            } else {
+                changelogEl.innerHTML = changelog.map(item => `
+                    <div class="changelog-item">
+                        <span class="changelog-type" style="background:${item.type_color}22;color:${item.type_color}">${item.type_label}</span>
+                        <div class="changelog-content">
+                            <div class="changelog-msg">${escapeHtml(item.message)}</div>
+                            <div class="changelog-meta">
+                                <span>${item.sha}</span>
+                                <span>${item.date_formatted || ''}</span>
+                                <span>${escapeHtml(item.author || '')}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function hideUpdateModal() {
+            document.getElementById('updateModal').style.display = 'none';
+        }
+
+        function doUpdateFromModal() {
+            hideUpdateModal();
+            if (!document.getElementById('page-update').classList.contains('active')) {
+                const updateItem = document.querySelector('.nav-item[data-page="update"]');
+                if (updateItem) handleNavClick(updateItem);
+            }
+            setTimeout(() => doUpdate(), 300);
+        }
+
+        async function checkUpdate(autoShowModal = false) {
+            const checkBtn = document.querySelector('button[onclick="checkUpdate()"]');
+            const originalBtnText = checkBtn ? checkBtn.textContent : '';
+            if (checkBtn) {
+                checkBtn.disabled = true;
+                checkBtn.textContent = '检查中...';
+            }
+
+            const statusEl = document.getElementById('updateStatus');
+            if (statusEl) {
+                statusEl.textContent = '检查中...';
+                statusEl.className = 'stat-value';
+            }
+
+            try {
+                const res = await fetch(API_BASE + '?action=update/check');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                
+                const curVerEl = document.getElementById('currentVersion');
+                const latestVerEl = document.getElementById('latestVersion');
+                if (curVerEl) {
+                    const curShort = (data.current_commit || '').substring(0, 7);
+                    curVerEl.textContent = (data.current_version || '-') + (curShort ? ' · ' + curShort : '');
+                }
+                if (latestVerEl) {
+                    const latestShort = (data.latest_commit || '').substring(0, 7);
+                    latestVerEl.textContent = (data.latest_version || '-') + (latestShort ? ' · ' + latestShort : '');
+                }
+                
+                const updateBtn = document.getElementById('updateBtn');
+                const githubStatusEl = document.getElementById('githubStatus');
+                
+                if (githubStatusEl) {
+                    if (data.github_connected) {
+                        let mirrorInfo = '';
+                        if (data.used_mirror) {
+                            try {
+                                const m = new URL(data.used_mirror);
+                                mirrorInfo = ' (' + m.host + ')';
+                            } catch (e) {
+                                mirrorInfo = ' (' + data.used_mirror + ')';
+                            }
+                        }
+                        githubStatusEl.textContent = '连接成功' + mirrorInfo;
+                        githubStatusEl.className = 'stat-value success';
+                    } else {
+                        githubStatusEl.textContent = '连接失败';
+                        githubStatusEl.className = 'stat-value danger';
+                    }
+                }
+                
+                if (data.has_update) {
+                    if (statusEl) {
+                        statusEl.textContent = '有新版本';
+                        statusEl.className = 'stat-value warning';
+                    }
+                    if (updateBtn) updateBtn.disabled = false;
+                    latestUpdateData = data;
+                    setTimeout(() => showUpdateModal(data), 300);
+                } else {
+                    if (statusEl) {
+                        statusEl.textContent = '已是最新';
+                        statusEl.className = 'stat-value success';
+                    }
+                    if (updateBtn) updateBtn.disabled = true;
+                    if (!autoShowModal) {
+                        showToast('已是最新版本', 'success');
+                    }
+                }
+            } catch (e) {
+                if (statusEl) {
+                    statusEl.textContent = '检查失败';
+                    statusEl.className = 'stat-value danger';
+                }
+                const githubStatusEl = document.getElementById('githubStatus');
+                if (githubStatusEl) {
+                    githubStatusEl.textContent = '连接失败';
+                    githubStatusEl.className = 'stat-value danger';
+                }
+                loadVersion();
+                if (!autoShowModal) {
+                    showToast('检查更新失败: ' + e.message, 'error');
+                }
+            } finally {
+                if (checkBtn) {
+                    checkBtn.disabled = false;
+                    checkBtn.textContent = originalBtnText || '检查更新';
+                }
+            }
+        }
+
+        async function loadVersion() {
+            try {
+                const res = await fetch(API_BASE + '?action=update/version');
+                const data = await res.json();
+                if (data.success) {
+                    const curEl = document.getElementById('currentVersion');
+                    if (curEl && (curEl.textContent === '-' || curEl.textContent === '')) {
+                        const curShort = (data.current_commit || '').substring(0, 7);
+                        curEl.textContent = (data.current_version || '-') + (curShort ? ' · ' + curShort : '');
+                    }
+                }
+            } catch (e) {}
+            loadBackupList();
+            loadSystemInfo();
+        }
+
+        async function loadSystemInfo() {
+            try {
+                const res = await fetch(API_BASE + '?action=update/system_info');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                
+                const info = data.data;
+                
+                let ghMirrorInfo = '';
+                if (info.github.reachable && info.github.mirror) {
+                    try {
+                        const m = new URL(info.github.mirror);
+                        ghMirrorInfo = ' (' + m.host + ')';
+                    } catch (e) {
+                        ghMirrorInfo = ' (' + info.github.mirror + ')';
+                    }
+                }
+                document.getElementById('githubStatus').textContent = info.github.reachable ? ('连接成功' + ghMirrorInfo) : '连接失败';
+                document.getElementById('githubStatus').className = 'stat-value ' + (info.github.reachable ? 'success' : 'danger');
+                const ghStatusTitle = document.getElementById('githubStatus');
+                if (ghStatusTitle) {
+                    ghStatusTitle.title = info.github.error || ('共测试 ' + (info.github.tested_mirrors || 0) + ' 个镜像');
+                }
+                
+                document.getElementById('serverInfo').innerHTML = `
+                    <div class="detail-grid">
+                        <div><strong>PHP版本:</strong> ${escapeHtml(info.server.php_version)}</div>
+                        <div><strong>操作系统:</strong> ${escapeHtml(info.server.os)}</div>
+                        <div><strong>服务器软件:</strong> ${escapeHtml(info.server.server_software)}</div>
+                        <div><strong>服务器名称:</strong> ${escapeHtml(info.server.server_name)}</div>
+                        <div><strong>服务器IP:</strong> ${escapeHtml(info.server.server_ip)}</div>
+                        <div><strong>内存限制:</strong> ${escapeHtml(info.server.memory_limit)}</div>
+                        <div><strong>最大执行时间:</strong> ${escapeHtml(info.server.max_execution_time)}秒</div>
+                        <div><strong>文档根目录:</strong> ${escapeHtml(info.server.document_root)}</div>
+                    </div>
+                `;
+                
+                document.getElementById('permissionInfo').innerHTML = `
+                    <table class="rules-table">
+                        <thead>
+                            <tr>
+                                <th>路径</th>
+                                <th>状态</th>
+                                <th>权限</th>
+                                <th>可写</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${info.permissions.map(p => `
+                                <tr>
+                                    <td>${escapeHtml(p.path)}</td>
+                                    <td>${p.exists ? '<span class="tag tag-green">存在</span>' : '<span class="tag tag-red">不存在</span>'}</td>
+                                    <td>${escapeHtml(p.permission)}</td>
+                                    <td>${p.writable ? '<span class="tag tag-green">是</span>' : '<span class="tag tag-red">否</span>'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (e) {
+                document.getElementById('serverInfo').innerHTML = '<span class="tag tag-red">加载失败:</span> ' + e.message;
+                document.getElementById('permissionInfo').innerHTML = '<span class="tag tag-red">加载失败:</span> ' + e.message;
+            }
+        }
+
+        async function createBackup() {
+            try {
+                const res = await fetch(API_BASE + '?action=update/backup/create');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('备份创建成功: ' + data.filename, 'success');
+                loadBackupList();
+            } catch (e) {
+                showToast('创建备份失败: ' + e.message, 'error');
+            }
+        }
+
+        async function loadBackupList() {
+            try {
+                const res = await fetch(API_BASE + '?action=update/backup/list');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                
+                const backups = data.backups || [];
+                const container = document.getElementById('backupList');
+                
+                if (backups.length === 0) {
+                    container.innerHTML = '<div class="empty">暂无备份文件</div>';
+                    return;
+                }
+                
+                container.innerHTML = `
+                    <table class="rules-table">
+                        <thead>
+                            <tr>
+                                <th>备份文件名</th>
+                                <th>大小</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${backups.map(b => `
+                                <tr>
+                                    <td><strong>${b.filename}</strong></td>
+                                    <td>${b.size_formatted}</td>
+                                    <td style="color:#909399;font-size:12px">${b.created_formatted}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-secondary" onclick="restoreBackup('${b.filename}')">恢复</button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteBackup('${b.filename}')">删除</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (e) {
+                document.getElementById('backupList').innerHTML = '<div class="empty">加载备份列表失败</div>';
+            }
+        }
+
+        async function restoreBackup(filename) {
+            if (!confirm('确定要恢复该备份吗？当前数据将被覆盖。')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=update/backup/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: filename })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('备份恢复成功', 'success');
+            } catch (e) {
+                showToast('恢复失败: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteBackup(filename) {
+            if (!confirm('确定要删除该备份吗？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=update/backup/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: filename })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('备份已删除', 'success');
+                loadBackupList();
+            } catch (e) {
+                showToast('删除失败: ' + e.message, 'error');
+            }
+        }
+
+        async function clearBrowserCache() {
+            const resultEl = document.getElementById('cacheClearResult');
+            resultEl.innerHTML = '<span style="color:#409eff">正在清理浏览器缓存...</span>';
+            try {
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map(name => caches.delete(name)));
+                }
+                resultEl.innerHTML = '<span style="color:#67c23a">浏览器缓存已清理</span>';
+                showToast('浏览器缓存已清理', 'success');
+            } catch (e) {
+                resultEl.innerHTML = '<span style="color:#f56c6c">清理失败: ' + e.message + '</span>';
+                showToast('清理失败: ' + e.message, 'error');
+            }
+        }
+
+        async function clearServiceWorker() {
+            const resultEl = document.getElementById('cacheClearResult');
+            resultEl.innerHTML = '<span style="color:#409eff">正在清理 Service Worker...</span>';
+            try {
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map(reg => reg.unregister()));
+                }
+                resultEl.innerHTML = '<span style="color:#67c23a">Service Worker 已清理</span>';
+                showToast('Service Worker 已清理', 'success');
+            } catch (e) {
+                resultEl.innerHTML = '<span style="color:#f56c6c">清理失败: ' + e.message + '</span>';
+                showToast('清理失败: ' + e.message, 'error');
+            }
+        }
+
+        async function clearAllCaches() {
+            const resultEl = document.getElementById('cacheClearResult');
+            resultEl.innerHTML = '<span style="color:#409eff">正在清理所有缓存...</span>';
+            const logs = [];
+            try {
+                try {
+                    const res = await fetch(API_BASE + '?action=update/clear_cache');
+                    const data = await res.json();
+                    if (data.success) {
+                        logs.push('服务器 PHP 缓存: 已清理');
+                    } else {
+                        logs.push('服务器 PHP 缓存: 清理失败 - ' + (data.message || '未知错误'));
+                    }
+                } catch (e) {
+                    logs.push('服务器 PHP 缓存: 清理失败 - ' + e.message);
+                }
+
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map(name => caches.delete(name)));
+                    logs.push('浏览器缓存: 已清理');
+                }
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map(reg => reg.unregister()));
+                    logs.push('Service Worker: 已清理');
+                }
+                localStorage.removeItem('m3u8_rules_cache');
+                sessionStorage.clear();
+                logs.push('localStorage/sessionStorage: 已清理');
+
+                const meta = document.createElement('meta');
+                meta.httpEquiv = 'Cache-Control';
+                meta.content = 'no-cache, no-store, must-revalidate';
+                document.head.appendChild(meta);
+                logs.push('页面缓存策略: 已禁用');
+
+                resultEl.innerHTML = logs.map(l => '<div style="color:#67c23a">' + l + '</div>').join('');
+                showToast('所有缓存已清理完成', 'success');
+            } catch (e) {
+                resultEl.innerHTML = '<span style="color:#f56c6c">清理失败: ' + e.message + '</span>';
+                showToast('清理失败: ' + e.message, 'error');
+            }
+        }
+
+        async function doUpdate() {
+            if (!latestUpdateData) {
+                try {
+                    const res = await fetch(API_BASE + '?action=update/check');
+                    const data = await res.json();
+                    if (data.success && data.has_update) {
+                        latestUpdateData = data;
+                    }
+                } catch (e) {}
+            }
+
+            const confirmed = await showUpdateConfirm(latestUpdateData);
+            if (!confirmed) return;
+
+            const btn = document.getElementById('updateBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '更新中...';
+            }
+
+            let statusEl = document.getElementById('updateResult');
+            if (!statusEl) {
+                statusEl = document.createElement('div');
+                statusEl.id = 'updateResult';
+                statusEl.style.fontSize = '12px';
+                statusEl.style.color = '#606266';
+                statusEl.style.padding = '12px';
+                statusEl.style.background = '#f5f7fa';
+                statusEl.style.borderRadius = '8px';
+                statusEl.style.marginTop = '12px';
+                const pageUpdate = document.getElementById('page-update');
+                if (pageUpdate) {
+                    pageUpdate.appendChild(statusEl);
+                } else {
+                    document.body.appendChild(statusEl);
+                }
+            }
+            function appendInfo(html) {
+                const wrap = document.createElement('div');
+                wrap.innerHTML = html;
+                statusEl.appendChild(wrap);
+            }
+
+            try {
+                // 4 个阶段：授权验证 → 下载更新 → 完整性检查 → 清理缓存
+                const updateSteps = 4;
+                const updateProgress = showLoadingWithProgress(statusEl, {
+                    label: '正在验证授权，请稍候...',
+                    total: updateSteps,
+                    current: 0,
+                    extraText: '步骤 1/4：授权验证',
+                });
+                statusEl.style.color = ''; // 使用进度条组件颜色
+                statusEl.style.padding = '';
+                statusEl.style.background = '';
+                statusEl.style.borderRadius = '';
+
+                appendInfo('<div style="color:#409eff;margin-top:8px">正在验证授权...</div>');
+                const authRes = await fetch(API_BASE + '?action=update/integrity');
+                const authData = await authRes.json();
+                if (!authData.auth_valid) {
+                    throw new Error('授权验证失败: ' + (authData.issues?.join(', ') || '未知错误'));
+                }
+                appendInfo('<div style="color:#67c23a">授权验证通过</div>');
+                updateProgress({ current: 1, total: updateSteps, label: '正在下载更新，请稍候...', extraText: '步骤 2/4：下载更新' });
+
+                appendInfo('<div style="color:#409eff">正在下载更新...</div>');
+                const res = await fetch(API_BASE + '?action=update/download');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                appendInfo('<div style="color:#67c23a">更新完成</div>');
+                updateProgress({ current: 2, total: updateSteps, label: '正在进行完整性检查，请稍候...', extraText: '步骤 3/4：完整性检查' });
+
+                if (data.cleaned_files && data.cleaned_files.length > 0) {
+                    appendInfo('<div style="color:#e6a23c">清理了 ' + data.cleaned_files.length + ' 个差异文件:</div>');
+                    data.cleaned_files.forEach(f => {
+                        appendInfo('<div style="color:#909399;font-size:11px">' + escapeHtml(f) + '</div>');
+                    });
+                }
+                if (data.integrity_check) {
+                    if (data.integrity_check.success) {
+                        appendInfo('<div style="color:#67c23a">完整性检查通过</div>');
+                    } else {
+                        appendInfo('<div style="color:#f56c6c">完整性检查发现问题:</div>');
+                        data.integrity_check.issues.forEach(i => {
+                            appendInfo('<div style="color:#f56c6c;font-size:11px">' + escapeHtml(i) + '</div>');
+                        });
+                    }
+                }
+                showToast('更新成功！备份: ' + data.backup_file, 'success');
+                updateProgress({ current: 3, total: updateSteps, label: '正在清理缓存，请稍候...', extraText: '步骤 4/4：清理缓存' });
+                appendInfo('<div style="color:#409eff">正在清理缓存...</div>');
+                await clearAllCaches();
+                updateProgress({ current: 4, total: updateSteps, label: '更新完成', extraText: '已完成所有步骤' });
+                appendInfo('<div style="color:#67c23a">缓存已清理，2秒后刷新页面...</div>');
+                setTimeout(() => location.reload(true), 2000);
+            } catch (e) {
+                appendInfo('<div style="color:#f56c6c">更新失败: ' + escapeHtml(e.message) + '</div>');
+                showToast('更新失败: ' + e.message, 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '立即更新';
+                }
+            }
+        }
+
+        function showUpdateConfirm(updateData) {
+            return new Promise((resolve) => {
+                const modalHtml = `
+                    <div class="update-modal-overlay" data-confirm-modal>
+                        <div class="update-modal" style="width:440px">
+                            <div class="update-modal-header">
+                                <div class="update-modal-icon">⚠️</div>
+                                <div class="update-modal-title">确认更新</div>
+                                <button class="update-modal-close" data-action="close">✕</button>
+                            </div>
+                            <div class="update-modal-body">
+                                <p style="color:#606266;font-size:13px;margin-bottom:16px;line-height:1.6">
+                                    确定要更新系统吗？更新前会自动创建备份，并自动清理差异文件。
+                                </p>
+                                ${updateData ? `
+                                <div style="background:#f5f7fa;border-radius:8px;padding:12px;font-size:12px">
+                                    <div style="margin-bottom:8px"><strong>更新摘要：</strong></div>
+                                    <div style="color:#67c23a;margin-bottom:4px">
+                                        共 ${updateData.changelog?.length || 0} 项更新
+                                    </div>
+                                    <div style="color:#909399">
+                                        最新版本: ${escapeHtml(updateData.latest_version || '-')}
+                                    </div>
+                                </div>
+                                ` : ''}
+                            </div>
+                            <div class="update-modal-footer">
+                                <button class="btn btn-secondary" data-action="cancel">取消</button>
+                                <button class="btn btn-primary" data-action="confirm">确认更新</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = modalHtml;
+                const modal = tempDiv.firstElementChild;
+                document.body.appendChild(modal);
+
+                let resolved = false;
+                const closeModal = (result) => {
+                    if (resolved) return;
+                    resolved = true;
+                    modal.remove();
+                    resolve(result);
+                };
+
+                const closeBtn = modal.querySelector('[data-action="close"]');
+                const cancelBtn = modal.querySelector('[data-action="cancel"]');
+                const confirmBtn = modal.querySelector('[data-action="confirm"]');
+
+                if (closeBtn) closeBtn.addEventListener('click', () => closeModal(false));
+                if (cancelBtn) cancelBtn.addEventListener('click', () => closeModal(false));
+                if (confirmBtn) confirmBtn.addEventListener('click', () => closeModal(true));
+
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) closeModal(false);
+                });
+            });
+        }
+
+        async function checkIntegrity() {
+            const statusEl = document.getElementById('integrityResult');
+            statusEl.innerHTML = '<span style="color:#409eff">正在检查...</span>';
+            try {
+                const res = await fetch(API_BASE + '?action=update/integrity');
+                const data = await res.json();
+                if (data.success) {
+                    statusEl.innerHTML = '<span style="color:#67c23a">完整性检查通过</span>';
+                    showToast('系统完整性正常', 'success');
+                } else {
+                    const issues = data.issues || [];
+                    statusEl.innerHTML = '<div style="color:#f56c6c">发现 ' + issues.length + ' 个问题:<br>' +
+                        issues.map(i => '<div style="font-size:12px">' + escapeHtml(i) + '</div>').join('') + '</div>';
+                    showToast('完整性检查发现问题', 'error');
+                }
+            } catch (e) {
+                statusEl.innerHTML = '<span style="color:#f56c6c">检查失败: ' + escapeHtml(e.message) + '</span>';
+            }
+        }
+
+        async function refreshAuthInfo() {
+            try {
+                const [authRes, versionRes] = await Promise.all([
+                    fetch(API_BASE + '?action=auth/info'),
+                    fetch(API_BASE + '?action=update/version')
+                ]);
+                
+                const authData = await authRes.json();
+                const versionData = await versionRes.json();
+                
+                if (!authData.success) throw new Error(authData.message);
+                
+                const sqStatusEl = document.getElementById('sqFileStatus');
+                const localStatusEl = document.getElementById('localAuthStatus');
+                const remoteStatusEl = document.getElementById('remoteAuthStatus');
+                
+                if (authData.sq_file_exists) {
+                    sqStatusEl.textContent = '存在';
+                    sqStatusEl.className = 'stat-value success';
+                } else {
+                    sqStatusEl.textContent = '不存在';
+                    sqStatusEl.className = 'stat-value danger';
+                }
+                
+                if (authData.local_valid) {
+                    localStatusEl.textContent = '通过';
+                    localStatusEl.className = 'stat-value success';
+                } else {
+                    localStatusEl.textContent = '失败';
+                    localStatusEl.className = 'stat-value danger';
+                }
+                
+                if (authData.remote && authData.remote.url) {
+                    if (authData.remote.reachable) {
+                        remoteStatusEl.textContent = '连接成功';
+                        remoteStatusEl.className = 'stat-value success';
+                    } else {
+                        remoteStatusEl.textContent = '连接失败';
+                        remoteStatusEl.className = 'stat-value danger';
+                    }
+                } else {
+                    remoteStatusEl.textContent = '未检查';
+                    remoteStatusEl.className = 'stat-value warning';
+                }
+                
+                if (versionData.success) {
+                    const curShort = (versionData.current_commit || '').substring(0, 7);
+                    document.getElementById('authVersion').textContent = (versionData.current_version || '-') + (curShort ? ' · ' + curShort : '');
+                }
+                
+                if (authData.local) {
+                    const info = authData;
+                    
+                    document.getElementById('localAuthInfo').innerHTML = `
+                        <div class="detail-grid">
+                            <div><strong>授权文件:</strong> ${info.local.file_exists ? '<span class="tag tag-green">存在</span>' : '<span class="tag tag-red">不存在</span>'}</div>
+                            <div><strong>文件大小:</strong> ${info.local.file_size} 字节</div>
+                            <div><strong>授权码:</strong> <code>${info.local.auth_code ? info.local.auth_code.substring(0, 20) + '...' : '未设置'}</code></div>
+                        </div>
+                    `;
+                    
+                    if (info.remote && info.remote.url) {
+                        document.getElementById('remoteAuthInfo').innerHTML = `
+                            <div class="detail-grid">
+                                <div><strong>服务器地址:</strong> ${escapeHtml(info.remote.url)}</div>
+                                <div><strong>连接状态:</strong> ${info.remote.reachable ? '<span class="tag tag-green">可连接</span>' : '<span class="tag tag-red">不可连接</span>'}</div>
+                                <div><strong>响应内容:</strong> <code>${info.remote.content ? escapeHtml(info.remote.content).substring(0, 50) + '...' : '无'}</code></div>
+                                ${info.remote.error ? `<div><strong>错误信息:</strong> <span class="tag tag-red">${escapeHtml(info.remote.error)}</span></div>` : ''}
+                            </div>
+                        `;
+                    } else {
+                        document.getElementById('remoteAuthInfo').innerHTML = '<div class="empty">远程服务器信息未配置</div>';
+                    }
+                }
+                
+                if (authData.auth_config) {
+                    document.getElementById('authServerIp').value = authData.auth_config.auth_server_ip || '';
+                    document.getElementById('authServerPort').value = authData.auth_config.auth_server_port || '';
+                    document.getElementById('authFile').value = authData.auth_config.auth_file || '';
+                    document.getElementById('authFileCompare').value = authData.auth_config.auth_file_compare || '';
+                    document.getElementById('enableRemoteVerify').checked = authData.auth_config.enable_remote_verify ?? true;
+                    document.getElementById('enableTimestampCheck').checked = authData.auth_config.enable_timestamp_check ?? true;
+                }
+            } catch (e) {
+                showToast('获取授权信息失败: ' + e.message, 'error');
+            }
+        }
+
+        async function saveAuthConfig() {
+            const config = {
+                auth_server_ip: document.getElementById('authServerIp').value.trim(),
+                auth_server_port: document.getElementById('authServerPort').value.trim(),
+                auth_file: document.getElementById('authFile').value.trim(),
+                auth_file_compare: document.getElementById('authFileCompare').value.trim(),
+                enable_remote_verify: document.getElementById('enableRemoteVerify').checked,
+                enable_timestamp_check: document.getElementById('enableTimestampCheck').checked
+            };
+            try {
+                const res = await fetch(API_BASE + '?action=auth/config/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ config: config })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('配置保存成功', 'success');
+                refreshAuthInfo();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        async function setAuthCode() {
+            const authCode = document.getElementById('authCodeInput').value.trim();
+            if (!authCode) {
+                showToast('请输入授权码', 'error');
+                return;
+            }
+            try {
+                const res = await fetch(API_BASE + '?action=auth/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auth_code: authCode })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('授权码设置成功', 'success');
+                refreshAuthInfo();
+            } catch (e) {
+                showToast('设置失败: ' + e.message, 'error');
+            }
+        }
+
+        async function generateAuthCode() {
+            const domain = prompt('请输入授权域名:', 'localhost');
+            if (!domain) return;
+            try {
+                const res = await fetch(API_BASE + '?action=auth/generate&domain=' + encodeURIComponent(domain));
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                document.getElementById('authCodeInput').value = data.auth_code;
+                showToast('授权码已生成', 'success');
+            } catch (e) {
+                showToast('生成失败: ' + e.message, 'error');
+            }
+        }
+
+        let currentSites = [];
+        let editingSite = null;
+
+        async function refreshSites() {
+            try {
+                const includePaused = document.getElementById('showPaused')?.checked ? '1' : '0';
+                const res = await fetch(API_BASE + '?action=sites/list&include_paused=' + includePaused + '&_t=' + Date.now(), {
+                    cache: 'no-store',
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                currentSites = data.sites || [];
+                renderSitesTable(currentSites);
+                renderAutoLearnStats(data);
+                populateSearchSiteSelect();
+                document.getElementById('sitesCount').textContent = currentSites.length;
+            } catch (e) {
+                console.error('获取资源站列表错误:', e);
+                showToast('获取资源站列表失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderAutoLearnStats(data) {
+            const allSites = currentSites.length;
+            const activeCount = currentSites.filter(s => s.status === 'active').length;
+            document.getElementById('totalSites').textContent = allSites;
+            document.getElementById('activeSites').textContent = activeCount;
+            document.getElementById('lastLearnTime').textContent = data.last_learn_time || '从未学习';
+
+            const statusEl = document.getElementById('autoLearnStatus');
+            const config = data.auto_learn_config || {};
+            if (config.enabled) {
+                if (data.should_auto_learn) {
+                    statusEl.textContent = '待执行';
+                    statusEl.className = 'stat-value warning';
+                } else {
+                    statusEl.textContent = '运行中';
+                    statusEl.className = 'stat-value success';
+                }
+            } else {
+                statusEl.textContent = '已禁用';
+                statusEl.className = 'stat-value danger';
+            }
+
+            document.getElementById('autoLearnEnabled').value = config.enabled ? 'true' : 'false';
+            document.getElementById('intervalDays').value = config.interval_days ?? 3;
+            document.getElementById('videosPerSite').value = config.videos_per_site ?? 5;
+            document.getElementById('maxSitesPerRun').value = config.max_sites_per_run ?? 5;
+            document.getElementById('minSegments').value = config.min_segments ?? 50;
+            document.getElementById('maxAdPercentage').value = config.max_ad_percentage ?? 90;
+        }
+
+        function filterSites() {
+            const keyword = document.getElementById('siteSearch').value.trim().toLowerCase();
+            const showPaused = document.getElementById('showPaused').checked;
+            let filtered = currentSites.filter(site => {
+                if (!showPaused && site.status !== 'active') return false;
+                return true;
+            });
+            if (keyword) {
+                filtered = filtered.filter(s =>
+                    s.name.toLowerCase().includes(keyword) ||
+                    (s.note || '').toLowerCase().includes(keyword)
+                );
+            }
+            renderSitesTable(filtered);
+        }
+
+        let healthCheckData = {};
+
+        async function checkSitesHealth() {
+            const btn = document.getElementById('healthCheckBtn');
+            btn.disabled = true;
+            btn.textContent = '检测中...';
+            
+            try {
+                const res = await fetch(API_BASE + '?action=sites/health_check&_t=' + Date.now());
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                
+                healthCheckData = {};
+                data.results.forEach(r => {
+                    healthCheckData[r.name] = r;
+                });
+                
+                filterSites();
+                showToast('检测完成：' + data.healthy + '/' + data.total + ' 个可用', 'success');
+            } catch (e) {
+                showToast('检测失败: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔍 健康检测';
+            }
+        }
+
+        async function toggleSiteStatus(name, currentStatus) {
+            const newStatus = currentStatus === 'active' ? 'paused' : 'active';
+            const note = newStatus === 'paused' ? '手动暂停' : '';
+            
+            try {
+                const res = await fetch(API_BASE + '?action=sites/update_status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, status: newStatus, note })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('更新成功', 'success');
+                refreshSites();
+            } catch (e) {
+                showToast('更新失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderSitesTable(sites) {
+            const container = document.getElementById('sitesTable');
+            if (sites.length === 0) {
+                container.innerHTML = '<div class="empty">暂无资源站</div>';
+                return;
+            }
+            let html = '<table class="rules-table"><thead><tr><th>优先级</th><th>名称</th><th>官网</th><th>采集接口</th><th>状态</th><th>响应时间</th><th>扩展备注</th><th>操作</th></tr></thead><tbody>';
+            for (const site of sites) {
+                const priority = site.priority || 99;
+                const health = healthCheckData[site.name];
+                let statusTag = site.status === 'active'
+                    ? '<span class="tag tag-green">正常</span>'
+                    : '<span class="tag tag-orange">暂停</span>';
+                let responseTime = '-';
+                
+                if (health) {
+                    if (site.status === 'active' && !health.healthy) {
+                        statusTag = '<span class="tag tag-red">异常</span>';
+                    } else if (health.healthy) {
+                        responseTime = health.response_time + 'ms';
+                    }
+                }
+                
+                const siteUrl = site.site_url || '#';
+                const apiUrl = site.api_url || '';
+                const note = escapeHtml(site.note || '');
+                const healthNote = health && !health.healthy ? escapeHtml(health.message) : note;
+                const isPaused = site.status !== 'active';
+                const videoBtnDisabled = isPaused ? ' disabled style="opacity:0.5;cursor:not-allowed"' : '';
+                const videoBtnOnclick = isPaused ? '' : 'onclick="fetchSiteVideos(\'' + escapeHtml(site.name) + '\')"';
+                html += `
+                    <tr style="${isPaused ? 'opacity:0.6' : ''}">
+                        <td><span class="tag tag-blue">${priority}</span></td>
+                        <td><strong>${escapeHtml(site.name)}</strong></td>
+                        <td>
+                            ${site.site_url ? `<a href="${escapeHtml(siteUrl)}" target="_blank" style="color:#409eff;text-decoration:none;font-size:12px">访问官网 ↗</a>` : '-'}
+                        </td>
+                        <td style="font-size:12px;color:#909399;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(apiUrl)}">
+                            ${escapeHtml(apiUrl)}
+                        </td>
+                        <td>${statusTag}</td>
+                        <td style="font-size:12px;color:#67c23a">${responseTime}</td>
+                        <td style="font-size:12px;color:#606266;max-width:130px" title="${healthNote}">${healthNote || '-'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" ${videoBtnOnclick}${videoBtnDisabled} title="${isPaused ? '站点已暂停，无法获取视频' : '获取视频列表'}">视频</button>
+                            <button class="btn btn-sm btn-secondary" onclick="toggleSiteStatus('${escapeHtml(site.name)}', '${site.status}')">${isPaused ? '启用' : '暂停'}</button>
+                            <button class="btn btn-sm btn-secondary" onclick="editSite('${escapeHtml(site.name)}')">编辑</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteSite('${escapeHtml(site.name)}')">删除</button>
+                        </td>
+                    </tr>
+                `;
+            }
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function showAddSite() {
+            editingSite = null;
+            document.getElementById('siteEditorTitle').textContent = '新增资源站';
+            document.getElementById('siteName').value = '';
+            document.getElementById('siteUrl').value = '';
+            document.getElementById('siteApiUrl').value = '';
+            document.getElementById('siteType').value = 'maccms';
+            document.getElementById('siteStatus').value = 'active';
+            document.getElementById('sitePriority').value = 50;
+            document.getElementById('siteNote').value = '';
+            document.getElementById('siteName').disabled = false;
+            document.getElementById('siteEditor').style.display = 'block';
+            document.getElementById('siteEditor').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function editSite(name) {
+            try {
+                const res = await fetch(API_BASE + '?action=sites/get&name=' + encodeURIComponent(name));
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                editingSite = data.site;
+                document.getElementById('siteEditorTitle').textContent = '编辑资源站';
+                document.getElementById('siteName').value = data.site.name || '';
+                document.getElementById('siteUrl').value = data.site.site_url || '';
+                document.getElementById('siteApiUrl').value = data.site.api_url || '';
+                document.getElementById('siteType').value = data.site.type || 'maccms';
+                document.getElementById('siteStatus').value = data.site.status || 'active';
+                document.getElementById('sitePriority').value = data.site.priority || 50;
+                document.getElementById('siteNote').value = data.site.note || '';
+                document.getElementById('siteName').disabled = true;
+                document.getElementById('siteEditor').style.display = 'block';
+                document.getElementById('siteEditor').scrollIntoView({ behavior: 'smooth' });
+            } catch (e) {
+                showToast('获取资源站失败: ' + e.message, 'error');
+            }
+        }
+
+        function cancelSiteEdit() {
+            document.getElementById('siteEditor').style.display = 'none';
+            editingSite = null;
+        }
+
+        async function saveSite() {
+            const name = document.getElementById('siteName').value.trim();
+            const siteUrl = document.getElementById('siteUrl').value.trim();
+            const apiUrl = document.getElementById('siteApiUrl').value.trim();
+            const type = document.getElementById('siteType').value;
+            const status = document.getElementById('siteStatus').value;
+            const priority = parseInt(document.getElementById('sitePriority').value) || 50;
+            const note = document.getElementById('siteNote').value.trim();
+
+            if (!name) { showToast('请输入资源站名称', 'error'); return; }
+            if (!apiUrl) { showToast('请输入采集接口地址', 'error'); return; }
+
+            const siteData = {
+                name: name,
+                site_url: siteUrl,
+                api_url: apiUrl,
+                type: type,
+                status: status,
+                priority: priority,
+                note: note
+            };
+
+            try {
+                const action = editingSite ? 'sites/update' : 'sites/add';
+                const res = await fetch(API_BASE + '?action=' + action, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(siteData)
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast(data.message || '保存成功', 'success');
+                cancelSiteEdit();
+                refreshSites();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteSite(name) {
+            if (!confirm('确定要删除该资源站吗？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=sites/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('删除成功', 'success');
+                refreshSites();
+            } catch (e) {
+                showToast('删除失败: ' + e.message, 'error');
+            }
+        }
+
+        async function fetchSiteVideos(name) {
+            document.getElementById('siteVideosTitle').textContent = name + ' - 视频列表';
+            document.getElementById('siteVideos').style.display = 'block';
+            showLoadingWithProgress(document.getElementById('siteVideosList'), { label: '正在获取视频列表，请稍候...' });
+            document.getElementById('siteVideos').scrollIntoView({ behavior: 'smooth' });
+            try {
+                const res = await fetch(API_BASE + '?action=sites/fetch_videos&name=' + encodeURIComponent(name) + '&limit=10');
+                const data = await res.json();
+                if (!data.success) {
+                    const isDnsFailure = data.error_type === 'dns_failure';
+                    let errorHtml = '<div class="empty" style="text-align:left;padding:20px">';
+                    errorHtml += '<div style="color:#f56c6c;font-weight:500;margin-bottom:8px">❌ ' + escapeHtml(data.message) + '</div>';
+                    if (isDnsFailure) {
+                        errorHtml += '<div style="font-size:12px;color:#909399;margin-bottom:12px">该资源站API域名无法解析，可能已经失效或被墙。建议将其标记为暂停状态。</div>';
+                        errorHtml += '<button class="btn btn-sm btn-warning" onclick="toggleSiteStatus(\'' + escapeHtml(name) + '\', \'active\')">⚠️ 标记为暂停</button>';
+                    }
+                    errorHtml += '</div>';
+                    document.getElementById('siteVideosList').innerHTML = errorHtml;
+                    showToast('获取视频失败: ' + data.message, 'error');
+                    return;
+                }
+                renderSiteVideos(data.videos || []);
+            } catch (e) {
+                document.getElementById('siteVideosList').innerHTML = '<div class="empty">获取失败: ' + escapeHtml(e.message) + '</div>';
+                showToast('获取视频失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderSiteVideos(videos) {
+            const container = document.getElementById('siteVideosList');
+            if (videos.length === 0) {
+                container.innerHTML = '<div class="empty">暂无视频数据</div>';
+                return;
+            }
+            let html = '<div style="max-height:400px;overflow-y:auto">';
+            videos.forEach((v, i) => {
+                html += `
+                    <div class="segment-item" style="border-bottom:1px solid #ebeef5">
+                        <div style="flex:1">
+                            <div style="font-weight:500;color:#303133">${i + 1}. ${escapeHtml(v.name || '未知')}</div>
+                            <div style="font-size:12px;color:#909399;margin-top:4px;word-break:break-all;font-family:monospace">${escapeHtml(v.url || '')}</div>
+                        </div>
+                        <div style="display:flex;gap:6px;flex-shrink:0">
+                            <button class="btn btn-sm btn-secondary" onclick="copyText('${escapeHtml(v.url || '')}')">复制</button>
+                            <button class="btn btn-sm btn-primary" onclick="analyzeFromSite('${escapeHtml(v.url || '')}')">分析</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function closeSiteVideos() {
+            document.getElementById('siteVideos').style.display = 'none';
+        }
+
+        function analyzeFromSite(url) {
+            document.getElementById('analyzeUrl').value = url;
+            document.querySelector('.nav-item[data-page="analyze"]').click();
+            setTimeout(() => analyzeVideo(), 300);
+        }
+
+        // ==================== AI 自动学习（频繁更新规则专用） ====================
+        async function refreshAiAutoLearn() {
+            try {
+                const res = await fetch(API_BASE + '?action=ai_autolearn/config&_t=' + Date.now());
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                const config = data.config || {};
+                const status = data.status || {};
+                const statusEl = document.getElementById('aiAlStatus');
+                if (config.enabled) {
+                    statusEl.textContent = status.should_run ? '待执行' : '就绪';
+                    statusEl.className = 'stat-value ' + (status.should_run ? 'warning' : 'success');
+                } else {
+                    statusEl.textContent = '已禁用';
+                    statusEl.className = 'stat-value danger';
+                }
+                document.getElementById('aiAlLastRun').textContent = status.last_run_time || '从未执行';
+                document.getElementById('aiAlInterval').textContent = (config.interval_hours || 4) + ' 小时';
+                const targets = config.target_sites || ['如意'];
+                document.getElementById('aiAlTargets').textContent = targets.join(', ');
+
+                document.getElementById('aiAlEnabled').value = config.enabled ? 'true' : 'false';
+                document.getElementById('aiAlIntervalHours').value = config.interval_hours ?? 4;
+                document.getElementById('aiAlVideosPerSite').value = config.videos_per_site ?? 5;
+                document.getElementById('aiAlMaxSites').value = config.max_sites_per_run ?? 3;
+                document.getElementById('aiAlMinSegments').value = config.min_segments ?? 50;
+                document.getElementById('aiAlMaxAdPct').value = config.max_ad_percentage ?? 90;
+                document.getElementById('aiAlMaxExecTime').value = config.max_exec_time_per_video ?? 30;
+                document.getElementById('aiAlDedupDays').value = config.dedup_retention_days ?? 7;
+                document.getElementById('aiAlTargetSites').value = (config.target_sites || ['如意']).join(',');
+                document.getElementById('aiAlPlayFromPatterns').value = (config.play_from_patterns || ['rym3u8']).join(',');
+                document.getElementById('aiAlPreferHot').value = config.prefer_hot_videos ? 'true' : 'false';
+                document.getElementById('aiAlAccessKey').value = config.access_key || '';
+            } catch (e) {
+                showToast('加载 AI 自动学习配置失败: ' + e.message, 'error');
+            }
+        }
+
+        async function saveAiAutoLearnConfig() {
+            const config = {
+                enabled: document.getElementById('aiAlEnabled').value === 'true',
+                interval_hours: parseInt(document.getElementById('aiAlIntervalHours').value) || 4,
+                videos_per_site: parseInt(document.getElementById('aiAlVideosPerSite').value) || 5,
+                max_sites_per_run: parseInt(document.getElementById('aiAlMaxSites').value) || 3,
+                min_segments: parseInt(document.getElementById('aiAlMinSegments').value) || 50,
+                max_ad_percentage: parseInt(document.getElementById('aiAlMaxAdPct').value) || 90,
+                max_exec_time_per_video: parseInt(document.getElementById('aiAlMaxExecTime').value) || 30,
+                dedup_retention_days: parseInt(document.getElementById('aiAlDedupDays').value) || 7,
+                target_sites: document.getElementById('aiAlTargetSites').value.split(',').map(s => s.trim()).filter(s => s),
+                play_from_patterns: document.getElementById('aiAlPlayFromPatterns').value.split(',').map(s => s.trim()).filter(s => s),
+                prefer_hot_videos: document.getElementById('aiAlPreferHot').value === 'true',
+                access_key: document.getElementById('aiAlAccessKey').value.trim(),
+            };
+            try {
+                const res = await fetch(API_BASE + '?action=ai_autolearn/config/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('AI 自动学习配置已保存', 'success');
+                refreshAiAutoLearn();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        async function runAiAutoLearn() {
+            if (!confirm('确定要立即执行 AI 自动学习吗？\n\n将在后台异步执行（避免 nginx 502 超时），可通过日志实时查看进度。')) return;
+            const resultEl = document.getElementById('aiAutoLearnResult');
+            resultEl.style.display = 'block';
+            // 基于配置估算总视频数作为进度分母
+            let estTotal = 10;
+            try {
+                const cfg = document.getElementById('aiAlVideosPerSite');
+                const mxs = document.getElementById('aiAlMaxSites');
+                const v = cfg ? parseInt(cfg.value) || 5 : 5;
+                const m = mxs ? parseInt(mxs.value) || 3 : 3;
+                estTotal = Math.max(5, v * m);
+            } catch (_) {}
+
+            const updateProgress = showLoadingWithProgress(resultEl, {
+                label: '正在提交 AI 自动学习任务到后台...',
+                total: estTotal,
+                current: 0,
+                extraText: '异步执行模式（避免 502）',
+            });
+
+            // 阶段 1：提交任务（立即返回）
+            let submitOk = false;
+            let alreadyRunning = false;
+            try {
+                const res = await fetch(API_BASE + '?action=ai_autolearn/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                let text;
+                try {
+                    text = await res.text();
+                    const data = JSON.parse(text);
+                    if (!data.success) throw new Error(data.message);
+                    submitOk = true;
+                    alreadyRunning = !!data.already_running;
+                    updateProgress({
+                        current: 0,
+                        total: estTotal,
+                        label: alreadyRunning ? '已有任务在后台运行，开始监控进度...' : '任务已提交后台，开始监控进度...',
+                        extraText: '异步执行 · 实时日志轮询中',
+                    });
+                } catch (jsonErr) {
+                    throw new Error('服务器返回非JSON: ' + (text || '').substring(0, 200));
+                }
+            } catch (e) {
+                if (typeof updateProgress === 'function') updateProgress({ done: true });
+                resultEl.innerHTML = '<div style="padding:12px;background:#fef0f0;border:1px solid #fbc4c4;border-radius:6px;color:#f56c6c">❌ 提交任务失败: ' + escapeHtml(e.message) + '</div>';
+                showToast('执行失败: ' + e.message, 'error');
+                return;
+            }
+
+            // 阶段 2：轮询日志监控进度
+            let pollCount = 0;
+            let lastLogCount = 0;
+            let finished = false;
+            const maxPolls = 300; // 最多轮询 5 分钟（1秒/次）
+            const pollTimer = setInterval(async () => {
+                pollCount++;
+                if (pollCount > maxPolls) {
+                    clearInterval(pollTimer);
+                    updateProgress({ done: true });
+                    resultEl.innerHTML += '<div style="padding:8px;color:#e6a23c;font-size:12px;margin-top:8px">⚠ 监控超时（5分钟），任务仍在后台执行，请稍后查看日志</div>';
+                    return;
+                }
+                try {
+                    const lr = await fetch(API_BASE + '?action=ai_autolearn/logs&limit=10&_t=' + Date.now());
+                    const ld = await lr.json();
+                    if (!ld.success || !ld.logs) return;
+                    const logs = ld.logs;
+
+                    // 检测完成/异常关键字
+                    const latest = logs[0] || {};
+                    const msg = (latest.message || '').toLowerCase();
+                    const isFinished = msg.includes('完成') || msg.includes('异常') || msg.includes('失败：') || msg.includes('success') || msg.includes('error');
+                    if (isFinished && pollCount > 2) {
+                        clearInterval(pollTimer);
+                        finished = true;
+                        updateProgress({ current: estTotal, total: estTotal, extraText: '任务完成', done: false });
+                        // 显示最终日志
+                        let html = '<div style="padding:12px;background:#f0f9eb;border:1px solid #c2e7b0;border-radius:6px">';
+                        html += '<div style="font-weight:600;color:#67c23a;margin-bottom:8px">✅ ' + escapeHtml(latest.message || 'AI 自动学习任务完成') + '</div>';
+                        html += '<div style="font-size:12px;color:#909399;margin-top:8px">最新日志（最近 10 条）：</div>';
+                        html += '<div style="margin-top:6px;max-height:240px;overflow-y:auto;font-family:monospace;font-size:11px">';
+                        logs.slice().reverse().forEach(l => {
+                            const color = (l.type === 'error') ? '#f56c6c' : ((l.type === 'warning') ? '#e6a23c' : '#606266');
+                            html += '<div style="padding:3px 0;border-bottom:1px solid #f0f0f0"><span style="color:#909399">[' + escapeHtml(l.time || '') + ']</span> <span style="color:' + color + '">' + escapeHtml(l.message || '') + '</span></div>';
+                        });
+                        html += '</div>';
+                        html += '<div style="margin-top:8px"><button class="btn btn-sm btn-primary" onclick="loadAiAutoLearnLogs()">查看完整日志</button></div>';
+                        html += '</div>';
+                        resultEl.innerHTML = html;
+                        showToast('AI 自动学习任务完成', 'success');
+                        refreshAiAutoLearn();
+                        return;
+                    }
+
+                    // 模拟进度推进（日志数变化时加速）
+                    const el = resultEl.querySelector('[data-progress-fill]');
+                    if (el && !el.classList.contains('indeterminate')) {
+                        const style = el.getAttribute('style') || '';
+                        const m = style.match(/width:\s*(\d+)%/);
+                        let pct = m ? parseInt(m[1]) : 0;
+                        const step = (logs.length !== lastLogCount) ? 3 : 0.5;
+                        if (pct < 90) pct = Math.min(90, pct + step + Math.random());
+                        el.style.width = pct + '%';
+                        const text = resultEl.querySelector('[data-progress-text]');
+                        if (text) {
+                            text.innerHTML = Math.round(pct) + ' %  (后台执行中)  ·  最新: ' + escapeHtml((latest.message || '').substring(0, 50));
+                        }
+                    }
+                    lastLogCount = logs.length;
+                } catch (_) {}
+            }, 1000);
+
+            // 提供手动停止按钮（注入到容器）
+            setTimeout(() => {
+                if (!finished) {
+                    const btn = document.createElement('div');
+                    btn.style.cssText = 'text-align:center;margin-top:8px;font-size:12px;color:#909399';
+                    btn.innerHTML = '🔄 后台异步执行中，自动每秒刷新日志... <a href="javascript:loadAiAutoLearnLogs()" style="color:#409eff">手动查看日志</a>';
+                    resultEl.appendChild(btn);
+                }
+            }, 2000);
+        }
+
+        async function loadAiAutoLearnLogs() {
+            const logsEl = document.getElementById('aiAutoLearnLogs');
+            logsEl.style.display = 'block';
+            showLoadingWithProgress(logsEl, { label: '加载日志中，请稍候...' });
+            try {
+                const res = await fetch(API_BASE + '?action=ai_autolearn/logs&limit=30&_t=' + Date.now());
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                const logs = data.logs || [];
+                if (logs.length === 0) {
+                    logsEl.innerHTML = '<div style="padding:12px;color:#909399;font-size:13px">暂无日志记录</div>';
+                    return;
+                }
+                let html = '<div style="padding:12px;background:var(--fill-lighter);border:1px solid var(--border-lighter);border-radius:6px;max-height:400px;overflow-y:auto">';
+                html += '<div style="font-weight:600;margin-bottom:8px">AI 自动学习执行日志</div>';
+                logs.forEach(log => {
+                    const color = log.type === 'error' ? '#f56c6c' : (log.type === 'warning' ? '#e6a23c' : '#606266');
+                    html += '<div style="padding:4px 0;border-bottom:1px solid var(--border-lighter);font-size:12px">';
+                    html += '<span style="color:#909399">[' + log.time + ']</span> ';
+                    html += '<span style="color:' + color + '">' + escapeHtml(log.message) + '</span>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                logsEl.innerHTML = html;
+            } catch (e) {
+                logsEl.innerHTML = '<div style="color:#f56c6c">加载日志失败: ' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        async function saveAutoLearnConfig() {
+            const config = {
+                enabled: document.getElementById('autoLearnEnabled').value === 'true',
+                interval_days: parseInt(document.getElementById('intervalDays').value) || 3,
+                videos_per_site: parseInt(document.getElementById('videosPerSite').value) || 5,
+                max_sites_per_run: parseInt(document.getElementById('maxSitesPerRun').value) || 5,
+                min_segments: parseInt(document.getElementById('minSegments').value) || 50,
+                max_ad_percentage: parseInt(document.getElementById('maxAdPercentage').value) || 90
+            };
+            try {
+                const res = await fetch(API_BASE + '?action=sites/auto_learn/config/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('配置保存成功', 'success');
+                refreshSites();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        async function runAutoLearn() {
+            if (!confirm('确定要立即执行自动学习吗？这可能需要一些时间。')) return;
+            const useMultiThread = document.getElementById('autoLearnMultiThread').value === 'true';
+            const concurrency = parseInt(document.getElementById('autoLearnConcurrency').value || 5);
+            const vps = parseInt(document.getElementById('videosPerSite').value || 5);
+            const mx = parseInt(document.getElementById('maxSitesPerRun').value || 5);
+            const estTotal = Math.max(10, vps * mx);
+            const resultEl = document.getElementById('autoLearnResult');
+            resultEl.style.display = 'block';
+            const modeText = useMultiThread ? ('多线程模式，并发 ' + concurrency) : '串行模式';
+            const updateProgress = showLoadingWithProgress(resultEl, {
+                label: '正在执行自动学习，请稍候...',
+                total: estTotal,
+                current: 0,
+                extraText: modeText,
+            });
+            const progressTimer = setInterval(() => {
+                const el = resultEl.querySelector('[data-progress-fill]');
+                if (!el || el.classList.contains('indeterminate')) return;
+                const style = el.getAttribute('style') || '';
+                const m = style.match(/width:\s*(\d+)%/);
+                let pct = m ? parseInt(m[1]) : 0;
+                if (pct < 85) pct = Math.min(85, pct + Math.random() * 2);
+                el.style.width = pct + '%';
+            }, 1000);
+            try {
+                const res = await fetch(API_BASE + '?action=sites/auto_learn/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        multi_thread: useMultiThread,
+                        concurrency: concurrency
+                    })
+                });
+
+                let data;
+                let text;
+                try {
+                    text = await res.text();
+                    data = JSON.parse(text);
+                } catch (jsonErr) {
+                    console.error('JSON解析失败，响应内容:', jsonErr.message);
+                    throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                }
+                clearInterval(progressTimer);
+                updateProgress({ current: estTotal, total: estTotal, extraText: '完成 · ' + modeText, done: false });
+
+                if (!data.success) throw new Error(data.message);
+                let html = '<div style="padding:12px;background:#f0f9eb;border:1px solid #c2e7b0;border-radius:6px">';
+                html += '<div style="font-weight:600;color:#67c23a;margin-bottom:8px">✅ ' + escapeHtml(data.message || '自动学习完成') + '</div>';
+                html += '<div style="font-size:13px;color:#606266">';
+                html += '处理站点: ' + data.sites_processed + ' 个 | ';
+                html += '学习成功: <span style="color:#67c23a">' + data.total_learned + '</span> 个 | ';
+                html += '失败: <span style="color:#f56c6c">' + data.total_failed + '</span> 个';
+                if (data.total_time) {
+                    html += ' | 耗时: <span style="color:#e6a23c">' + (data.total_time / 1000).toFixed(1) + 's</span>';
+                }
+                if (data.mode) {
+                    html += ' | 模式: <span style="color:#909399">' + data.mode + '</span>';
+                }
+                html += '</div>';
+                if (data.learned_domains && data.learned_domains.length > 0) {
+                    html += '<div style="font-size:12px;color:#909399;margin-top:8px">更新域名: ' + data.learned_domains.join(', ') + '</div>';
+                }
+                if (data.details && data.details.length > 0) {
+                    html += '<div style="margin-top:12px">';
+                    data.details.forEach(d => {
+                        html += '<div style="padding:8px;background:white;border-radius:4px;margin-bottom:6px;font-size:12px">';
+                        html += '<strong>' + escapeHtml(d.site) + '</strong>: ';
+                        html += '检查 ' + d.videos_checked + ' 个, 学习 ' + d.videos_learned + ' 个, 失败 ' + d.videos_failed + ' 个';
+                        if (d.error) {
+                            html += ' <span style="color:#f56c6c">(' + escapeHtml(d.error) + ')</span>';
+                        }
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
+                resultEl.innerHTML = html;
+                showToast('自动学习完成', 'success');
+                refreshSites();
+            } catch (e) {
+                clearInterval(progressTimer);
+                if (typeof updateProgress === 'function') updateProgress({ done: true });
+                resultEl.innerHTML = '<div style="padding:12px;background:#fef0f0;border:1px solid #fbc4c4;border-radius:6px;color:#f56c6c">学习失败: ' + escapeHtml(e.message) + '</div>';
+                showToast('学习失败: ' + e.message, 'error');
+            }
+        }
+
+        function populateSearchSiteSelect() {
+            const select = document.getElementById('searchSiteSelect');
+            if (!select || currentSites.length === 0) return;
+            const currentValue = select.value;
+            let html = '<option value="all">全部资源站</option>';
+            currentSites.forEach(site => {
+                if (site.status === 'active') {
+                    html += '<option value="' + escapeHtml(site.name) + '">' + escapeHtml(site.name) + '</option>';
+                }
+            });
+            select.innerHTML = html;
+            if (currentValue) select.value = currentValue;
+        }
+
+        async function searchVideos() {
+            const keyword = document.getElementById('searchKeyword').value.trim();
+            if (!keyword) {
+                showToast('请输入搜索关键词', 'warning');
+                return;
+            }
+
+            const siteName = document.getElementById('searchSiteSelect').value;
+            const maxSites = parseInt(document.getElementById('searchMaxSites').value) || 5;
+
+            document.getElementById('searchLoading').style.display = 'block';
+            document.getElementById('searchResults').style.display = 'none';
+
+            try {
+                let url;
+                if (siteName === 'all') {
+                    url = API_BASE + '?action=sites/search_all&keyword=' + encodeURIComponent(keyword) + '&max_sites=' + maxSites + '&limit_per_site=10&_t=' + Date.now();
+                } else {
+                    url = API_BASE + '?action=sites/search&name=' + encodeURIComponent(siteName) + '&keyword=' + encodeURIComponent(keyword) + '&limit=20&_t=' + Date.now();
+                }
+
+                const res = await fetch(url, {
+                    cache: 'no-store',
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+
+                renderSearchResults(data, siteName);
+                document.getElementById('searchLoading').style.display = 'none';
+                document.getElementById('searchResults').style.display = 'block';
+            } catch (e) {
+                document.getElementById('searchLoading').style.display = 'none';
+                showToast('搜索失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderSearchResults(data, siteName) {
+            const summaryEl = document.getElementById('searchSummary');
+            const listEl = document.getElementById('searchVideoList');
+            const actionsEl = document.getElementById('searchActions');
+            const statsEl = document.getElementById('searchStats');
+
+            currentSearchData = data;
+            currentSearchSiteName = siteName;
+
+            let totalVideos = 0;
+            let sitesCount = 0;
+            let successSites = 0;
+            let failedSites = 0;
+
+            if (siteName === 'all') {
+                totalVideos = data.total_videos || 0;
+                sitesCount = data.sites_searched || 0;
+                const results = data.results || [];
+                successSites = results.filter(r => (r.videos || []).length > 0).length;
+                failedSites = results.filter(r => r.error).length;
+                summaryEl.innerHTML = `搜索"${escapeHtml(data.keyword || '')}" - 搜索 ${sitesCount} 个站点，成功 ${successSites} 个，找到 ${totalVideos} 个视频`;
+            } else {
+                totalVideos = (data.videos || []).length;
+                sitesCount = 1;
+                summaryEl.innerHTML = `搜索"${escapeHtml(data.keyword || '')}" - 找到 ${totalVideos} 个视频`;
+            }
+
+            if (totalVideos > 0) {
+                actionsEl.style.display = 'flex';
+                statsEl.textContent = `共 ${totalVideos} 个视频可学习`;
+            } else {
+                actionsEl.style.display = 'none';
+            }
+
+            let html = '';
+
+            if (siteName === 'all') {
+                const results = data.results || [];
+                const successResults = results.filter(r => (r.videos || []).length > 0);
+                const failedResults = results.filter(r => r.error);
+                
+                if (successResults.length === 0 && failedResults.length === 0) {
+                    html += '<div class="empty">未找到相关视频</div>';
+                }
+                
+                successResults.forEach(siteResult => {
+                    const videos = siteResult.videos || [];
+                    html += `<div style="margin-bottom:16px">
+                        <div style="padding:8px 12px;background:#f5f7fa;border-radius:6px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+                            <strong>${escapeHtml(siteResult.site || '')}</strong>
+                            <span style="font-size:12px;color:#67c23a">
+                                ${videos.length} 个视频
+                            </span>
+                        </div>
+                        <div style="max-height:300px;overflow-y:auto;border:1px solid #ebeef5;border-radius:6px">`;
+                    videos.forEach((v, i) => {
+                        html += renderSearchVideoItem(v, siteResult.site);
+                    });
+                    html += '</div></div>';
+                });
+
+                if (failedResults.length > 0) {
+                    html += `<div style="margin-top:16px;padding:12px;background:#fafafa;border:1px solid #ebeef5;border-radius:6px">
+                        <div style="font-size:13px;color:#909399;margin-bottom:8px;cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+                            <span id="failedToggle">▶</span> ${failedResults.length} 个资源站暂不可用 <span style="font-size:11px">(点击展开/收起)</span>
+                        </div>
+                        <div id="failedSitesList" style="display:none;font-size:12px;color:#909399">`;
+                    failedResults.forEach(r => {
+                        html += `<div style="padding:4px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between">
+                            <span>${escapeHtml(r.site || '')}</span>
+                            <span style="color:#c0c4cc">${escapeHtml(r.error || '未知错误')}</span>
+                        </div>`;
+                    });
+                    html += '</div></div>';
+                }
+            } else {
+                const videos = data.videos || [];
+                if (videos.length > 0) {
+                    html += '<div style="max-height:500px;overflow-y:auto;border:1px solid #ebeef5;border-radius:6px">';
+                    videos.forEach((v, i) => {
+                        html += renderSearchVideoItem(v, siteName);
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<div class="empty">未找到相关视频</div>';
+                }
+            }
+
+            listEl.innerHTML = html;
+        }
+
+        function renderSearchVideoItem(video, siteName) {
+            const videoName = video.name || '未知';
+            const firstUrl = video.first_url || video.url || '';
+            const urls = video.urls || (firstUrl ? [{name: '默认', url: firstUrl}] : []);
+            const domain = firstUrl ? (new URL(firstUrl).hostname) : '';
+
+            let html = `<div class="segment-item" style="border-bottom:1px solid #ebeef5;flex-wrap:wrap">
+                <div style="flex:1;min-width:200px">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <div style="font-weight:500;color:#303133">${escapeHtml(videoName)}</div>
+                        <div style="display:flex;gap:4px">
+                            <button class="btn btn-sm btn-success" onclick="learnFromVideoUrl('${escapeHtml(firstUrl)}', '${escapeHtml(videoName)}')" style="padding:4px 10px;font-size:11px">📚 学习</button>
+                            <button class="btn btn-sm btn-primary" onclick="analyzeFromSite('${escapeHtml(firstUrl)}')" style="padding:4px 10px;font-size:11px">🔍 分析</button>
+                        </div>
+                    </div>
+                    <div style="font-size:12px;color:#909399;margin-top:4px">
+                        <span style="background:#ecf5ff;color:#409eff;padding:2px 8px;border-radius:4px;margin-right:8px">${escapeHtml(siteName || '')}</span>
+                        ${domain ? '<span style="background:#f0f9eb;color:#67c23a;padding:2px 8px;border-radius:4px">' + escapeHtml(domain) + '</span>' : ''}
+                        ${video.remarks ? '<span style="margin-left:8px">' + escapeHtml(video.remarks) + '</span>' : ''}
+                    </div>`;
+
+            if (urls.length > 0) {
+                const videoId = 'vid_' + Math.random().toString(36).slice(2, 10);
+                const total = urls.length;
+                html += `<div style="margin-top:8px;font-size:12px" id="${videoId}_container">
+                    <div id="${videoId}_visible">`;
+                const showCount = Math.min(3, total);
+                urls.slice(0, showCount).forEach((u, idx) => {
+                    html += `<div style="padding:4px 0;display:flex;align-items:center;gap:8px">
+                        <span style="color:#909399;white-space:nowrap">${escapeHtml(u.name || '剧集' + (idx + 1))}:</span>
+                        <code style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#f5f7fa;padding:2px 6px;border-radius:4px;font-size:11px" title="${escapeHtml(u.url)}">${escapeHtml(u.url)}</code>
+                        <button class="btn btn-sm btn-secondary" onclick="copyText('${escapeHtml(u.url)}')" style="padding:2px 8px;font-size:11px">复制</button>
+                    </div>`;
+                });
+                html += `</div>
+                    <div id="${videoId}_hidden" style="display:none">`;
+                urls.slice(showCount).forEach((u, idx) => {
+                    html += `<div style="padding:4px 0;display:flex;align-items:center;gap:8px">
+                        <span style="color:#909399;white-space:nowrap">${escapeHtml(u.name || '剧集' + (showCount + idx + 1))}:</span>
+                        <code style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#f5f7fa;padding:2px 6px;border-radius:4px;font-size:11px" title="${escapeHtml(u.url)}">${escapeHtml(u.url)}</code>
+                        <button class="btn btn-sm btn-secondary" onclick="copyText('${escapeHtml(u.url)}')" style="padding:2px 8px;font-size:11px">复制</button>
+                    </div>`;
+                });
+                html += `</div>`;
+                if (total > 3) {
+                    html += `<button class="btn btn-sm btn-secondary" onclick="toggleVideoUrls('${videoId}', ${total})" id="${videoId}_btn" style="margin-top:6px;padding:2px 10px;font-size:11px">展开全部 ${total} 个播放源</button>`;
+                }
+                html += '</div>';
+            }
+
+            html += `</div>
+            </div>`;
+
+            return html;
+        }
+
+        let toggleVideoUrlsState = {};
+
+        function toggleVideoUrls(videoId, total) {
+            const hiddenEl = document.getElementById(videoId + '_hidden');
+            const btnEl = document.getElementById(videoId + '_btn');
+            const visibleEl = document.getElementById(videoId + '_visible');
+            const expanded = toggleVideoUrlsState[videoId] || false;
+
+            if (expanded) {
+                hiddenEl.style.display = 'none';
+                btnEl.textContent = '展开全部 ' + total + ' 个播放源';
+                toggleVideoUrlsState[videoId] = false;
+            } else {
+                hiddenEl.style.display = 'block';
+                btnEl.textContent = '收起播放源';
+                toggleVideoUrlsState[videoId] = true;
+            }
+        }
+
+        async function learnFromVideoUrl(url, videoName) {
+            if (!url) {
+                showToast('视频URL为空', 'error');
+                return;
+            }
+
+            if (!confirm('确定要学习该视频的广告规则吗？\n\n视频: ' + (videoName || '未知') + '\n域名: ' + (new URL(url).hostname))) return;
+
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '学习中...';
+
+            try {
+                const res = await fetch(API_BASE + '?action=sites/learn_video', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                let data;
+                let text;
+                try {
+                    text = await res.text();
+                    data = JSON.parse(text);
+                } catch (jsonErr) {
+                    showToast('学习失败: 服务器返回非JSON响应: ' + text.substring(0, 200), 'error');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    return;
+                }
+
+                if (data.success) {
+                    showToast('学习成功！域名: ' + (data.domain || ''), 'success');
+                    console.log('学习结果:', data);
+                } else {
+                    showToast('学习失败: ' + (data.message || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('学习请求失败: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        let currentSearchData = null;
+        let currentSearchSiteName = 'all';
+        let batchLearning = false;
+
+        function collectAllVideoUrls() {
+            const urls = [];
+            if (!currentSearchData) return urls;
+
+            if (currentSearchSiteName === 'all') {
+                const results = currentSearchData.results || [];
+                results.forEach(siteResult => {
+                    const videos = siteResult.videos || [];
+                    videos.forEach(v => {
+                        const firstUrl = v.first_url || v.url || '';
+                        if (firstUrl) {
+                            urls.push({
+                                url: firstUrl,
+                                name: v.name || '未知',
+                                site: siteResult.site || ''
+                            });
+                        }
+                    });
+                });
+            } else {
+                const videos = currentSearchData.videos || [];
+                videos.forEach(v => {
+                    const firstUrl = v.first_url || v.url || '';
+                    if (firstUrl) {
+                        urls.push({
+                            url: firstUrl,
+                            name: v.name || '未知',
+                            site: currentSearchSiteName
+                        });
+                    }
+                });
+            }
+            return urls;
+        }
+
+        function onMultiThreadToggle() {
+            const enabled = document.getElementById('enableMultiThread').checked;
+            const wrap = document.getElementById('concurrencyWrap');
+            const badge = document.getElementById('multiThreadBadge');
+            if (enabled) {
+                wrap.style.opacity = '1';
+                checkMultiThreadStatus();
+            } else {
+                wrap.style.opacity = '0.5';
+                badge.style.display = 'none';
+            }
+        }
+
+        async function checkMultiThreadStatus() {
+            try {
+                const res = await fetch(API_BASE + '?action=sites/multi_thread/status');
+                const data = await res.json();
+                const badge = document.getElementById('multiThreadBadge');
+                if (data.available) {
+                    badge.style.display = 'inline-block';
+                    badge.textContent = '✓ 后端加速已就绪';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch (e) {}
+        }
+
+        async function batchLearnAll() {
+            if (batchLearning) {
+                showToast('正在批量学习中，请稍候...', 'warning');
+                return;
+            }
+
+            const videos = collectAllVideoUrls();
+            if (videos.length === 0) {
+                showToast('没有可学习的视频', 'warning');
+                return;
+            }
+
+            const useMultiThread = document.getElementById('enableMultiThread').checked;
+            const concurrency = parseInt(document.getElementById('concurrencyNum').value) || 5;
+
+            let modeText = useMultiThread ? '后端多线程加速' : '前端并发请求';
+            if (!confirm(`确定要批量学习 ${videos.length} 个视频吗？\n\n模式: ${modeText}\n并发数: ${concurrency} 个\n学习成功后将自动更新规则管理中的对应域名规则。`)) return;
+
+            batchLearning = true;
+            const resultEl = document.getElementById('batchResult');
+            resultEl.style.display = 'block';
+            resultEl.style.background = '#fffbe6';
+            resultEl.style.border = '1px solid #ffe58f';
+
+            const updateProgress = showLoadingWithProgress(resultEl, {
+                label: '正在批量学习中，请稍候...',
+                total: videos.length,
+                current: 0,
+                extraText: '并发: ' + concurrency + ' (' + modeText + ')',
+            });
+            window.__batchLearnProgressUpdate = updateProgress;
+
+            const startTime = Date.now();
+            let successCount = 0;
+            let failCount = 0;
+            let learnedDomains = new Set();
+            let results = [];
+
+            if (useMultiThread) {
+                try {
+                    const urls = videos.map(v => v.url);
+                    const res = await fetch(API_BASE + '?action=sites/learn_batch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            urls: urls,
+                            concurrency: concurrency,
+                            multi_thread: true
+                        })
+                    });
+
+                    let data;
+                    let text;
+                    try {
+                        text = await res.text();
+                        data = JSON.parse(text);
+                    } catch (jsonErr) {
+                        throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                    }
+
+                    updateProgress({ current: videos.length, total: videos.length, extraText: '完成 · 并发: ' + concurrency + ' (' + modeText + ')' });
+
+                    if (data.success) {
+                        successCount = data.success_count || 0;
+                        failCount = data.fail_count || 0;
+                        learnedDomains = new Set(data.learned_domains || []);
+                        results = (data.results || []).map((r, i) => ({
+                            name: videos[i]?.name || '',
+                            site: videos[i]?.site || '',
+                            success: r.success,
+                            domain: r.domain || '',
+                            segments: r.segments_count || 0,
+                            ad_count: r.ad_count || 0,
+                            message: r.message || '',
+                            duration: r.duration || 0
+                        }));
+
+                        const totalTime = data.total_time ? (data.total_time / 1000).toFixed(1) : '?';
+                        renderBatchResults(resultEl, videos, results, successCount, failCount, learnedDomains, totalTime, data.mode || 'backend');
+                    } else {
+                        throw new Error(data.message || '批量学习失败');
+                    }
+                } catch (e) {
+                    showLoadingWithProgress(resultEl, { label: '后端批量失败，回退到前端并发模式...' });
+                    await batchLearnFrontend(videos, concurrency, resultEl);
+                }
+            } else {
+                await batchLearnFrontend(videos, concurrency, resultEl);
+            }
+
+            batchLearning = false;
+            showToast(`批量学习完成：成功 ${successCount}，失败 ${failCount}`, successCount > 0 ? 'success' : 'error');
+        }
+
+        async function batchLearnFrontend(videos, concurrency, resultEl) {
+            let completedCount = 0;
+            let successCount = 0;
+            let failCount = 0;
+            const results = [];
+            const learnedDomains = new Set();
+            const updateProgress = typeof window.__batchLearnProgressUpdate === 'function'
+                ? window.__batchLearnProgressUpdate
+                : showLoadingWithProgress(resultEl, {
+                    label: '正在批量学习中，请稍候...',
+                    total: videos.length,
+                    current: 0,
+                    extraText: '前端并发模式',
+                  });
+
+            async function learnOne(video) {
+                try {
+                    const res = await fetch(API_BASE + '?action=sites/learn_video', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: video.url })
+                    });
+
+                    let data;
+                    let text;
+                    try {
+                        text = await res.text();
+                        data = JSON.parse(text);
+                    } catch (jsonErr) {
+                        return { success: false, message: '服务器返回非JSON响应: ' + text.substring(0, 200) };
+                    }
+
+                    if (data.success) {
+                        successCount++;
+                        if (data.domain) {
+                            learnedDomains.add(data.domain);
+                        }
+                        results.push({
+                            name: video.name,
+                            site: video.site,
+                            success: true,
+                            domain: data.domain,
+                            segments: data.segments_count,
+                            ad_count: data.ad_count
+                        });
+                    } else {
+                        failCount++;
+                        results.push({
+                            name: video.name,
+                            site: video.site,
+                            success: false,
+                            message: data.message
+                        });
+                    }
+                } catch (e) {
+                    failCount++;
+                    results.push({
+                        name: video.name,
+                        site: video.site,
+                        success: false,
+                        message: e.message
+                    });
+                }
+
+                completedCount++;
+                try {
+                    if (typeof updateProgress === 'function') {
+                        updateProgress({
+                            current: completedCount,
+                            total: videos.length,
+                            label: '正在批量学习中，请稍候...',
+                            extraText: '并发: ' + concurrency + ' (前端模式) · 成功 ' + successCount + ' · 失败 ' + failCount,
+                        });
+                    } else {
+                        resultEl.innerHTML = '<div class="loading">正在批量学习中，请稍候... (' + completedCount + '/' + videos.length + ') 并发: ' + concurrency + ' (前端模式)</div>';
+                    }
+                } catch (_) {}
+                document.getElementById('searchStats').textContent = `已完成 ${completedCount}/${videos.length}，成功 ${successCount}，失败 ${failCount}`;
+            }
+
+            const queue = [...videos];
+            const workers = [];
+            for (let w = 0; w < concurrency; w++) {
+                workers.push((async () => {
+                    while (queue.length > 0 && batchLearning) {
+                        const video = queue.shift();
+                        await learnOne(video);
+                    }
+                })());
+            }
+            await Promise.all(workers);
+
+            renderBatchResults(resultEl, videos, results, successCount, failCount, learnedDomains, null, 'frontend');
+        }
+
+        function renderBatchResults(resultEl, videos, results, successCount, failCount, learnedDomains, totalTime, mode) {
+            const modeText = mode === 'backend' ? '后端多线程' : '前端并发';
+            let html = '<div style="margin-bottom:8px;font-weight:600">';
+            if (successCount > 0) {
+                html += '<span style="color:#67c23a">✅ 批量学习完成</span>';
+                resultEl.style.background = '#f0f9eb';
+                resultEl.style.border = '1px solid #c2e7b0';
+            } else {
+                html += '<span style="color:#f56c6c">❌ 批量学习失败</span>';
+                resultEl.style.background = '#fef0f0';
+                resultEl.style.border = '1px solid #fbc4c4';
+            }
+            html += '</div>';
+            html += '<div style="font-size:13px;color:#606266;margin-bottom:8px">';
+            html += `总计: ${videos.length} 个 | 成功: <span style="color:#67c23a">${successCount}</span> | 失败: <span style="color:#f56c6c">${failCount}</span>`;
+            if (learnedDomains.size > 0) {
+                html += ` | 更新域名: <span style="color:#409eff">${learnedDomains.size}</span> 个`;
+            }
+            if (totalTime) {
+                html += ` | 耗时: <span style="color:#e6a23c">${totalTime}s</span>`;
+            }
+            html += ` | 模式: <span style="color:#909399">${modeText}</span>`;
+            html += '</div>';
+
+            if (learnedDomains.size > 0) {
+                html += '<div style="font-size:12px;color:#909399;margin-bottom:8px">';
+                html += '已更新域名: ' + Array.from(learnedDomains).join(', ');
+                html += '</div>';
+            }
+
+            const failedResults = results.filter(r => !r.success);
+            if (failedResults.length > 0 && failedResults.length <= 10) {
+                html += '<div style="font-size:12px"><details><summary style="cursor:pointer;color:#909399">查看失败详情</summary><div style="margin-top:8px">';
+                failedResults.forEach(r => {
+                    html += `<div style="padding:4px 0;color:#f56c6c">${escapeHtml(r.name)} - ${escapeHtml(r.message || '未知错误')}</div>`;
+                });
+                html += '</div></details></div>';
+            }
+
+            resultEl.innerHTML = html;
+            document.getElementById('searchStats').textContent = `完成 - 成功 ${successCount}，失败 ${failCount}，更新 ${learnedDomains.size} 个域名`;
+        }
+
+        let batchAnalyzing = false;
+
+        async function batchAnalyzeAll() {
+            if (batchAnalyzing) {
+                showToast('正在批量分析中，请稍候...', 'warning');
+                return;
+            }
+
+            const videos = collectAllVideoUrls();
+            if (videos.length === 0) {
+                showToast('没有可分析的视频', 'warning');
+                return;
+            }
+
+            const useMultiThread = document.getElementById('enableMultiThread').checked;
+            const concurrency = parseInt(document.getElementById('concurrencyNum').value) || 5;
+
+            let modeText = useMultiThread ? '后端多线程加速' : '串行分析';
+            if (!confirm(`确定要批量分析 ${videos.length} 个视频吗？\n\n模式: ${modeText}\n并发数: ${concurrency} 个`)) return;
+
+            batchAnalyzing = true;
+            const resultEl = document.getElementById('batchResult');
+            resultEl.style.display = 'block';
+            resultEl.style.background = '#fffbe6';
+            resultEl.style.border = '1px solid #ffe58f';
+
+            const updateProgress = showLoadingWithProgress(resultEl, {
+                label: '正在批量分析中，请稍候...',
+                total: videos.length,
+                current: 0,
+                extraText: '并发: ' + concurrency + ' (' + modeText + ')',
+            });
+            // 不确定进度动画（后端无细粒度回调时使用）：自动缓慢推进
+            const progressTimer = setInterval(() => {
+                const el = resultEl.querySelector('[data-progress-fill]');
+                if (!el || el.classList.contains('indeterminate')) return;
+                const style = el.getAttribute('style') || '';
+                const m = style.match(/width:\s*(\d+)%/);
+                let pct = m ? parseInt(m[1]) : 0;
+                if (pct < 90) {
+                    pct = Math.min(90, pct + Math.random() * 1.5);
+                    el.style.width = pct + '%';
+                    const text = resultEl.querySelector('[data-progress-text]');
+                    if (text) {
+                        const parts = (text.textContent || '').split('·');
+                        parts[0] = Math.round(pct) + ' %  (后端批量分析中，请稍候...)  ';
+                        text.innerHTML = parts.join('·');
+                    }
+                }
+            }, 1000);
+
+            const startTime = Date.now();
+
+            try {
+                const urls = videos.map(v => v.url);
+                const res = await fetch(API_BASE + '?action=sites/analyze_batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        urls: urls,
+                        concurrency: concurrency,
+                        multi_thread: useMultiThread
+                    })
+                });
+                let data;
+                let text;
+                try {
+                    text = await res.text();
+                    data = JSON.parse(text);
+                } catch (jsonErr) {
+                    throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                }
+                clearInterval(progressTimer);
+                updateProgress({ current: videos.length, total: videos.length, extraText: '完成 · 并发: ' + concurrency + ' (' + modeText + ')' });
+
+                if (data.success) {
+                    const successCount = data.success_count || 0;
+                    const failCount = data.fail_count || 0;
+                    const totalTime = data.total_time ? (data.total_time / 1000).toFixed(1) : '?';
+                    const results = data.results || [];
+
+                    let html = '<div style="margin-bottom:8px;font-weight:600">';
+                    if (successCount > 0) {
+                        html += '<span style="color:#67c23a">✅ 批量分析完成</span>';
+                        resultEl.style.background = '#f0f9eb';
+                        resultEl.style.border = '1px solid #c2e7b0';
+                    } else {
+                        html += '<span style="color:#f56c6c">❌ 批量分析失败</span>';
+                        resultEl.style.background = '#fef0f0';
+                        resultEl.style.border = '1px solid #fbc4c4';
+                    }
+                    html += '</div>';
+                    html += '<div style="font-size:13px;color:#606266;margin-bottom:8px">';
+                    html += `总计: ${videos.length} 个 | 成功: <span style="color:#67c23a">${successCount}</span> | 失败: <span style="color:#f56c6c">${failCount}</span>`;
+                    html += ` | 耗时: <span style="color:#e6a23c">${totalTime}s</span>`;
+                    html += ` | 模式: <span style="color:#909399">${data.mode || 'unknown'}</span>`;
+                    html += '</div>';
+
+                    if (results.length > 0 && results.length <= 20) {
+                        html += '<div style="font-size:12px"><details open><summary style="cursor:pointer;color:#909399">查看分析详情</summary><div style="margin-top:8px">';
+                        results.forEach((r, idx) => {
+                            const v = videos[idx] || {};
+                            if (r.success) {
+                                const stats = r.stats || {};
+                                html += `<div style="padding:6px 0;border-bottom:1px solid #ebeef5">`;
+                                html += `<div style="font-weight:500">${escapeHtml(v.name || '未知')}</div>`;
+                                html += `<div style="font-size:11px;color:#909399;word-break:break-all;font-family:monospace">${escapeHtml(r.url || '')}</div>`;
+                                html += `<div style="font-size:12px;color:#606266;margin-top:4px">`;
+                                html += `总片段: ${stats.totalSegments || 0} | 广告: <span style="color:#f56c6c">${stats.adSegments || 0}</span>`;
+                                if (r.fast_mode) html += ' <span class="tag tag-blue" style="font-size:10px">快速模式</span>';
+                                html += `</div></div>`;
+                            } else {
+                                html += `<div style="padding:6px 0;color:#f56c6c;font-size:12px;border-bottom:1px solid #ebeef5">`;
+                                html += `${escapeHtml(v.name || '未知')} - ${escapeHtml(r.message || '未知错误')}`;
+                                html += `</div>`;
+                            }
+                        });
+                        html += '</div></details></div>';
+                    }
+
+                    resultEl.innerHTML = html;
+                    document.getElementById('searchStats').textContent = `完成 - 成功 ${successCount}，失败 ${failCount}，耗时 ${totalTime}s`;
+                    showToast(`批量分析完成：成功 ${successCount}，失败 ${failCount}`, successCount > 0 ? 'success' : 'error');
+                } else {
+                    throw new Error(data.message || '批量分析失败');
+                }
+            } catch (e) {
+                clearInterval(progressTimer);
+                if (typeof updateProgress === 'function') updateProgress({ done: true });
+                resultEl.style.background = '#fef0f0';
+                resultEl.style.border = '1px solid #fbc4c4';
+                resultEl.innerHTML = '<div style="color:#f56c6c">批量分析失败: ' + escapeHtml(e.message) + '</div>';
+                showToast('批量分析失败: ' + e.message, 'error');
+            }
+
+            batchAnalyzing = false;
+        }
+
+        function clearSearchResults() {
+            document.getElementById('searchKeyword').value = '';
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('searchLoading').style.display = 'none';
+            document.getElementById('batchResult').style.display = 'none';
+            document.getElementById('searchActions').style.display = 'none';
+            currentSearchData = null;
+        }
+
+        function copyText(text) {
+            if (!text) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('复制成功', 'success');
+                }).catch(() => {
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.top = '-1000px';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('复制成功', 'success');
+            } catch (e) {
+                showToast('复制失败，请手动复制', 'error');
+            }
+            document.body.removeChild(textarea);
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('mxadmin_theme') || 'default';
+            switchTheme(savedTheme, false);
+        }
+
+        function switchTheme(themeName, save = true) {
+            if (themeName === 'default') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', themeName);
+            }
+
+            document.querySelectorAll('.theme-dot').forEach(dot => {
+                if (dot.dataset.themeName === themeName) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
+
+            if (save) {
+                localStorage.setItem('mxadmin_theme', themeName);
+            }
+        }
+
+        function initAccessPreview() {
+            const protocol = window.location.protocol;
+            const host = window.location.host;
+            const path = window.location.pathname;
+            const baseDir = path.substring(0, path.lastIndexOf('/'));
+            const base = protocol + '//' + host + baseDir;
+
+            updateV2ApiUrl();
+            loadAnnouncement(base);
+            
+            const moxiApiUrl = base + '/mx.php?action=moxi&url=';
+            const moxiApiEl = document.getElementById('moxi-api-url');
+            if (moxiApiEl) {
+                moxiApiEl.textContent = moxiApiUrl;
+            }
+        }
+
+        function getLocalAnnouncements() {
+            return [
+                { date: '2026-08-03', text: 'v5.9.7 版本发布：修复exec被禁用时AI学习报错-改用fsockopen非阻塞HTTP触发' },
+                { date: '2026-08-03', text: 'v5.9.6 版本发布：修复AI自动学习502超时-改为后台异步执行+日志轮询监控进度' },
+                { date: '2026-08-03', text: 'v5.9.5 版本发布：所有请稍后/加载中提示全部升级为带进度条显示' },
+                { date: '2026-08-03', text: 'v5.9.4 版本发布：修复AI自动学习执行报错 body stream already read' },
+                { date: '2026-08-03', text: 'v5.9.3 版本发布：自动成长系统-默认全部资源站、自动清理失效规则、部署即可自动运行' },
+                { date: '2026-08-03', text: 'v5.9.2 版本发布：修复AI自动学习失败返回HTTP 500、版本号不递增问题' },
+                { date: '2026-08-03', text: 'v5.9.1 版本发布：修复如意rym3u8规则误判，AI自动学习样本提升至50-100' },
+                { date: '2026-08-03', text: 'v5.9.0 版本发布：新增AI自动学习功能（频繁更新规则专用）' },
+                { date: '2026-07-23', text: 'v5.8.4 版本发布：彻底修复自动学习502报错' },
+                { date: '2026-07-23', text: 'v5.8.3 版本发布：修复公告不能自动更新，新增公告管理' },
+                { date: '2026-07-23', text: 'v5.8.2 版本发布：修复自动学习502 Bad Gateway报错' },
+                { date: '2026-07-23', text: 'v5.8.1 版本发布：资源站深度分析修复' },
+                { date: '2026-07-23', text: 'v5.8.0 版本发布：批量新增61个资源站' },
+                { date: '2026-07-19', text: 'v5.7.6 版本发布：修复jiexi.php解析返回的clean.php URL路径错误' },
+                { date: '2026-07-19', text: 'v5.7.5 版本发布：修复jiexi.php不能同时调用官解和官替' },
+                { date: '2026-07-19', text: 'v5.7.4 版本发布：优化clean.php播放器页面' },
+            ];
+        }
+
+        function renderAnnouncements(announcements) {
+            const contentEl = document.getElementById('announcementContent');
+            const loadingEl = document.getElementById('announcementLoading');
+            if (!contentEl) return;
+
+            if (loadingEl) {
+                loadingEl.style.display = 'none';
+            }
+
+            if (!announcements || announcements.length === 0) {
+                contentEl.innerHTML = '<div class="announcement-empty">📭 暂无公告</div>';
+                return;
+            }
+
+            let html = '';
+            announcements.forEach((item, index) => {
+                const isNew = index === 0;
+                let dateText = '';
+                let contentText = '';
+
+                if (typeof item === 'string') {
+                    contentText = item.trim();
+                    const dateMatch = item.match(/^\[(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})\]\s*(.+)/);
+                    if (dateMatch) {
+                        dateText = dateMatch[1];
+                        contentText = dateMatch[2].trim();
+                    }
+                } else {
+                    dateText = item.date || '';
+                    contentText = item.text || '';
+                }
+
+                html += `
+                            <div class="announcement-item ${isNew ? 'new' : ''}">
+                                <div class="announcement-dot"></div>
+                                <div class="announcement-text">
+                                    <div>${escapeHtml(contentText)}</div>
+                                    ${dateText ? '<div class="announcement-date">' + dateText + '</div>' : ''}
+                                </div>
+                            </div>
+                        `;
+            });
+
+            contentEl.innerHTML = html;
+        }
+
+        function loadAnnouncement(baseUrl) {
+            const contentEl = document.getElementById('announcementContent');
+            const loadingEl = document.getElementById('announcementLoading');
+            if (!contentEl) return;
+
+            const localApiUrl = (baseUrl || '') + 'mx.php?action=announcement/list&_t=' + Date.now();
+            const remoteUrls = [
+                'https://raw.githubusercontent.com/ssmhdssmhd/qcb/main/gg.txt',
+                'https://cdn.jsdelivr.net/gh/ssmhdssmhd/qcb@main/gg.txt',
+                'http://114.134.184.91:9001/公告.txt'
+            ];
+            
+            fetch(localApiUrl, { cache: 'no-store' })
+                .then(response => {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.announcements && data.announcements.length > 0) {
+                        renderAnnouncements(data.announcements);
+                        localStorage.setItem('announcement_cache', JSON.stringify(data.announcements));
+                        return;
+                    }
+                    throw new Error('本地公告为空');
+                })
+                .catch(err => {
+                    console.warn('加载本地公告失败，尝试远程获取:', err);
+                    tryRemoteAnnouncements(0);
+                });
+            
+            function tryRemoteAnnouncements(index) {
+                if (index >= remoteUrls.length) {
+                    const cached = localStorage.getItem('announcement_cache');
+                    if (cached) {
+                        try {
+                            const cachedData = JSON.parse(cached);
+                            if (cachedData && cachedData.length > 0) {
+                                renderAnnouncements(cachedData);
+                                return;
+                            }
+                        } catch (e) {}
+                    }
+                    renderAnnouncements(getLocalAnnouncements());
+                    return;
+                }
+                
+                const url = remoteUrls[index] + (remoteUrls[index].includes('?') ? '&' : '?') + '_t=' + Date.now();
+                fetch(url, { cache: 'no-store' })
+                    .then(response => {
+                        if (!response.ok) throw new Error('HTTP ' + response.status);
+                        return response.text();
+                    })
+                    .then(text => {
+                        const lines = text.trim().split('\n').filter(line => line.trim());
+                        if (lines.length > 0) {
+                            renderAnnouncements(lines);
+                            localStorage.setItem('announcement_cache', JSON.stringify(lines));
+                        } else {
+                            tryRemoteAnnouncements(index + 1);
+                        }
+                    })
+                    .catch(err => {
+                        console.warn('远程公告源 ' + (index + 1) + ' 失败:', err);
+                        tryRemoteAnnouncements(index + 1);
+                    });
+            }
+        }
+
+        function updateV2ApiUrl() {
+            const path = window.location.pathname;
+            const lastSlash = path.lastIndexOf('/');
+            let baseDir = '';
+            if (lastSlash > 0) {
+                baseDir = path.substring(0, lastSlash);
+            }
+            const base = window.location.origin + baseDir;
+            const typeSelect = document.getElementById('v2TypeSelect');
+            const type = typeSelect ? typeSelect.value : 'parse';
+            const urlEl = document.getElementById('preview-v2-api');
+            if (urlEl) {
+                urlEl.textContent = base + '/mx.php?action=api/v2&type=' + type + '&url=';
+            }
+        }
+
+        let currentAnnouncements = [];
+
+        async function loadAnnouncementList() {
+            const listEl = document.getElementById('announcementList');
+            const statsEl = document.getElementById('announcementStats');
+            if (!listEl) return;
+
+            listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#909399">加载中...</div>';
+
+            try {
+                const res = await fetch(API_BASE + '?action=announcement/list&_t=' + Date.now());
+                const data = await res.json();
+
+                if (data.success) {
+                    currentAnnouncements = data.announcements || [];
+                    renderAnnouncementList();
+                    if (statsEl) {
+                        statsEl.innerHTML = `共 <b>${data.total}</b> 条公告 | 最后更新：${data.last_modified || '未知'}`;
+                    }
+                } else {
+                    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#f56c6c">加载失败：' + (data.message || '未知错误') + '</div>';
+                }
+            } catch (e) {
+                listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#f56c6c">加载失败：' + e.message + '</div>';
+            }
+        }
+
+        function renderAnnouncementList() {
+            const listEl = document.getElementById('announcementList');
+            if (!listEl) return;
+
+            if (currentAnnouncements.length === 0) {
+                listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#909399">暂无公告</div>';
+                return;
+            }
+
+            let html = '';
+            currentAnnouncements.forEach((item, index) => {
+                const date = item.date || '';
+                const text = item.text || item.content || '';
+                html += `
+                    <div class="announcement-edit-item" data-index="${index}">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                            <span style="font-size:14px">📌</span>
+                            <input type="date" value="${date}" onchange="updateAnnouncementDate(${index}, this.value)" 
+                                style="padding:6px 10px;border:1px solid #dcdfe6;border-radius:6px;font-size:13px">
+                            <button class="btn btn-danger btn-sm" onclick="deleteAnnouncement(${index})">删除</button>
+                            <button class="btn btn-secondary btn-sm" onclick="moveAnnouncement(${index}, -1)" ${index === 0 ? 'disabled' : ''}>↑</button>
+                            <button class="btn btn-secondary btn-sm" onclick="moveAnnouncement(${index}, 1)" ${index === currentAnnouncements.length - 1 ? 'disabled' : ''}>↓</button>
+                        </div>
+                        <textarea onchange="updateAnnouncementText(${index}, this.value)" 
+                            style="width:100%;padding:10px;border:1px solid #dcdfe6;border-radius:8px;font-size:13px;resize:vertical;min-height:50px;font-family:inherit">${escapeHtml(text)}</textarea>
+                    </div>
+                `;
+            });
+
+            listEl.innerHTML = html;
+        }
+
+        function updateAnnouncementDate(index, value) {
+            if (currentAnnouncements[index]) {
+                currentAnnouncements[index].date = value;
+                if (!currentAnnouncements[index].text && currentAnnouncements[index].content) {
+                    currentAnnouncements[index].text = currentAnnouncements[index].content;
+                }
+            }
+        }
+
+        function updateAnnouncementText(index, value) {
+            if (currentAnnouncements[index]) {
+                currentAnnouncements[index].text = value;
+                if (!currentAnnouncements[index].date) {
+                    currentAnnouncements[index].date = '';
+                }
+            }
+        }
+
+        function deleteAnnouncement(index) {
+            if (!confirm('确定要删除这条公告吗？')) return;
+            currentAnnouncements.splice(index, 1);
+            renderAnnouncementList();
+            showToast('已删除', 'success');
+        }
+
+        function moveAnnouncement(index, direction) {
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= currentAnnouncements.length) return;
+            const temp = currentAnnouncements[index];
+            currentAnnouncements[index] = currentAnnouncements[newIndex];
+            currentAnnouncements[newIndex] = temp;
+            renderAnnouncementList();
+        }
+
+        function showAddAnnouncementModal() {
+            const text = prompt('请输入公告内容：');
+            if (!text || !text.trim()) return;
+            const today = new Date().toISOString().split('T')[0];
+            currentAnnouncements.unshift({
+                date: today,
+                text: text.trim()
+            });
+            renderAnnouncementList();
+            showToast('已添加，记得保存', 'success');
+        }
+
+        async function saveAnnouncements() {
+            if (!confirm('确定要保存公告修改吗？')) return;
+
+            try {
+                const res = await fetch(API_BASE + '?action=announcement/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ announcements: currentAnnouncements })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast('保存成功', 'success');
+                    loadAnnouncementList();
+                } else {
+                    showToast('保存失败：' + (data.message || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('保存失败：' + e.message, 'error');
+            }
+        }
+
+        async function refreshRemoteAnnouncement() {
+            if (!confirm('确定要从远程同步公告吗？这将覆盖本地公告。')) return;
+
+            showToast('正在从远程同步...', 'info');
+
+            try {
+                const res = await fetch(API_BASE + '?action=announcement/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast('同步成功：' + data.count + ' 条公告', 'success');
+                    loadAnnouncementList();
+                } else {
+                    showToast('同步失败：' + (data.message || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('同步失败：' + e.message, 'error');
+            }
+        }
+
+        let currentOfficialConfig = null;
+        let editingPlatformIndex = -1;
+
+        async function loadOfficialReplaceConfig() {
+            try {
+                const res = await fetch(API_BASE + '?action=official_replace/config&_t=' + Date.now());
+                const data = await res.json();
+                if (data.success && data.config) {
+                    currentOfficialConfig = data.config;
+                    const cfg = data.config;
+                    document.getElementById('orTotalPlatforms').textContent = (cfg.platforms || []).length;
+                    document.getElementById('orStatus').textContent = cfg.enabled ? '已启用' : '已禁用';
+                    document.getElementById('orStatus').style.color = cfg.enabled ? '#67c23a' : '#f56c6c';
+                    const defaultSite = cfg.default_site || '抖剧TV';
+                    const defaultSiteEl = document.getElementById('orDefaultSiteStat');
+                    defaultSiteEl.textContent = defaultSite;
+                    if (/抖剧/.test(defaultSite)) {
+                        defaultSiteEl.style.color = '#dc2626';
+                        defaultSiteEl.textContent = '⭐ ' + defaultSite;
+                    } else {
+                        defaultSiteEl.style.color = '#111827';
+                    }
+                    document.getElementById('orSearchSites').textContent = (cfg.search_sites || []).length > 0 ? (cfg.search_sites || []).length + '个' : '全部';
+                    document.getElementById('orThreshold').textContent = cfg.match_threshold ?? 60;
+
+                    document.getElementById('orEnabled').value = cfg.enabled ? 'true' : 'false';
+                    document.getElementById('orDefaultSite').value = defaultSite;
+                    document.getElementById('orThresholdInput').value = cfg.match_threshold ?? 60;
+                    document.getElementById('orMaxSites').value = cfg.max_search_sites ?? 5;
+                    document.getElementById('orSearchSitesInput').value = (cfg.search_sites || []).join(',');
+
+                    const base = window.location.protocol + '//' + window.location.host + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+                    document.getElementById('api-resolve-url').textContent = base + '/mx.php?action=official_replace/resolve&url=';
+                    document.getElementById('api-info-url').textContent = base + '/mx.php?action=official_replace/info&url=';
+
+                    renderOfficialPlatforms(cfg.platforms || []);
+                }
+            } catch (e) {
+                showToast('加载官替配置失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderOfficialPlatforms(platforms) {
+            const listEl = document.getElementById('officialPlatformsList');
+            if (platforms.length === 0) {
+                listEl.innerHTML = '<div class="empty">暂无平台配置</div>';
+                return;
+            }
+
+            // 按 priority ASC 升序显示（数据库虽然已排，但前端再次确保排序稳定性）
+            const sorted = [...platforms].sort((a, b) => (parseInt(a.priority ?? 10) || 9999) - (parseInt(b.priority ?? 10) || 9999));
+
+            let html = '<div style="margin-bottom:10px;font-size:12.5px;color:#6b7280">按 <strong>priority 数字越小越优先</strong> 升序排列，priority=1 的平台会被最先匹配/搜索。</div>';
+            html += '<table class="rule-table"><thead><tr><th>#</th><th>平台名称</th><th>域名</th><th>状态</th><th>Priority</th><th>操作</th></tr></thead><tbody>';
+            sorted.forEach((p, displayIndex) => {
+                const originalIndex = platforms.indexOf(p);
+                const pri = parseInt(p.priority ?? 10) || 9999;
+                let badge = '';
+                if (pri <= 1) {
+                    badge = ' <span title="最高优先官替资源站" style="display:inline-block;padding:2px 8px;border-radius:999px;background:linear-gradient(135deg,#fee2e2,#fecaca);color:#dc2626;font-size:11px;font-weight:600;border:1px solid #fca5a5">⭐ 默认官替</span>';
+                } else if (pri <= 3) {
+                    badge = ' <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#ecfdf5;color:#059669;font-size:11px;font-weight:600;border:1px solid #a7f3d0">高优先</span>';
+                } else if (pri <= 10) {
+                    badge = ' <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#eff6ff;color:#2563eb;font-size:11px;font-weight:500;border:1px solid #bfdbfe">普通</span>';
+                } else {
+                    badge = ' <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#f3f4f6;color:#6b7280;font-size:11px;border:1px solid #e5e7eb">低优先</span>';
+                }
+                html += `<tr>
+                    <td style="color:#9ca3af">${displayIndex + 1}</td>
+                    <td><strong>${escapeHtml(p.name || '')}</strong>${badge}</td>
+                    <td><code>${escapeHtml(p.domain || '')}</code></td>
+                    <td><span style="color:${p.enabled ? '#67c23a' : '#f56c6c'}">${p.enabled ? '启用' : '禁用'}</span></td>
+                    <td><strong style="${pri <= 1 ? 'color:#dc2626;font-size:15px' : (pri <= 5 ? 'color:#ea580c' : 'color:#111827')}">${pri}</strong></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="editOfficialPlatform(${originalIndex})">编辑</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteOfficialPlatform(${originalIndex})">删除</button>
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            listEl.innerHTML = html;
+        }
+
+        async function saveOfficialReplaceConfig() {
+            if (!currentOfficialConfig) return;
+            
+            const newConfig = JSON.parse(JSON.stringify(currentOfficialConfig));
+            newConfig.enabled = document.getElementById('orEnabled').value === 'true';
+            const defaultSiteInput = (document.getElementById('orDefaultSite').value || '').trim();
+            if (defaultSiteInput) newConfig.default_site = defaultSiteInput;
+            newConfig.match_threshold = parseInt(document.getElementById('orThresholdInput').value) || 60;
+            newConfig.max_search_sites = parseInt(document.getElementById('orMaxSites').value) || 5;
+            
+            const sitesInput = document.getElementById('orSearchSitesInput').value.trim();
+            newConfig.search_sites = sitesInput ? sitesInput.split(',').map(s => s.trim()).filter(s => s) : [];
+
+            try {
+                const res = await fetch(API_BASE + '?action=official_replace/config/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newConfig)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('配置保存成功', 'success');
+                    loadOfficialReplaceConfig();
+                } else {
+                    showToast('保存失败: ' + (data.message || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        function addOfficialPlatform() {
+            editingPlatformIndex = -1;
+            showPlatformEditor({
+                name: '',
+                domain: '',
+                enabled: true,
+                pattern: '',
+                title_selector: '',
+                priority: 10
+            });
+        }
+
+        function editOfficialPlatform(index) {
+            if (!currentOfficialConfig || !currentOfficialConfig.platforms) return;
+            editingPlatformIndex = index;
+            showPlatformEditor(currentOfficialConfig.platforms[index]);
+        }
+
+        function showPlatformEditor(platform) {
+            const html = `<div id="platformEditorModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000">
+                <div style="background:white;border-radius:8px;padding:24px;width:90%;max-width:500px;max-height:90vh;overflow-y:auto">
+                    <h3 style="margin-bottom:16px">${editingPlatformIndex >= 0 ? '编辑' : '添加'}平台</h3>
+                    <div class="form-group"><label>平台名称</label><input type="text" id="pe-name" value="${escapeHtml(platform.name || '')}"></div>
+                    <div class="form-group"><label>域名</label><input type="text" id="pe-domain" placeholder="如: v.qq.com" value="${escapeHtml(platform.domain || '')}"></div>
+                    <div class="form-group"><label>启用</label><select id="pe-enabled"><option value="true" ${platform.enabled ? 'selected' : ''}>启用</option><option value="false" ${!platform.enabled ? 'selected' : ''}>禁用</option></select></div>
+                    <div class="form-group"><label>URL 匹配正则</label><input type="text" id="pe-pattern" placeholder="如: /v\\.qq\\.com\\/.*?(?:vid=|\\/)([a-zA-Z0-9]+)/i" value="${escapeHtml(platform.pattern || '')}"></div>
+                    <div class="form-group"><label>标题选择器</label><input type="text" id="pe-title_selector" placeholder="如: meta[property=og:title]" value="${escapeHtml(platform.title_selector || '')}"></div>
+                    <div class="form-group"><label>优先级 <span style="color:#6b7280;font-weight:400">(数字越小越优先，1=最高，1-2000)</span></label><input type="number" min="1" max="2000" step="1" id="pe-priority" value="${platform.priority || 10}" title="priority=1 为默认官替最高优先；数字越大搜索/匹配时优先级越靠后"></div>
+                    <div style="font-size:11.5px;color:#6b7280;margin-top:-6px;margin-bottom:8px">抖剧TV priority=1 为默认官替资源站（根源 www.360kan.com，采集接口 douju.tv）。</div>
+                    <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px">
+                        <button class="btn btn-secondary" onclick="closePlatformEditor()">取消</button>
+                        <button class="btn btn-primary" onclick="savePlatformEditor()">保存</button>
+                    </div>
+                </div>
+            </div>`;
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+
+        function closePlatformEditor() {
+            const modal = document.getElementById('platformEditorModal');
+            if (modal) modal.remove();
+        }
+
+        async function savePlatformEditor() {
+            const platformData = {
+                name: document.getElementById('pe-name').value.trim(),
+                domain: document.getElementById('pe-domain').value.trim(),
+                enabled: document.getElementById('pe-enabled').value === 'true',
+                pattern: document.getElementById('pe-pattern').value.trim(),
+                title_selector: document.getElementById('pe-title_selector').value.trim(),
+                priority: parseInt(document.getElementById('pe-priority').value) || 10
+            };
+
+            if (!platformData.name || !platformData.domain) {
+                showToast('请填写平台名称和域名', 'error');
+                return;
+            }
+
+            try {
+                const action = editingPlatformIndex >= 0 ? 'official_replace/platform/update' : 'official_replace/platform/add';
+                const body = editingPlatformIndex >= 0 
+                    ? { index: editingPlatformIndex, ...platformData }
+                    : platformData;
+
+                const res = await fetch(API_BASE + '?action=' + action, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(editingPlatformIndex >= 0 ? '更新成功' : '添加成功', 'success');
+                    closePlatformEditor();
+                    loadOfficialReplaceConfig();
+                } else {
+                    showToast('操作失败: ' + (data.message || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('操作失败: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteOfficialPlatform(index) {
+            if (!confirm('确定要删除这个平台吗？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=official_replace/platform/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ index: index })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('删除成功', 'success');
+                    loadOfficialReplaceConfig();
+                } else {
+                    showToast('删除失败: ' + (data.message || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('删除失败: ' + e.message, 'error');
+            }
+        }
+
+        // ============ 嗅探设置（xt/sniffer_config.php） ============
+        let currentSnifferConfig = null;
+        let snifferIsDirty = false;
+        const SNIFFER_WATCH_IDS = [
+            'snifferOfficialEnabled','snifferOfficialName','snifferOfficialUrl','snifferOfficialType','snifferOfficialUrlField',
+            'snifferReplaceEnabled','snifferReplaceName','snifferReplaceUrl','snifferReplaceType','snifferReplaceUrlField'
+        ];
+
+        function markSnifferDirty() {
+            snifferIsDirty = true;
+            const b = document.getElementById('snifferDirtyBadge');
+            if (b) b.style.display = '';
+            const t = document.getElementById('snifferLastSavedTip');
+            if (t) t.textContent = '';
+        }
+
+        function clearSnifferDirty() {
+            snifferIsDirty = false;
+            const b = document.getElementById('snifferDirtyBadge');
+            if (b) b.style.display = 'none';
+        }
+
+        function updateSnifferBadges() {
+            const oEnabled = document.getElementById('snifferOfficialEnabled').checked;
+            const rEnabled = document.getElementById('snifferReplaceEnabled').checked;
+            const oBadge = document.getElementById('snifferOfficialBadge');
+            const rBadge = document.getElementById('snifferReplaceBadge');
+            const mode = document.querySelector('input[name="snifferMode"]:checked')?.value || 'concurrent';
+
+            // 1) 接口卡片上的状态徽章
+            oBadge.textContent = oEnabled ? '已启用' : '未启用';
+            oBadge.style.background = oEnabled ? '#f0f9eb' : '#f0f0f0';
+            oBadge.style.color = oEnabled ? '#67c23a' : '#909399';
+
+            rBadge.textContent = rEnabled ? '已启用' : '未启用';
+            rBadge.style.background = rEnabled ? '#f0f9eb' : '#f0f0f0';
+            rBadge.style.color = rEnabled ? '#67c23a' : '#909399';
+
+            // 2) 接口卡片上的「当前主路由」副徽章 + 卡片激活态
+            const oCurrent = document.getElementById('snifferOfficialCurrentBadge');
+            const rCurrent = document.getElementById('snifferReplaceCurrentBadge');
+            const oCard = document.getElementById('snifferOfficialCard');
+            const rCard = document.getElementById('snifferReplaceCard');
+            // concurrent 模式下两个通道都标记为"并发中"
+            if (oCurrent) oCurrent.style.display = (mode === 'official' || mode === 'concurrent') ? '' : 'none';
+            if (rCurrent) rCurrent.style.display = (mode === 'replace' || mode === 'concurrent') ? '' : 'none';
+            if (oCurrent && mode === 'concurrent') oCurrent.textContent = '并发中';
+            else if (oCurrent) oCurrent.textContent = '当前主路由';
+            if (rCurrent && mode === 'concurrent') rCurrent.textContent = '并发中';
+            else if (rCurrent) rCurrent.textContent = '当前主路由';
+            if (oCard) {
+                oCard.classList.toggle('is-current', mode === 'official' || mode === 'concurrent');
+                oCard.classList.toggle('is-enabled', oEnabled);
+                oCard.classList.toggle('is-disabled', !oEnabled);
+            }
+            if (rCard) {
+                rCard.classList.toggle('is-current', mode === 'replace' || mode === 'concurrent');
+                rCard.classList.toggle('is-enabled', rEnabled);
+                rCard.classList.toggle('is-disabled', !rEnabled);
+            }
+
+            // 3) 主路由选择卡的高亮
+            document.querySelectorAll('[data-sniffer-mode-card]').forEach(el => {
+                el.classList.toggle('is-active', el.dataset.snifferModeCard === mode);
+            });
+
+            // 4) 「当前选择的通道未启用」红色联动警告
+            //    concurrent 模式需要两个通道都启用；official/replace 只需对应通道启用
+            const alertEl = document.getElementById('snifferModeAlert');
+            let activeEnabled;
+            if (mode === 'concurrent') {
+                activeEnabled = oEnabled && rEnabled;
+            } else if (mode === 'replace') {
+                activeEnabled = rEnabled;
+            } else {
+                activeEnabled = oEnabled;
+            }
+            if (alertEl) {
+                if (mode === 'concurrent' && (!oEnabled || !rEnabled)) {
+                    alertEl.textContent = '⚠️ 同时调用模式需要官解和官替都启用，请在下方勾选「启用此接口」后再保存。';
+                    alertEl.style.display = '';
+                } else if (!activeEnabled) {
+                    alertEl.textContent = '⚠️ 当前选择的通道还没启用，请在下方对应卡片勾选「启用此接口」后再保存。';
+                    alertEl.style.display = '';
+                } else {
+                    alertEl.style.display = 'none';
+                }
+            }
+        }
+
+        function bindSnifferDirtyListeners() {
+            // change 事件（checkbox/select/radio）
+            document.addEventListener('change', function (e) {
+                if (!e.target || !e.target.id) return;
+                if (SNIFFER_WATCH_IDS.includes(e.target.id) || e.target.name === 'snifferMode') {
+                    markSnifferDirty();
+                    updateSnifferBadges();
+                }
+            });
+            // input 事件（text 输入）
+            document.addEventListener('input', function (e) {
+                if (!e.target || !e.target.id) return;
+                if (SNIFFER_WATCH_IDS.includes(e.target.id)) markSnifferDirty();
+            });
+        }
+        // 只执行一次绑定
+        if (!window.__snifferDirtyBound) {
+            window.__snifferDirtyBound = true;
+            bindSnifferDirtyListeners();
+        }
+
+        async function loadSnifferConfig() {
+            try {
+                const res = await fetch(API_BASE + '?action=sniffer/config&_t=' + Date.now());
+                const data = await res.json();
+                if (data.success && data.config) {
+                    currentSnifferConfig = data.config;
+                    const cfg = data.config;
+
+                    // 当前通道
+                    const mode = cfg.mode || 'concurrent';
+                    document.getElementById('snifferModeOfficial').checked = (mode === 'official');
+                    document.getElementById('snifferModeReplace').checked = (mode === 'replace');
+                    document.getElementById('snifferModeConcurrent').checked = (mode === 'concurrent');
+
+                    // 官解接口
+                    const o = cfg.official_api || {};
+                    document.getElementById('snifferOfficialEnabled').checked = !!o.enabled;
+                    document.getElementById('snifferOfficialName').value = o.name || '';
+                    document.getElementById('snifferOfficialUrl').value = o.url || '';
+                    document.getElementById('snifferOfficialType').value = o.type || 'json';
+                    document.getElementById('snifferOfficialUrlField').value = o.url_field || '';
+
+                    // 官替接口
+                    const r = cfg.replace_api || {};
+                    document.getElementById('snifferReplaceEnabled').checked = !!r.enabled;
+                    document.getElementById('snifferReplaceName').value = r.name || '';
+                    document.getElementById('snifferReplaceUrl').value = r.url || '';
+                    document.getElementById('snifferReplaceType').value = r.type || 'json';
+                    document.getElementById('snifferReplaceUrlField').value = r.url_field || '';
+
+                    // 更新时间
+                    const dateEl = document.getElementById('snifferUpdateDate');
+                    if (dateEl) {
+                        dateEl.textContent = cfg.update_date ? ('更新于 ' + cfg.update_date) : '尚未保存';
+                    }
+
+                    clearSnifferDirty();
+                    updateSnifferBadges();
+
+                    // v5.13.2-C4：加载完后立即检测：用户当前仍启用了失效的第三方虾米官解 114.134.184.91:9002？
+                    const hasDeprecated = (function () {
+                        const o = cfg.official_api || {};
+                        if (o.enabled && typeof o.url === 'string' &&
+                            (o.url.indexOf('114.134.184.91') !== -1 || o.url.indexOf(':9002') !== -1)) return true;
+                        const list = cfg.official_apis;
+                        if (Array.isArray(list)) {
+                            for (let i = 0; i < list.length; i++) {
+                                const a = list[i] || {};
+                                if (a.enabled && typeof a.url === 'string' &&
+                                    (a.url.indexOf('114.134.184.91') !== -1 || a.url.indexOf(':9002') !== -1)) return true;
+                            }
+                        }
+                        return false;
+                    })();
+                    const banner = document.getElementById('xiamiDeprecatedBanner');
+                    if (banner) banner.style.display = hasDeprecated ? 'block' : 'none';
+                } else {
+                    showToast('加载嗅探配置失败: ' + (data.message || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('加载嗅探配置失败: ' + e.message, 'error');
+            }
+        }
+
+        // v5.13.2-C4：一键修复按钮——①取消虾米官解（114.134.184.91:9002）的启用；②切主路由到 replace；③官替 URL 置空 + 启用官替
+        function xiamiBannerOneClickFix() {
+            const applyOne = function (oEl, urlEl, replaceUrlEl) {
+                const url = (urlEl && urlEl.value) ? urlEl.value : '';
+                if (oEl && (url.indexOf('114.134.184.91') !== -1 || url.indexOf(':9002') !== -1)) {
+                    oEl.checked = false;
+                }
+                if (replaceUrlEl) replaceUrlEl.value = '';
+            };
+            applyOne(
+                document.getElementById('snifferOfficialEnabled'),
+                document.getElementById('snifferOfficialUrl'),
+                document.getElementById('snifferReplaceUrl')
+            );
+            const repEn = document.getElementById('snifferReplaceEnabled');
+            if (repEn) repEn.checked = true;
+            const modeReplace = document.getElementById('snifferModeReplace');
+            if (modeReplace) modeReplace.checked = true;
+            const modeOff = document.getElementById('snifferModeOfficial');
+            if (modeOff) modeOff.checked = false;
+            // banner 隐藏，提示用户点击保存
+            const banner = document.getElementById('xiamiDeprecatedBanner');
+            if (banner) banner.style.display = 'none';
+            updateSnifferBadges();
+            markSnifferDirty();
+            showToast('已完成一键修复预设：请点击下方「💾 保存嗅探设置」，再去首页刷新播放页即可', 'success', 5000);
+            setTimeout(() => {
+                const btn = document.getElementById('btnSaveSniffer');
+                if (btn) { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); btn.style.outline = '3px solid #67c23a'; setTimeout(() => btn.style.outline = '', 3000); }
+            }, 250);
+        }
+
+        async function saveSnifferConfig() {
+            const btn = document.getElementById('btnSaveSniffer');
+            const originalBtnText = btn ? btn.innerHTML : '';
+            try {
+                if (btn) { btn.disabled = true; btn.innerHTML = '⏳ 保存中...'; }
+
+                const newConfig = {
+                    mode: document.querySelector('input[name="snifferMode"]:checked')?.value || 'concurrent',
+                    official_api: {
+                        enabled:   document.getElementById('snifferOfficialEnabled').checked,
+                        name:      document.getElementById('snifferOfficialName').value.trim(),
+                        url:       document.getElementById('snifferOfficialUrl').value.trim(),
+                        type:      document.getElementById('snifferOfficialType').value,
+                        url_field: document.getElementById('snifferOfficialUrlField').value.trim(),
+                        headers:   {}
+                    },
+                    replace_api: {
+                        enabled:   document.getElementById('snifferReplaceEnabled').checked,
+                        name:      document.getElementById('snifferReplaceName').value.trim(),
+                        url:       document.getElementById('snifferReplaceUrl').value.trim(),
+                        type:      document.getElementById('snifferReplaceType').value,
+                        url_field: document.getElementById('snifferReplaceUrlField').value.trim(),
+                        headers:   {}
+                    }
+                };
+
+                // 强校验：必填项不能空（官替 URL 可空；html_player 类型 url_field 非必填）
+                const mustChecks = [];
+                const oType = newConfig.official_api.type;
+                if (newConfig.official_api.enabled) {
+                    if (!newConfig.official_api.name) mustChecks.push('官解接口 · 接口名称');
+                    if (!newConfig.official_api.url) mustChecks.push('官解接口 · 接口地址');
+                    if (oType !== 'html_player' && !newConfig.official_api.url_field) mustChecks.push('官解接口 · URL 字段名');
+                }
+                if (newConfig.replace_api.enabled) {
+                    if (!newConfig.replace_api.name) mustChecks.push('官替接口 · 接口名称');
+                    if (newConfig.replace_api.type !== 'html_player' && !newConfig.replace_api.url_field) mustChecks.push('官替接口 · URL 字段名');
+                }
+                if (mustChecks.length) {
+                    showToast('请补全必填项：' + mustChecks.join('、'), 'error');
+                    return;
+                }
+
+                // 软校验：主路由未启用，给出提示但仍允许保存
+                let allowSave = true;
+                if (newConfig.mode === 'concurrent') {
+                    if (!newConfig.official_api.enabled || !newConfig.replace_api.enabled) {
+                        allowSave = confirm('同时调用模式需要官解和官替都启用，当前有通道未启用，将自动 fallback 到已启用的通道。是否继续保存？');
+                    }
+                } else {
+                    const activeKey = newConfig.mode === 'replace' ? 'replace_api' : 'official_api';
+                    allowSave = newConfig[activeKey].enabled
+                        ? true
+                        : confirm('当前选择的通道未启用，保存后将自动 fallback 到另一通道。是否继续保存？');
+                }
+                if (!allowSave) return;
+
+                const res = await fetch(API_BASE + '?action=sniffer/config/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newConfig)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    currentSnifferConfig = data.config || newConfig;
+                    const now = new Date();
+                    const pad = n => String(n).padStart(2, '0');
+                    const time = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+                    clearSnifferDirty();
+                    updateSnifferBadges();
+                    const tip = document.getElementById('snifferLastSavedTip');
+                    if (tip) tip.textContent = '✅ 保存成功 · ' + time;
+                    const dateEl = document.getElementById('snifferUpdateDate');
+                    if (dateEl && data.config && data.config.update_date) {
+                        dateEl.textContent = '更新于 ' + data.config.update_date;
+                    }
+                    showToast('嗅探设置保存成功', 'success');
+                } else {
+                    showToast('保存失败: ' + (data.message || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = originalBtnText; }
+            }
+        }
+
+        async function testSniffer() {
+            const url = document.getElementById('snifferTestUrl').value.trim();
+            if (!url) {
+                showToast('请输入视频链接', 'error');
+                return;
+            }
+
+            const resultEl = document.getElementById('snifferTestResult');
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<div style="text-align:center;padding:20px;color:#909399">正在按当前嗅探设置解析...</div>';
+
+            // 拼接 xt/api.php 入口（与本页面同域）
+            const base = window.location.protocol + '//' + window.location.host
+                + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'))
+                + '/xt/api.php?url=';
+            const testUrl = base + encodeURIComponent(url);
+
+            try {
+                const res = await fetch(testUrl + '&_t=' + Date.now());
+                const text = await res.text();
+                let data;
+                try { data = JSON.parse(text); } catch (e) {
+                    // ===== v5.13 B3 美化：非 JSON 不再裸贴整段 HTML =====
+                    // 先做人话诊断：按 HTTP 状态码 / 错误特征（502/504/500/403/空响应）
+                    const httpStatus = res.status || 0;
+                    const rawPreview = text.replace(/\s+/g, ' ').trim();
+                    let diagTitle = '响应格式异常';
+                    let diagLevel = 'danger';          // danger / warning / info
+                    let diagPrimary = '服务器返回了非 JSON 内容，可能是网关或 PHP 异常。';
+                    let diagCauses = [];
+                    let diagActions = [];
+                    const lowerText = text.toLowerCase();
+
+                    if (httpStatus === 502 || lowerText.indexOf('502 bad gateway') !== -1) {
+                        diagTitle = '502 Bad Gateway（网关/PHP-FPM 无响应）';
+                        diagPrimary = 'Nginx 等不到 PHP 进程响应或上游官解服务器挂了，返回了网关错误页。';
+                        diagLevel = 'danger';
+                        diagCauses.push('官替直调 CPU 过载，PHP-FPM 执行时间超过 Nginx 超时（默认 30s）');
+                        diagCauses.push('配置中的官解接口（如虾米官解 114.134.184.91:9002）本身宕机或限流');
+                        diagCauses.push('服务器 PHP 进程数被占满（并发高时的 FPM 队列阻塞）');
+                        diagActions.push('优先用官替通道：嗅探设置 → ① 切换为「官替接口 replace」 → ② 勾上「启用此接口（推荐作主路由）」');
+                        diagActions.push('临时禁用远端官解服务器：嗅探设置 → 官解解析接口 取消勾选「启用此接口」；官替不填 URL 就走本地直调（比 HTTP 回环快 30-70%）');
+                        diagActions.push('服务器运维侧：检查 PHP-FPM 慢日志 / Nginx error.log，必要时把 Nginx fastcgi_read_timeout 从 30s 调到 60s');
+                    } else if (httpStatus === 504 || lowerText.indexOf('504 gateway time-out') !== -1) {
+                        diagTitle = '504 Gateway Time-out（上游接口超时）';
+                        diagPrimary = '官解/官替接口请求超过 Nginx 设定的等待时间，网关主动掐断。';
+                        diagLevel = 'danger';
+                        diagCauses.push('资源站搜索引擎遍历太慢（站点数多或网络抖动）');
+                        diagCauses.push('外部官解服务器响应速度低于 15s（嗅探 performance.timeout 阈值）');
+                        diagActions.push('降低站点搜索规模：AI 自动学习 → 推荐采集里临时停用更新慢的资源站');
+                        diagActions.push('调大嗅探设置的超时阈值：performance.timeout 从 15s 改到 25s');
+                    } else if (httpStatus === 500 || lowerText.indexOf('<b>fatal error</b>') !== -1 || lowerText.indexOf('<b>parse error</b>') !== -1) {
+                        diagTitle = 'PHP 致命错误 / 500 Internal Server Error';
+                        diagPrimary = '解析脚本发生了致命错误。';
+                        diagLevel = 'danger';
+                        diagCauses.push('代码文件缺失 / 被篡改（加密核心 jiami_core.php 被修改会抛 HMAC 异常）');
+                        diagCauses.push('权限或配置文件损坏（sniffer_config.php / config.php 写入失败）');
+                        diagActions.push('立即执行「系统管理 → 在线更新 → 语法检查」看哪一行报错');
+                        diagActions.push('加密版用户：重新覆盖官方的 xt/jiami_core.php');
+                    } else if (httpStatus === 403 || lowerText.indexOf('403 forbidden') !== -1) {
+                        diagTitle = '403 Forbidden（被 WAF/防盗链拦截）';
+                        diagPrimary = '防火墙、CDN 或站点防盗链把请求判定为恶意请求。';
+                        diagLevel = 'warning';
+                        diagCauses.push('请求频率过高被 WAF 拉黑');
+                        diagCauses.push('服务器 IP 被目标视频平台或官解接口封了');
+                        diagActions.push('降低批量解析并发度，或为请求加上站点合法 UA/Referer');
+                    } else if (!text || text.length === 0) {
+                        diagTitle = '空响应（服务器无任何输出）';
+                        diagPrimary = '请求成功，但服务器没返回任何内容。';
+                        diagLevel = 'warning';
+                        diagCauses.push('PHP FPM worker 崩溃或被 OOM Killer 杀掉');
+                        diagActions.push('查看服务器 dmesg | 系统日志看 OOM，把 FPM 进程数调小');
+                    }
+
+                    if (diagCauses.length === 0) {
+                        diagCauses.push('接口临时返回了 HTML（如维护页、登录页、跳转页），嗅探 API 需要的是 application/json');
+                    }
+                    if (diagActions.length === 0) {
+                        diagActions.push('先刷新页面再试一次；如仍失败，切换嗅探设置通道：官解 ↔ 官替');
+                    }
+
+                    // ===== 用与 success/fail headerCard 同款的彩色卡片展示 =====
+                    const levelMap = {
+                        danger:  { border: '#f56c6c', bg: 'linear-gradient(135deg,#fef0f0 0%,#ffffff 100%)', text: '#f56c6c', pill:'danger',  pillText:'阻断级错误' },
+                        warning: { border: '#e6a23c', bg: 'linear-gradient(135deg,#fdf6ec 0%,#ffffff 100%)', text: '#e6a23c', pill:'warning', pillText:'需要排查' },
+                        info:    { border: '#409eff', bg: 'linear-gradient(135deg,#ecf5ff 0%,#ffffff 100%)', text: '#409eff', pill:'info',    pillText:'格式不对' },
+                    }[diagLevel];
+                    const rawId = 'raw_nonjson_' + (Date.now());
+                    const causesHtml = diagCauses.map(c => '<li style="margin:2px 0 2px 18px;line-height:1.8;color:#303133">• ' + escapeHtml(c) + '</li>').join('');
+                    const actionsHtml = diagActions.map(a => '<li style="margin:2px 0 2px 18px;line-height:1.8;color:#606266">💡 ' + escapeHtml(a) + '</li>').join('');
+                    resultEl.innerHTML =
+                        '<div style="padding:14px 16px;border:1px solid ' + levelMap.border + ';border-radius:10px;background:' + levelMap.bg + '">'
+                        + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+                        +   '<div style="display:flex;align-items:center;gap:10px">'
+                        +     '<div style="color:' + levelMap.text + ';font-weight:600;font-size:15px">✗ ' + escapeHtml(diagTitle) + '</div>'
+                        +     '<span class="status-pill ' + levelMap.pill + '">' + levelMap.pillText + '</span>'
+                        +   '</div>'
+                        +   '<div style="font-size:12px;color:#909399">HTTP 状态：<b style="color:#303133">' + escapeHtml(String(httpStatus || '未知')) + '</b> · 响应长度：<b style="color:#303133">' + escapeHtml(String(text ? text.length : 0)) + 'B</b></div>'
+                        + '</div>'
+                        + '<div style="font-size:13px;color:#606266;margin:10px 0 12px">' + escapeHtml(diagPrimary) + '</div>'
+                        + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px 16px">'
+                        +   '<div>'
+                        +     '<div style="font-size:12px;font-weight:600;color:#303133;margin-bottom:4px">🕵 可能原因（按概率排序）</div>'
+                        +     '<ul style="margin:0;padding:0;list-style:none;font-size:12.5px">' + causesHtml + '</ul>'
+                        +   '</div>'
+                        +   '<div>'
+                        +     '<div style="font-size:12px;font-weight:600;color:#303133;margin-bottom:4px">🛠 建议修复操作</div>'
+                        +     '<ul style="margin:0;padding:0;list-style:none;font-size:12.5px">' + actionsHtml + '</ul>'
+                        +   '</div>'
+                        + '</div>'
+                        + '<div style="margin-top:14px;border:1px solid ' + levelMap.border + '40;border-radius:8px;background:#fff">'
+                        +   '<button type="button" id="' + rawId + '_toggle" style="width:100%;background:#fafafa;border:0;border-bottom:1px solid ' + levelMap.border + '33;padding:8px 12px;text-align:left;cursor:pointer;font-size:12.5px;color:#606266;display:flex;justify-content:space-between;align-items:center;border-radius:8px 8px 0 0">'
+                        +     '<span>📎 查看原始响应（非 JSON）</span><span id="' + rawId + '_chev">▸</span>'
+                        +   '</button>'
+                        +   '<pre id="' + rawId + '_body" style="display:none;white-space:pre-wrap;word-break:break-all;font-size:11.5px;margin:0;padding:10px 12px;color:#606266;max-height:220px;overflow:auto">' + escapeHtml(text.substring(0, 3000)) + '</pre>'
+                        + '</div></div>'
+                        + '<script>'
+                        + '(function(){'
+                        +   'var t=document.getElementById("' + rawId + '_toggle"),b=document.getElementById("' + rawId + '_body"),c=document.getElementById("' + rawId + '_chev");'
+                        +   'if(!t||!b)return;'
+                        +   't.addEventListener("click",function(){'
+                        +     'if(b.style.display==="none"){b.style.display="";c.textContent="▾";}'
+                        +     'else{b.style.display="none";c.textContent="▸";}'
+                        +   '});'
+                        + '})();'
+                        + '<\/script>';
+                    return;
+                }
+
+                const ok = data.code === 200;
+                let headerCard = '';
+                if (ok) {
+                    const platform = data.platform ? escapeHtml(data.platform) : (data.source ? escapeHtml(data.source) : '—');
+                    const extraMeta = [];
+                    if (data.video_title) extraMeta.push('剧名:<b>' + escapeHtml(data.video_title) + '</b>');
+                    if (data.base_title)  extraMeta.push('base_title:<b>' + escapeHtml(data.base_title) + '</b>');
+                    if (data.site)        extraMeta.push('站点:<b>' + escapeHtml(data.site) + '</b>');
+                    if (data.episode_num) extraMeta.push('集:<b>第' + data.episode_num + '集</b>');
+                    if (data.match_score) extraMeta.push('分数:<b>' + data.match_score + '</b>');
+                    headerCard = '<div style="padding:14px 16px;border:1px solid #67c23a;border-radius:10px;background:linear-gradient(135deg,#f0f9eb 0%, #ffffff 100%)">'
+                        + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+                        +   '<div style="color:#67c23a;font-weight:600;font-size:15px">✓ 解析成功（耗时 ' + escapeHtml(data.time || '-') + ' · 通道 ' + platform + '）</div>'
+                        + '</div>'
+                        + '<div style="font-size:13px;color:#606266;margin:8px 0 10px">' + escapeHtml(data.msg || '') + '</div>'
+                        + (extraMeta.length ? ('<div style="font-size:12px;color:#303133;line-height:1.9">'+extraMeta.join(' &nbsp;·&nbsp; ')+'</div>') : '')
+                        + '<div style="background:#fff;padding:10px 12px;border-radius:6px;font-size:12px;word-break:break-all;margin-top:10px;border:1px dashed #c8e6c9">'
+                        +   '<strong>播放地址：</strong><a href="' + escapeHtml(data.url || '') + '" target="_blank" style="color:#409eff">' + escapeHtml(data.url || '') + '</a>'
+                        + '</div></div>';
+                } else {
+                    const debug = data.debug_info || {};
+                    const extraMeta = [];
+                    if (data.platform) extraMeta.push('平台:<b>' + escapeHtml(data.platform) + '</b>');
+                    if (data.base_title) extraMeta.push('base_title:<b>' + escapeHtml(data.base_title) + '</b>');
+                    else if (data.video_title) extraMeta.push('识别到的标题:<b>' + escapeHtml(data.video_title) + '</b>');
+                    if (data.search_keywords && data.search_keywords.length) extraMeta.push('搜索关键词:<b style="color:#e6a23c">' + data.search_keywords.slice(0, 3).map(escapeHtml).join(' | ') + '</b>');
+                    if (debug.searched_sites != null) extraMeta.push('搜索站点数:<b>' + debug.searched_sites + '</b>');
+                    if (debug.matched_sites != null) extraMeta.push('命中站点数:<b>' + debug.matched_sites + '</b>');
+                    if (Array.isArray(debug.successful_sites) && debug.successful_sites.length) extraMeta.push('成功站点:<b style="color:#67c23a">' + debug.successful_sites.slice(0, 4).map(escapeHtml).join('/') + '</b>');
+                    if (Array.isArray(debug.failed_sites) && debug.failed_sites.length) extraMeta.push('失败站点:<b style="color:#f56c6c">' + debug.failed_sites.slice(0, 4).map(escapeHtml).join('/') + (debug.failed_sites.length>4?' +'+(debug.failed_sites.length-4):'') + '</b>');
+                    headerCard = '<div style="padding:14px 16px;border:1px solid #f56c6c;border-radius:10px;background:linear-gradient(135deg,#fef0f0 0%, #ffffff 100%)">'
+                        + '<div style="color:#f56c6c;font-weight:600;font-size:15px;margin-bottom:6px">✗ 解析失败（耗时 ' + escapeHtml(data.time || '-') + '）</div>'
+                        + '<div style="font-size:13px;color:#606266;margin-bottom:8px">' + escapeHtml(data.msg || '未知错误') + '</div>'
+                        + (extraMeta.length ? ('<div style="font-size:12px;color:#303133;line-height:1.9">'+extraMeta.join(' &nbsp;·&nbsp; ')+'</div>') : '')
+                        + '<div style="margin-top:10px;padding:8px 12px;background:#fff7e7;border-left:3px solid #e6a23c;border-radius:0 6px 6px 0;font-size:12px;color:#9e7b1f">'
+                        +   '💡 从下方时间线找到第一个「✕ 失败」步骤，通常是那里出的问题。'
+                        + '</div></div>';
+                }
+
+                // ======= Step Trace 时间线 =======
+                let timelineCard = '';
+                const steps = Array.isArray(data.step_trace) ? data.step_trace : [];
+                if (steps.length > 0) {
+                    const items = steps.map(function (s, idx) {
+                        const st = s.status || 'info';
+                        const icons = { ok: '<span style="color:#67c23a">✓</span>', warn: '<span style="color:#e6a23c">△</span>', fail: '<span style="color:#f56c6c">✕</span>', info: '<span style="color:#409eff">ℹ</span>' };
+                        const borderColor = { ok: '#e1f3d8', warn: '#faecd8', fail: '#fbc4c4', info: '#d9ecff' }[st] || '#ebeef5';
+                        const dotColor    = { ok: '#67c23a', warn: '#e6a23c', fail: '#f56c6c', info: '#409eff' }[st] || '#909399';
+                        const detail = s.detail || {};
+                        let detailHtml = '';
+                        let flat = null;
+                        try {
+                            flat = [];
+                            function walk(prefix, obj) {
+                                if (obj == null) return;
+                                if (Array.isArray(obj)) {
+                                    if (obj.length === 0) return;
+                                    if (obj.length <= 8 && obj.every(function(x){ return typeof x !== 'object'; })) {
+                                        flat.push([prefix, JSON.stringify(obj)]);
+                                        return;
+                                    }
+                                    obj.forEach(function (v, i) { walk(prefix+'['+i+']', v); });
+                                } else if (typeof obj === 'object') {
+                                    const keys = Object.keys(obj);
+                                    if (keys.length === 0) return;
+                                    keys.forEach(function (k) { walk(prefix ? (prefix+'.'+k) : k, obj[k]); });
+                                } else {
+                                    flat.push([prefix, String(obj)]);
+                                }
+                            }
+                            walk('', detail);
+                            if (flat.length > 0) {
+                                detailHtml = '<div style="margin-top:8px;padding:8px 10px;background:#f5f7fa;border-radius:6px;font-size:11.5px;line-height:1.8;max-height:260px;overflow:auto">';
+                                flat.slice(0, 24).forEach(function (kv) {
+                                    const k = kv[0], v = kv[1];
+                                    let displayV = v.length > 180 ? (v.substring(0, 180) + '…') : v;
+                                    detailHtml += '<div style="display:flex;gap:8px"><span style="color:#909399;min-width:130px;flex-shrink:0">' + escapeHtml(k) + '</span><span style="color:#303133;word-break:break-all">' + escapeHtml(displayV) + '</span></div>';
+                                });
+                                if (flat.length > 24) detailHtml += '<div style="color:#909399">…省略 ' + (flat.length - 24) + ' 字段</div>';
+                                detailHtml += '</div>';
+                            }
+                        } catch (e) {}
+                        const elapsed = s.elapsed_ms != null ? (typeof s.elapsed_ms === 'number' ? s.elapsed_ms.toFixed(1) : String(s.elapsed_ms)) + 'ms' : '';
+                        const summary = s.summary || '';
+                        // 折叠开关：默认只展开 fail / warn 的详情
+                        const openByDefault = (st === 'fail') || (st === 'warn');
+                        const detailWrapId = 'sniffer_step_d_' + idx + '_' + Date.now();
+                        const toggleAble = flat && Array.isArray(flat) && flat.length > 0;
+                        return '<div style="position:relative;padding-left:28px;padding-bottom:16px">'
+                            + (idx < steps.length - 1 ? '<div style="position:absolute;left:9px;top:18px;bottom:0;width:2px;background:#ebeef5"></div>' : '')
+                            + '<div style="position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid ' + dotColor + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">'
+                            + icons[st] + '</div>'
+                            + '<div style="border:1px solid ' + borderColor + ';border-radius:8px;padding:10px 12px;background:#ffffff">'
+                            +   '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
+                            +     '<div style="font-weight:600;font-size:13.5px;color:#303133">' + escapeHtml(s.title || ('step ' + (idx + 1))) + '</div>'
+                            +     '<div style="display:flex;gap:10px;align-items:center;flex-shrink:0">'
+                            +       (elapsed ? '<span style="font-size:11.5px;color:#909399;background:#f5f7fa;padding:1px 8px;border-radius:10px">⏱ ' + elapsed + '</span>' : '')
+                            +       (toggleAble ? '<button type="button" class="step-toggle-btn" data-target="' + detailWrapId + '" style="font-size:11.5px;color:#409eff;background:#ecf5ff;border:1px solid #d9ecff;border-radius:6px;padding:1px 8px;cursor:pointer">' + (openByDefault ? '收起详情' : '展开详情') + '</button>' : '')
+                            +     '</div>'
+                            +   '</div>'
+                            +   '<div style="margin-top:4px;font-size:12.5px;color:#606266;line-height:1.65;word-break:break-word">' + escapeHtml(summary) + '</div>'
+                            +   (toggleAble ? ('<div id="' + detailWrapId + '" style="' + (openByDefault ? '' : 'display:none;') + '">' + detailHtml + '</div>') : '')
+                            + '</div></div>';
+                    }).join('');
+                    timelineCard = '<div style="margin-top:14px;border:1px solid #ebeef5;border-radius:10px;padding:14px 16px 4px;background:#fafcff">'
+                        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+                        +   '<div style="font-weight:600;color:#303133;font-size:14px">🕒 解析时间线（共 ' + steps.length + ' 步）</div>'
+                        +   '<div style="font-size:12px;color:#909399">✓ 成功  △ 警告  ✕ 失败  ℹ 信息</div>'
+                        + '</div>'
+                        + items + '</div>';
+                } else if (!ok) {
+                    timelineCard = '<div style="margin-top:12px;padding:10px 12px;background:#fdf6ec;border-radius:6px;font-size:12px;color:#9e7b1f">'
+                        + '当前接口未返回 step_trace，无法展示时间线。建议启用「官替接口」作为主路由（嗅探设置里 mode = replace）。'
+                        + '</div>';
+                }
+
+                resultEl.innerHTML = headerCard + timelineCard;
+
+                // 绑定详情展开/收起
+                if (typeof resultEl.querySelectorAll === 'function') {
+                    resultEl.querySelectorAll('.step-toggle-btn').forEach(function (btn) {
+                        btn.addEventListener('click', function () {
+                            const target = document.getElementById(btn.getAttribute('data-target'));
+                            if (!target) return;
+                            if (target.style.display === 'none') { target.style.display = ''; btn.textContent = '收起详情'; }
+                            else { target.style.display = 'none'; btn.textContent = '展开详情'; }
+                        });
+                    });
+                }
+            } catch (e) {
+                resultEl.innerHTML = '<div style="color:#f56c6c;padding:12px">请求失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        // 监听输入变化，实时更新徽章
+        document.addEventListener('change', function (e) {
+            if (e.target && (
+                e.target.id === 'snifferOfficialEnabled'
+                || e.target.id === 'snifferReplaceEnabled'
+                || e.target.name === 'snifferMode'
+            )) {
+                updateSnifferBadges();
+            }
+        });
+
+        async function testOfficialReplace() {
+            const url = document.getElementById('officialTestUrl').value.trim();
+            if (!url) {
+                showToast('请输入视频链接', 'error');
+                return;
+            }
+
+            const resultEl = document.getElementById('officialTestResult');
+            const infoEl = document.getElementById('officialTestInfo');
+            resultEl.style.display = 'block';
+            infoEl.innerHTML = '<div style="text-align:center;padding:20px;color:#909399">正在解析...</div>';
+
+            try {
+                const res = await fetch(API_BASE + '?action=official_replace/resolve&url=' + encodeURIComponent(url) + '&_t=' + Date.now());
+
+                let data;
+                let text;
+                try {
+                    text = await res.text();
+                    data = JSON.parse(text);
+                } catch (jsonErr) {
+                    console.error('JSON解析失败，响应内容:', jsonErr.message);
+                    throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                }
+
+                if (data.success) {
+                    let seasonHtml = '';
+                    if (data.season) {
+                        seasonHtml = `<div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">季数</span><div style="color:#409eff;font-weight:600">${escapeHtml(data.season)}</div></div>`;
+                    }
+                    let episodeHtml = '';
+                    if (data.episode) {
+                        let epTarget = '';
+                        if (data.target_episode) {
+                            epTarget = `<div style="font-size:11px;color:#67c23a">→ ${escapeHtml(data.target_episode)}</div>`;
+                        }
+                        episodeHtml = `<div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">集数</span><div style="color:#409eff;font-weight:600">${escapeHtml(data.episode)}${epTarget}</div></div>`;
+                    }
+                    let partHtml = '';
+                    if (data.part) {
+                        partHtml = `<div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">篇章</span><div style="color:#e6a23c;font-weight:600">${escapeHtml(data.part)}</div></div>`;
+                    }
+                    let versionHtml = '';
+                    if (data.version) {
+                        versionHtml = `<div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">版本</span><div style="color:#909399;font-weight:500">${escapeHtml(data.version)}</div></div>`;
+                    }
+                    let seasonMatchHtml = '';
+                    if (data.season_match !== undefined) {
+                        seasonMatchHtml = `<span style="color:${data.season_match ? '#67c23a' : '#f56c6c'};font-size:11px;margin-left:6px">
+                            ${data.season_match ? '✓' : '✗'}季
+                        </span>`;
+                    }
+                    let episodeMatchHtml = '';
+                    if (data.episode_match !== undefined && data.episode) {
+                        episodeMatchHtml = `<span style="color:${data.episode_match ? '#67c23a' : '#f56c6c'};font-size:11px;margin-left:6px">
+                            ${data.episode_match ? '✓' : '✗'}集
+                        </span>`;
+                    }
+
+                    let html = `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                        <div style="background:#ecf5ff;border:1px solid #d9ecff;border-radius:10px;padding:14px">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+                                <div style="width:6px;height:16px;background:#409eff;border-radius:3px"></div>
+                                <span style="font-weight:600;color:#409eff;font-size:14px">平台解析</span>
+                            </div>
+                            <div style="font-size:13px;line-height:1.6">
+                                <div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">平台</span><div style="font-weight:500">${escapeHtml(data.platform || '')}</div></div>
+                                <div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">原始标题</span><div style="font-weight:500;word-break:break-all">${escapeHtml(data.video_title || '')}</div></div>
+                                <div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">基础名称</span><div style="font-weight:600;color:#606266">${escapeHtml(data.base_title || '')}</div></div>
+                                ${seasonHtml}
+                                ${episodeHtml}
+                                ${partHtml}
+                                ${versionHtml}
+                            </div>
+                        </div>
+                        <div style="background:#f0f9eb;border:1px solid #e1f3d8;border-radius:10px;padding:14px">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+                                <div style="width:6px;height:16px;background:#67c23a;border-radius:3px"></div>
+                                <span style="font-weight:600;color:#67c23a;font-size:14px">资源站匹配</span>
+                                <span style="margin-left:auto;background:#67c23a;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${data.match_score || 0}%</span>
+                            </div>
+                            <div style="font-size:13px;line-height:1.6">
+                                <div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">资源站</span><div style="font-weight:500">${escapeHtml(data.site || '')}</div></div>
+                                <div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">匹配度</span><div style="font-weight:600;color:#67c23a;font-size:16px">${data.match_score || 0}% ${seasonMatchHtml}${episodeMatchHtml}</div></div>
+                                <div style="margin-bottom:6px;font-size:11px;color:#909399">基础匹配度: ${data.base_score || 0}%</div>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+                                    <div><span style="color:#909399;font-size:12px">目标集数</span><div style="font-weight:600;color:#409eff">${data.episode || '-'}</div></div>
+                                    <div><span style="color:#909399;font-size:12px">匹配集数</span><div style="font-weight:600;color:${data.episode_match ? '#67c23a' : '#e6a23c'}">${data.target_episode || '自动匹配'}</div></div>
+                                </div>
+                                ${data.episodes ? `<div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">总集数</span><div style="font-weight:500;color:#606266">共 ${data.episodes} 集</div></div>` : ''}
+                                <div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">M3U8地址</span><div style="font-size:11px;word-break:break-all;color:#606266;font-family:monospace">${escapeHtml(data.m3u8_url || '')}</div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="background:#f0f9eb;padding:12px;border-radius:8px;border:1px solid #e1f3d8;text-align:center">
+                        <span style="color:#67c23a;font-weight:600">✓ 解析成功</span>
+                    </div>`;
+                    
+                    if (data.alternatives && data.alternatives.length > 1) {
+                        html += '<div style="margin-top:16px"><div style="font-weight:600;margin-bottom:8px;color:#606266">其他候选结果</div>';
+                        data.alternatives.slice(1, 6).forEach(v => {
+                            const vEp = v.video_episode ? `第${v.video_episode}集` : '';
+                            const vSeason = v.video_season ? `第${v.video_season}季` : '';
+                            const vEpInfo = [vSeason, vEp].filter(Boolean).join(' · ');
+                            const vTotal = v.video && v.video.total_episodes ? `共${v.video.total_episodes}集` : '';
+                            html += `<div style="padding:10px;background:#f5f7fa;border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+                                <div style="flex:1;min-width:0">
+                                    <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.video?.name || v.name || '未知')}</div>
+                                    <div style="font-size:12px;color:#909399;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                        <span>${escapeHtml(v.site || '')}</span>
+                                        ${vEpInfo ? `<span style="color:#409eff">${escapeHtml(vEpInfo)}</span>` : ''}
+                                        ${vTotal ? `<span style="color:#67c23a">${escapeHtml(vTotal)}</span>` : ''}
+                                        <span style="color:#e6a23c">匹配度: ${v.score || 0}%</span>
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-primary" style="margin-left:8px;flex-shrink:0" onclick="learnFromVideoUrl('${escapeHtml(v.video?.first_url || v.video?.url || v.first_url || v.url || '')}', '${escapeHtml(v.video?.name || v.name || '')}')">学习</button>
+                            </div>`;
+                        });
+                        html += '</div>';
+                    }
+                    infoEl.innerHTML = html;
+                } else {
+                    let seasonHtml = '';
+                    if (data.season) {
+                        seasonHtml = `<div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">季数</span><div style="color:#409eff;font-weight:600">${escapeHtml(data.season)}</div></div>`;
+                    }
+                    let episodeHtml = '';
+                    if (data.episode) {
+                        episodeHtml = `<div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">集数</span><div style="color:#409eff;font-weight:600">${escapeHtml(data.episode)}</div></div>`;
+                    }
+
+                    let html = `
+                    <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:16px">
+                        <div style="background:#ecf5ff;border:1px solid #d9ecff;border-radius:10px;padding:14px">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+                                <div style="width:6px;height:16px;background:#409eff;border-radius:3px"></div>
+                                <span style="font-weight:600;color:#409eff;font-size:14px">平台解析</span>
+                            </div>
+                            <div style="font-size:13px;line-height:1.6">
+                                ${data.platform ? `<div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">平台</span><div style="font-weight:500">${escapeHtml(data.platform)}</div></div>` : ''}
+                                ${data.video_title ? `<div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">原始标题</span><div style="font-weight:500;word-break:break-all">${escapeHtml(data.video_title)}</div></div>` : ''}
+                                ${data.base_title ? `<div style="margin-bottom:6px"><span style="color:#909399;font-size:12px">基础名称</span><div style="font-weight:600;color:#606266">${escapeHtml(data.base_title)}</div></div>` : ''}
+                                ${seasonHtml}
+                                ${episodeHtml}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="background:#fef0f0;padding:12px;border-radius:8px;border:1px solid #fbc4c4;text-align:center">
+                        <span style="color:#f56c6c;font-weight:600">✗ ${escapeHtml(data.message || '解析失败')}</span>
+                    </div>`;
+                    
+                    if (data.candidates && data.candidates.length > 0) {
+                        html += '<div style="margin-top:16px"><div style="font-weight:600;margin-bottom:8px">候选结果 (匹配度不足):</div>';
+                        data.candidates.forEach(v => {
+                            const vEp = v.video_episode ? `第${v.video_episode}集` : '';
+                            const vSeason = v.video_season ? `第${v.video_season}季` : '';
+                            const vEpInfo = [vSeason, vEp].filter(Boolean).join(' · ');
+                            const vTotal = v.video && v.video.total_episodes ? `共${v.video.total_episodes}集` : '';
+                            html += `<div style="padding:8px;background:#f5f7fa;border-radius:6px;margin-bottom:6px">
+                                <div style="font-weight:500">${escapeHtml(v.video?.name || v.name || '未知')}</div>
+                                <div style="font-size:12px;color:#909399;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                    <span>${escapeHtml(v.site || '')}</span>
+                                    ${vEpInfo ? `<span style="color:#409eff">${escapeHtml(vEpInfo)}</span>` : ''}
+                                    ${vTotal ? `<span style="color:#67c23a">${escapeHtml(vTotal)}</span>` : ''}
+                                    <span style="color:#e6a23c">匹配度: ${v.score || 0}%</span>
+                                </div>
+                            </div>`;
+                        });
+                        html += '</div>';
+                    }
+                    infoEl.innerHTML = html;
+                }
+            } catch (e) {
+                infoEl.innerHTML = `<div style="color:#f56c6c;text-align:center;padding:20px">请求失败: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function testMoxiApi() {
+            const url = document.getElementById('moxiTestUrl').value.trim();
+            if (!url) {
+                showToast('请输入视频链接', 'error');
+                return;
+            }
+
+            const resultEl = document.getElementById('moxiTestResult');
+            const infoEl = document.getElementById('moxiTestInfo');
+            resultEl.style.display = 'block';
+            infoEl.innerHTML = '<div style="text-align:center;padding:20px;color:#909399">正在解析...</div>';
+
+            try {
+                const res = await fetch(API_BASE + '?action=moxi&url=' + encodeURIComponent(url) + '&_t=' + Date.now());
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    let html = `<div style="background:#f0f9eb;padding:16px;border-radius:8px;border:1px solid #e1f3d8">
+                        <div style="color:#67c23a;font-weight:600;margin-bottom:8px">✓ 解析成功</div>
+                        <div style="font-size:13px;line-height:2">
+                            <p><strong>状态码:</strong> <span style="color:#67c23a">${data.code}</span></p>
+                            <p><strong>剧名 (jm):</strong> ${escapeHtml(data.jm || '')}</p>
+                            <p><strong>集数 (js):</strong> ${escapeHtml(data.js || '')}</p>
+                            <p><strong>消息 (msg):</strong> ${escapeHtml(data.msg || '')}</p>
+                            <p><strong>响应时间 (time):</strong> ${escapeHtml(data.time || '')}</p>
+                            <p><strong>开发者 (kfz):</strong> ${escapeHtml(data.kfz || '')}</p>
+                            <p><strong>播放地址 (url):</strong></p>
+                            <div style="background:#fff;padding:8px;border-radius:4px;margin-top:4px;border:1px solid #e1f3d8">
+                                <code style="word-break:break-all;font-size:11px">${escapeHtml(data.url || '')}</code>
+                            </div>
+                        </div>
+                        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="btn btn-sm btn-primary" onclick="window.open('${escapeHtml(data.url || '')}', '_blank')">新窗口播放</button>
+                            <button class="btn btn-sm btn-secondary" onclick="copyText('${escapeHtml(data.url || '')}')">复制播放地址</button>
+                        </div>
+                    </div>`;
+                    
+                    html += '<div style="margin-top:16px"><div style="font-weight:600;margin-bottom:8px">完整 JSON 响应:</div>';
+                    html += `<pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+                    html += '</div>';
+                    
+                    infoEl.innerHTML = html;
+                } else {
+                    let html = `<div style="background:#fef0f0;padding:16px;border-radius:8px;border:1px solid #fbc4c4">
+                        <div style="color:#f56c6c;font-weight:600;margin-bottom:8px">✗ 解析失败</div>
+                        <div style="font-size:13px;line-height:2">
+                            <p><strong>状态码:</strong> <span style="color:#f56c6c">${data.code}</span></p>
+                            <p><strong>消息:</strong> ${escapeHtml(data.msg || '未知错误')}</p>
+                            <p><strong>响应时间:</strong> ${escapeHtml(data.time || '')}</p>
+                            <p><strong>开发者:</strong> ${escapeHtml(data.kfz || '')}</p>
+                        </div>
+                    </div>`;
+                    
+                    html += '<div style="margin-top:16px"><div style="font-weight:600;margin-bottom:8px">完整 JSON 响应:</div>';
+                    html += `<pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+                    html += '</div>';
+                    
+                    infoEl.innerHTML = html;
+                }
+            } catch (e) {
+                infoEl.innerHTML = `<div style="color:#f56c6c;text-align:center;padding:20px">请求失败: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function testMxjxApi() {
+            const url = document.getElementById('moxiTestUrl').value.trim();
+            if (!url) {
+                showToast('请输入视频链接', 'error');
+                return;
+            }
+            const resultEl = document.getElementById('moxiTestResult');
+            const infoEl = document.getElementById('moxiTestInfo');
+            resultEl.style.display = 'block';
+            infoEl.innerHTML = '<div style="text-align:center;padding:20px;color:#909399">正在去广告处理...</div>';
+
+            try {
+                const mxjxUrl = API_BASE + '?action=mxjx/info&url=' + encodeURIComponent(url) + '&_t=' + Date.now();
+                const res = await fetch(mxjxUrl);
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    infoEl.innerHTML = `<div style="background:#fef0f0;padding:16px;border-radius:8px;border:1px solid #fbc4c4">
+                        <div style="color:#f56c6c;font-weight:600">✗ 返回非JSON响应</div>
+                        <pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px;max-height:300px;margin-top:8px">${escapeHtml(text.substring(0, 1000))}</pre>
+                    </div>`;
+                    return;
+                }
+
+                if (data.success || data.code === 200) {
+                    const innerData = data.data || data;
+                    const playUrl = innerData.play_url || (API_BASE + '?action=mxjx&url=' + encodeURIComponent(url));
+                    let html = `<div style="background:#f0f9eb;padding:16px;border-radius:8px;border:1px solid #e1f3d8">
+                        <div style="color:#67c23a;font-weight:600;margin-bottom:8px">✓ 去广告处理成功</div>
+                        <div style="font-size:13px;line-height:2">
+                            <p><strong>原始URL:</strong> <code style="word-break:break-all">${escapeHtml(innerData.original_url || url)}</code></p>
+                            <p><strong>媒体URL:</strong> <code style="word-break:break-all">${escapeHtml(innerData.media_url || '')}</code></p>
+                            <p><strong>域名:</strong> ${escapeHtml(innerData.domain || '')}</p>
+                            <p><strong>有域名规则:</strong> ${innerData.has_domain_rules ? '是' : '否'}</p>
+                            ${innerData.stats ? `<p><strong>统计:</strong> 总${innerData.stats.total_segments || 0} 保留${innerData.stats.kept_segments || 0} 移除${innerData.stats.removed_segments || 0} 广告占比${innerData.stats.ad_percentage || 0}%</p>` : ''}
+                            <p><strong>无广告播放地址:</strong></p>
+                            <div style="background:#fff;padding:8px;border-radius:4px;margin-top:4px;border:1px solid #e1f3d8">
+                                <code style="word-break:break-all;font-size:11px">${escapeHtml(playUrl)}</code>
+                            </div>
+                        </div>
+                        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="btn btn-sm btn-primary" onclick="window.open('${escapeHtml(playUrl)}', '_blank')">新窗口播放</button>
+                            <button class="btn btn-sm btn-secondary" onclick="copyText('${escapeHtml(playUrl)}')">复制播放地址</button>
+                            <button class="btn btn-sm btn-secondary" onclick="copyText('${escapeHtml(mxjxUrl)}')">复制接口URL</button>
+                        </div>
+                    </div>`;
+                    html += '<div style="margin-top:16px"><div style="font-weight:600;margin-bottom:8px">完整 JSON 响应:</div>';
+                    html += `<pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px;max-height:400px">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+                    html += '</div>';
+                    infoEl.innerHTML = html;
+                } else {
+                    let html = `<div style="background:#fef0f0;padding:16px;border-radius:8px;border:1px solid #fbc4c4">
+                        <div style="color:#f56c6c;font-weight:600;margin-bottom:8px">✗ 去广告处理失败</div>
+                        <div style="font-size:13px;line-height:2">
+                            <p><strong>消息:</strong> ${escapeHtml(data.message || data.msg || '未知错误')}</p>
+                        </div>
+                    </div>`;
+                    html += '<div style="margin-top:16px"><div style="font-weight:600;margin-bottom:8px">完整 JSON 响应:</div>';
+                    html += `<pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px;max-height:400px">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+                    html += '</div>';
+                    infoEl.innerHTML = html;
+                }
+            } catch (e) {
+                infoEl.innerHTML = `<div style="color:#f56c6c;text-align:center;padding:20px">请求失败: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function testAnalyzeApi() {
+            const url = document.getElementById('moxiTestUrl').value.trim();
+            if (!url) {
+                showToast('请输入视频链接', 'error');
+                return;
+            }
+            const resultEl = document.getElementById('moxiTestResult');
+            const infoEl = document.getElementById('moxiTestInfo');
+            resultEl.style.display = 'block';
+            infoEl.innerHTML = '<div style="text-align:center;padding:20px;color:#909399">正在分析视频（可能需要 30-60 秒）...</div>';
+
+            try {
+                const analyzeUrl = API_BASE + '?action=analyze&url=' + encodeURIComponent(url) + '&auto_learn=0&_t=' + Date.now();
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 180000);
+                const res = await fetch(analyzeUrl, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    infoEl.innerHTML = `<div style="background:#fef0f0;padding:16px;border-radius:8px;border:1px solid #fbc4c4">
+                        <div style="color:#f56c6c;font-weight:600">✗ 返回非JSON响应</div>
+                        <pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px;max-height:300px;margin-top:8px">${escapeHtml(text.substring(0, 1000))}</pre>
+                    </div>`;
+                    return;
+                }
+
+                if (data.success) {
+                    const stats = data.stats || {};
+                    let html = `<div style="background:#f0f9eb;padding:16px;border-radius:8px;border:1px solid #e1f3d8">
+                        <div style="color:#67c23a;font-weight:600;margin-bottom:8px">✓ 分析成功</div>
+                        <div style="font-size:13px;line-height:2">
+                            <p><strong>域名:</strong> ${escapeHtml(data.domain || '')}</p>
+                            <p><strong>是否主播放列表:</strong> ${data.playlist && data.playlist.isMaster ? '是' : '否'}</p>
+                            <p><strong>快速模式:</strong> ${data.fastMode ? '是' : '否'}</p>
+                            <p><strong>有域名规则:</strong> ${data.hasDomainRules ? '是' : '否'}</p>
+                            <p><strong>学习次数:</strong> ${data.learn_count || 0}</p>
+                            <p><strong>片段统计:</strong> 总${stats.totalSegments || 0} 广告${stats.adSegments || 0} 不连续${stats.discontinuityCount || 0} 序列跳跃${stats.sequenceJumpCount || 0} 广告簇${stats.adClusterCount || 0}</p>
+                            ${data.mxjxUrl ? `<p><strong>无广告播放:</strong> <code style="word-break:break-all">${escapeHtml(data.mxjxUrl)}</code></p>` : ''}
+                        </div>
+                        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="btn btn-sm btn-primary" onclick="copyText('${escapeHtml(analyzeUrl)}')">复制接口URL</button>
+                            ${data.mxjxUrl ? `<button class="btn btn-sm btn-secondary" onclick="window.open('${escapeHtml(data.mxjxUrl)}', '_blank')">新窗口播放</button>` : ''}
+                        </div>
+                    </div>`;
+                    html += '<div style="margin-top:16px"><div style="font-weight:600;margin-bottom:8px">完整 JSON 响应（已截断）:</div>';
+                    const truncated = JSON.parse(JSON.stringify(data));
+                    if (truncated.allSegments) truncated.allSegments = truncated.allSegments.slice(0, 20) + `... (共 ${truncated.allSegments.length} 项)`;
+                    if (truncated.durationDistribution && truncated.durationDistribution.buckets) {
+                        // keep
+                    }
+                    html += `<pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px;max-height:400px">${escapeHtml(JSON.stringify(truncated, null, 2))}</pre>`;
+                    html += '</div>';
+                    infoEl.innerHTML = html;
+                } else {
+                    let html = `<div style="background:#fef0f0;padding:16px;border-radius:8px;border:1px solid #fbc4c4">
+                        <div style="color:#f56c6c;font-weight:600;margin-bottom:8px">✗ 分析失败</div>
+                        <div style="font-size:13px;line-height:2">
+                            <p><strong>消息:</strong> ${escapeHtml(data.message || '未知错误')}</p>
+                        </div>
+                    </div>`;
+                    html += '<div style="margin-top:16px"><div style="font-weight:600;margin-bottom:8px">完整 JSON 响应:</div>';
+                    html += `<pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px;max-height:400px">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+                    html += '</div>';
+                    infoEl.innerHTML = html;
+                }
+            } catch (e) {
+                infoEl.innerHTML = `<div style="color:#f56c6c;text-align:center;padding:20px">请求失败: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function testOfficialInfoApi() {
+            const url = document.getElementById('moxiTestUrl').value.trim();
+            if (!url) {
+                showToast('请输入视频链接', 'error');
+                return;
+            }
+            const resultEl = document.getElementById('moxiTestResult');
+            const infoEl = document.getElementById('moxiTestInfo');
+            resultEl.style.display = 'block';
+            infoEl.innerHTML = '<div style="text-align:center;padding:20px;color:#909399">正在解析官替地址...</div>';
+
+            try {
+                const resUrl = API_BASE + '?action=official_replace/info&url=' + encodeURIComponent(url) + '&_t=' + Date.now();
+                const res = await fetch(resUrl);
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    infoEl.innerHTML = `<div style="background:#fef0f0;padding:16px;border-radius:8px;border:1px solid #fbc4c4">
+                        <div style="color:#f56c6c;font-weight:600">✗ 返回非JSON响应</div>
+                        <pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px;max-height:300px;margin-top:8px">${escapeHtml(text.substring(0, 1000))}</pre>
+                    </div>`;
+                    return;
+                }
+
+                if (data.success) {
+                    const playUrl = data.ad_skip_url || (API_BASE + '?action=mxjx&deep=1&url=' + encodeURIComponent(data.m3u8_url || ''));
+                    let html = `<div style="background:#f0f9eb;padding:16px;border-radius:8px;border:1px solid #e1f3d8">
+                        <div style="color:#67c23a;font-weight:600;margin-bottom:8px">✓ 官替解析成功</div>
+                        <div style="font-size:13px;line-height:2">
+                            <p><strong>平台:</strong> ${escapeHtml(data.platform || '')}</p>
+                            <p><strong>视频标题:</strong> ${escapeHtml(data.video_title || '')}</p>
+                            <p><strong>目标集数:</strong> ${escapeHtml(data.target_episode || '')}</p>
+                            <p><strong>匹配度:</strong> ${data.match_score || 0}%</p>
+                            <p><strong>来源站点:</strong> ${escapeHtml(data.site || '')}</p>
+                            <p><strong>M3U8地址:</strong> <code style="word-break:break-all">${escapeHtml(data.m3u8_url || '')}</code></p>
+                            <p><strong>无广告播放地址:</strong></p>
+                            <div style="background:#fff;padding:8px;border-radius:4px;margin-top:4px;border:1px solid #e1f3d8">
+                                <code style="word-break:break-all;font-size:11px">${escapeHtml(playUrl)}</code>
+                            </div>
+                        </div>
+                        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="btn btn-sm btn-primary" onclick="window.open('${escapeHtml(playUrl)}', '_blank')">新窗口播放</button>
+                            <button class="btn btn-sm btn-secondary" onclick="copyText('${escapeHtml(playUrl)}')">复制播放地址</button>
+                            <button class="btn btn-sm btn-secondary" onclick="copyText('${escapeHtml(resUrl)}')">复制接口URL</button>
+                        </div>
+                    </div>`;
+                    html += '<div style="margin-top:16px"><div style="font-weight:600;margin-bottom:8px">完整 JSON 响应:</div>';
+                    html += `<pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px;max-height:400px">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+                    html += '</div>';
+                    infoEl.innerHTML = html;
+                } else {
+                    let html = `<div style="background:#fef0f0;padding:16px;border-radius:8px;border:1px solid #fbc4c4">
+                        <div style="color:#f56c6c;font-weight:600;margin-bottom:8px">✗ 官替解析失败</div>
+                        <div style="font-size:13px;line-height:2">
+                            <p><strong>消息:</strong> ${escapeHtml(data.message || '未知错误')}</p>
+                        </div>
+                    </div>`;
+                    html += '<div style="margin-top:16px"><div style="font-weight:600;margin-bottom:8px">完整 JSON 响应:</div>';
+                    html += `<pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px;max-height:400px">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+                    html += '</div>';
+                    infoEl.innerHTML = html;
+                }
+            } catch (e) {
+                infoEl.innerHTML = `<div style="color:#f56c6c;text-align:center;padding:20px">请求失败: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        let orPlayCurrentUrl = '';
+        let orPlayHls = null;
+
+        async function orPlayStart() {
+            const url = document.getElementById('orPlayUrl').value.trim();
+            if (!url) {
+                showToast('请输入视频链接', 'error');
+                return;
+            }
+
+            const statusEl = document.getElementById('orPlayStatus');
+            const infoEl = document.getElementById('orPlayInfo');
+            const containerEl = document.getElementById('orPlayerContainer');
+
+            containerEl.style.display = 'none';
+            infoEl.style.display = 'none';
+            statusEl.style.display = 'block';
+            statusEl.innerHTML = '<div style="background:#ecf5ff;padding:12px;border-radius:8px;border:1px solid #d9ecff;color:#409eff;font-size:13px">⏳ 步骤 1/3：正在匹配官方链接...</div>';
+
+            if (orPlayHls) {
+                try { orPlayHls.destroy(); } catch(e) {}
+                orPlayHls = null;
+            }
+
+            try {
+                const resUrl = API_BASE + '?action=official_replace/info&url=' + encodeURIComponent(url) + '&_t=' + Date.now();
+                const res = await fetch(resUrl);
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    statusEl.innerHTML = `<div style="background:#fef0f0;padding:12px;border-radius:8px;border:1px solid #fbc4c4">
+                        <div style="color:#f56c6c;font-weight:600">✗ 服务器返回非JSON响应</div>
+                        <pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;font-size:11px;max-height:300px;margin-top:8px">${escapeHtml(text.substring(0, 1000))}</pre>
+                    </div>`;
+                    return;
+                }
+
+                if (!data.success) {
+                    statusEl.innerHTML = '<div style="background:#fef0f0;padding:12px;border-radius:8px;border:1px solid #fbc4c4;color:#f56c6c;font-size:13px">✗ 匹配失败：' + escapeHtml(data.message || '未找到匹配资源') + '</div>';
+                    return;
+                }
+
+                statusEl.innerHTML = '<div style="background:#ecf5ff;padding:12px;border-radius:8px;border:1px solid #d9ecff;color:#409eff;font-size:13px">⏳ 步骤 2/4：AI 去广告处理中...</div>';
+
+                const m3u8Url = data.m3u8_url || '';
+                let playUrl = data.ad_skip_url || (API_BASE + '?action=mxjx&deep=1&url=' + encodeURIComponent(m3u8Url));
+                if (!playUrl || !m3u8Url) {
+                    statusEl.innerHTML = '<div style="background:#fef0f0;padding:12px;border-radius:8px;border:1px solid #fbc4c4;color:#f56c6c;font-size:13px">✗ 未获取到播放地址</div>';
+                    return;
+                }
+                orPlayCurrentUrl = playUrl;
+
+                infoEl.style.display = 'block';
+                infoEl.innerHTML = `<div style="background:#f0f9eb;padding:14px;border-radius:8px;border:1px solid #e1f3d8;font-size:13px;line-height:1.8">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+                        <span style="color:#67c23a;font-weight:600">✓ 匹配成功</span>
+                        <span style="color:#909399;font-size:11px">匹配度 ${data.match_score || 0}%</span>
+                        <span style="background:#e6a23c;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">深度去广告</span>
+                    </div>
+                    <div style="color:#606266"><strong>平台:</strong> ${escapeHtml(data.platform || '')}</div>
+                    <div style="color:#606266"><strong>视频:</strong> ${escapeHtml(data.video_title || '')}</div>
+                    ${data.target_episode ? '<div style="color:#606266"><strong>集数:</strong> ' + escapeHtml(data.target_episode) + '</div>' : ''}
+                    <div style="color:#606266"><strong>来源:</strong> ${escapeHtml(data.site || '')}</div>
+                    <div style="color:#909399;font-size:11px;margin-top:6px">💡 已启用三重去广告：标签过滤 + 规则引擎 + TS 内容分析 + 前端自动跳过</div>
+                </div>`;
+
+                statusEl.innerHTML = '<div style="background:#ecf5ff;padding:12px;border-radius:8px;border:1px solid #d9ecff;color:#409eff;font-size:13px">⏳ 步骤 3/4：获取广告时间段...</div>';
+
+                let adSegments = [];
+                try {
+                    const deepUrl = API_BASE + '?action=mxjx/deep&url=' + encodeURIComponent(m3u8Url) + '&_t=' + Date.now();
+                    const deepRes = await fetch(deepUrl);
+                    const deepText = await deepRes.text();
+                    const deepData = JSON.parse(deepText);
+                    if (deepData && deepData.ad_segments) {
+                        adSegments = deepData.ad_segments;
+                    }
+                } catch (e) {}
+
+                statusEl.innerHTML = '<div style="background:#ecf5ff;padding:12px;border-radius:8px;border:1px solid #d9ecff;color:#409eff;font-size:13px">⏳ 步骤 4/4：加载播放器...</div>';
+
+                containerEl.style.display = 'block';
+                orPlayInitHls(playUrl, statusEl, adSegments);
+            } catch (e) {
+                statusEl.innerHTML = '<div style="background:#fef0f0;padding:12px;border-radius:8px;border:1px solid #fbc4c4;color:#f56c6c;font-size:13px">✗ 请求失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        let orPlayAdSegments = [];
+        let orPlayAdSkipTimer = null;
+        let orPlayLastSkippedIndex = -1;
+
+        function orPlayInitHls(url, statusEl, adSegments) {
+            const video = document.getElementById('orPlayVideo');
+            orPlayAdSegments = adSegments || [];
+            orPlayLastSkippedIndex = -1;
+
+            if (orPlayAdSkipTimer) {
+                clearInterval(orPlayAdSkipTimer);
+                orPlayAdSkipTimer = null;
+            }
+
+            if (orPlayHls) {
+                try { orPlayHls.destroy(); } catch(e) {}
+                orPlayHls = null;
+            }
+            video.removeAttribute('src');
+            video.load();
+
+            function checkAndSkipAds() {
+                if (!orPlayAdSegments || orPlayAdSegments.length === 0) return;
+                const currentTime = video.currentTime;
+                for (let i = 0; i < orPlayAdSegments.length; i++) {
+                    const seg = orPlayAdSegments[i];
+                    if (currentTime >= seg.start && currentTime < seg.end) {
+                        if (i !== orPlayLastSkippedIndex) {
+                            orPlayLastSkippedIndex = i;
+                            video.currentTime = seg.end;
+                            if (statusEl) {
+                                statusEl.innerHTML = '<div style="background:#e6a23c;padding:12px;border-radius:8px;border:1px solid #faecd8;color:#fff;font-size:13px">⏭ 已自动跳过广告片段（第 ' + (i + 1) + ' 段，' + (seg.duration || 0).toFixed(1) + '秒）</div>';
+                                setTimeout(function() {
+                                    if (statusEl) {
+                                        statusEl.innerHTML = '<div style="background:#f0f9eb;padding:12px;border-radius:8px;border:1px solid #e1f3d8;color:#67c23a;font-size:13px">✓ 正在播放（已去广告）</div>';
+                                    }
+                                }, 2000);
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (Hls.isSupported()) {
+                const hlsConfig = {
+                    enableWorker: true,
+                    lowLatencyMode: false,
+                    backBufferLength: 60,
+                    enableCEA708Captions: false,
+                    enableWebVTT: false,
+                    enableIMSC1: false,
+                    renderTextTracksNatively: false,
+                    xhrSetup: function(xhr) {
+                        xhr.withCredentials = false;
+                        xhr.timeout = 30000;
+                    }
+                };
+                orPlayHls = new Hls(hlsConfig);
+                orPlayHls.loadSource(url);
+                orPlayHls.attachMedia(video);
+
+                orPlayHls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    statusEl.innerHTML = '<div style="background:#f0f9eb;padding:12px;border-radius:8px;border:1px solid #e1f3d8;color:#67c23a;font-size:13px">✓ 播放就绪，缓冲中...</div>';
+                    video.play().catch(function() {});
+                });
+
+                orPlayHls.on(Hls.Events.FRAG_LOADED, function() {
+                    statusEl.innerHTML = '<div style="background:#f0f9eb;padding:12px;border-radius:8px;border:1px solid #e1f3d8;color:#67c23a;font-size:13px">✓ 正在播放（已去广告）</div>';
+                });
+
+                orPlayHls.on(Hls.Events.ERROR, function(event, data) {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                statusEl.innerHTML = '<div style="background:#fdf6ec;padding:12px;border-radius:8px;border:1px solid #faecd8;color:#e6a23c;font-size:13px">⚠ 网络错误，正在恢复...</div>';
+                                try { orPlayHls.startLoad(); } catch(e) {}
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                statusEl.innerHTML = '<div style="background:#fdf6ec;padding:12px;border-radius:8px;border:1px solid #faecd8;color:#e6a23c;font-size:13px">⚠ 媒体错误，正在恢复...</div>';
+                                try { orPlayHls.recoverMediaError(); } catch(e) {}
+                                break;
+                            default:
+                                statusEl.innerHTML = '<div style="background:#fef0f0;padding:12px;border-radius:8px;border:1px solid #fbc4c4;color:#f56c6c;font-size:13px">✗ 视频加载失败</div>';
+                                try { orPlayHls.destroy(); } catch(e) {}
+                                orPlayHls = null;
+                        }
+                    }
+                });
+
+                video.addEventListener('playing', function() {
+                    statusEl.innerHTML = '<div style="background:#f0f9eb;padding:12px;border-radius:8px;border:1px solid #e1f3d8;color:#67c23a;font-size:13px">✓ 正在播放（已去广告）</div>';
+                });
+                video.addEventListener('waiting', function() {
+                    statusEl.innerHTML = '<div style="background:#ecf5ff;padding:12px;border-radius:8px;border:1px solid #d9ecff;color:#409eff;font-size:13px">⏳ 缓冲中...</div>';
+                });
+
+                orPlayAdSkipTimer = setInterval(checkAndSkipAds, 500);
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.addEventListener('loadedmetadata', function() {
+                    statusEl.innerHTML = '<div style="background:#f0f9eb;padding:12px;border-radius:8px;border:1px solid #e1f3d8;color:#67c23a;font-size:13px">✓ 正在播放（已去广告）</div>';
+                    video.play().catch(function() {});
+                    orPlayAdSkipTimer = setInterval(checkAndSkipAds, 500);
+                });
+            } else {
+                statusEl.innerHTML = '<div style="background:#fef0f0;padding:12px;border-radius:8px;border:1px solid #fbc4c4;color:#f56c6c;font-size:13px">✗ 当前浏览器不支持 HLS 播放</div>';
+            }
+        }
+
+        function orPlayCopyUrl() {
+            if (orPlayCurrentUrl) {
+                copyText(orPlayCurrentUrl);
+                showToast('播放地址已复制', 'success');
+            }
+        }
+
+        function orPlayOpenNew() {
+            if (orPlayCurrentUrl) {
+                window.open(orPlayCurrentUrl, '_blank');
+            }
+        }
+
+        let currentOfficialSite = '';
+
+        async function loadOfficialSites() {
+            const res = await fetch(API_BASE + '?action=official_sites/list&include_paused=1&_t=' + Date.now());
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('officialSitesEnabled').checked = data.enabled;
+                if (data.settings) {
+                    document.getElementById('osAutoSwitch').value = data.settings.auto_switch_domain ? '1' : '0';
+                    document.getElementById('osMaxRetry').value = data.settings.max_retry_per_domain ?? 2;
+                    document.getElementById('osTimeout').value = data.settings.timeout ?? 10;
+                    document.getElementById('osDefaultLimit').value = data.settings.default_limit ?? 20;
+                }
+                renderOfficialSites(data.sites || []);
+            }
+        }
+
+        function renderOfficialSites(sites) {
+            const container = document.getElementById('officialSitesList');
+            if (sites.length === 0) {
+                container.innerHTML = '<div class="empty">暂无推荐采集资源站</div>';
+                return;
+            }
+            let html = '<table class="rules-table">';
+            html += '<thead><tr><th>状态</th><th>名称</th><th>域名</th><th>类型</th><th>备注</th><th>优先级</th><th>操作</th></tr></thead>';
+            html += '<tbody>';
+            sites.forEach(site => {
+                const isPaused = site.status === 'paused';
+                const domains = site.domains || [];
+                const activeIdx = site.active_domain_index ?? 0;
+                const domainBadges = domains.map((d, i) => {
+                    const isActive = i === activeIdx;
+                    return `<span class="tag ${isActive ? 'tag-green' : 'tag-blue'}" style="cursor:pointer" onclick="switchOfficialDomain('${escapeHtml(site.name)}', ${i})" title="点击切换">${escapeHtml(d)}</span>`;
+                }).join(' ');
+
+                html += `<tr>
+                    <td>${isPaused ? '<span class="tag tag-orange">停用</span>' : '<span class="tag tag-green">运行中</span>'}</td>
+                    <td style="font-weight:500">
+                        ${escapeHtml(site.name || '')}
+                        <span class="tag tag-gray">推荐</span>
+                    </td>
+                    <td><div style="max-width:280px;display:flex;flex-wrap:wrap;gap:4px">${domainBadges}</div></td>
+                    <td>${escapeHtml(site.type || 'maccms')}</td>
+                    <td>${escapeHtml(site.note || '')}</td>
+                    <td>${site.priority ?? 99}</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" onclick="viewOfficialSiteVideos('${escapeHtml(site.name)}')">视频</button>
+                        <button class="btn btn-sm btn-primary" onclick="editOfficialSite('${escapeHtml(site.name)}')">编辑</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteOfficialSite('${escapeHtml(site.name)}')">删除</button>
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        async function switchOfficialDomain(siteName, domainIndex) {
+            const res = await fetch(API_BASE + '?action=official_sites/set_domain', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: siteName, domain_index: domainIndex })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('域名切换成功', 'success');
+                loadOfficialSites();
+            } else {
+                showToast(data.message || '切换失败', 'error');
+            }
+        }
+
+        async function toggleOfficialSites() {
+            const enabled = document.getElementById('officialSitesEnabled').checked;
+            const res = await fetch(API_BASE + '?action=official_sites/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(enabled ? '推荐采集已启用' : '推荐采集已停用', 'success');
+            } else {
+                showToast(data.message || '操作失败', 'error');
+            }
+        }
+
+        async function saveOfficialSettings() {
+            const settings = {
+                auto_switch_domain: document.getElementById('osAutoSwitch').value === '1',
+                max_retry_per_domain: parseInt(document.getElementById('osMaxRetry').value),
+                timeout: parseInt(document.getElementById('osTimeout').value),
+                default_limit: parseInt(document.getElementById('osDefaultLimit').value)
+            };
+            const res = await fetch(API_BASE + '?action=official_sites/settings/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('设置保存成功', 'success');
+            } else {
+                showToast(data.message || '保存失败', 'error');
+            }
+        }
+
+        function showAddOfficialSite() {
+            const name = prompt('请输入推荐站名称：');
+            if (!name) return;
+            const domains = prompt('请输入域名（一行一个）：', 'cj.10010888.xyz\ncj.tianwe.cn\ntianwei.qzz.io');
+            if (!domains) return;
+            const apiPath = prompt('请输入API路径：', '/api.php/provide/vod/') || '/api.php/provide/vod/';
+            const note = prompt('备注：', '推荐采集') || '';
+            addOfficialSite({ name, domains, api_path: apiPath, note, type: 'maccms', priority: 1 });
+        }
+
+        async function addOfficialSite(siteData) {
+            const domainList = siteData.domains.split('\n').map(d => d.trim()).filter(d => d);
+            const siteUrl = 'https://' + domainList[0];
+            const apiUrl = siteUrl + siteData.api_path;
+            const res = await fetch(API_BASE + '?action=official_sites/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: siteData.name,
+                    code: siteData.name.toLowerCase(),
+                    site_url: siteUrl,
+                    api_url: apiUrl,
+                    type: siteData.type || 'maccms',
+                    status: 'active',
+                    note: siteData.note || '',
+                    priority: siteData.priority || 1,
+                    domains: domainList,
+                    api_path: siteData.api_path || '/api.php/provide/vod/'
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('添加成功', 'success');
+                loadOfficialSites();
+            } else {
+                showToast(data.message || '添加失败', 'error');
+            }
+        }
+
+        async function editOfficialSite(name) {
+            const res = await fetch(API_BASE + '?action=official_sites/get&name=' + encodeURIComponent(name));
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.message || '获取失败', 'error');
+                return;
+            }
+            const site = data.site;
+            const newNote = prompt('修改备注：', site.note || '');
+            if (newNote === null) return;
+            const newPriority = prompt('修改优先级（数字越小越靠前）：', site.priority ?? 99);
+            if (newPriority === null) return;
+
+            const updateRes = await fetch(API_BASE + '?action=official_sites/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    note: newNote,
+                    priority: parseInt(newPriority)
+                })
+            });
+            const updateData = await updateRes.json();
+            if (updateData.success) {
+                showToast('更新成功', 'success');
+                loadOfficialSites();
+            } else {
+                showToast(updateData.message || '更新失败', 'error');
+            }
+        }
+
+        async function deleteOfficialSite(name) {
+            if (!confirm('确定删除推荐站「' + name + '」吗？')) return;
+            const res = await fetch(API_BASE + '?action=official_sites/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('删除成功', 'success');
+                loadOfficialSites();
+            } else {
+                showToast(data.message || '删除失败', 'error');
+            }
+        }
+
+        async function viewOfficialSiteVideos(siteName) {
+            currentOfficialSite = siteName;
+            document.getElementById('officialSiteVideoTitle').textContent = siteName + ' - 视频列表';
+            document.getElementById('officialSiteVideos').style.display = 'block';
+            document.getElementById('officialVideoSearch').value = '';
+            showLoadingWithProgress(document.getElementById('officialSiteVideosList'), { label: '加载中，请稍候...' });
+            try {
+                const res = await fetch(API_BASE + '?action=official_sites/fetch_videos&name=' + encodeURIComponent(siteName) + '&_t=' + Date.now());
+                const data = await res.json();
+                renderOfficialVideos(data);
+            } catch (e) {
+                document.getElementById('officialSiteVideosList').innerHTML = 
+                    `<div style="color:#f56c6c;text-align:center;padding:20px">加载失败: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        function renderOfficialVideos(data) {
+            const container = document.getElementById('officialSiteVideosList');
+            if (!data.success || !data.videos || data.videos.length === 0) {
+                container.innerHTML = `<div class="empty">${data.message || '暂无视频数据'}</div>`;
+                return;
+            }
+            const videos = data.videos;
+            let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">';
+            videos.forEach(v => {
+                const vid = v.id || v.vod_id || 0;
+                html += `<div class="stat-card" style="cursor:pointer" onclick="showOfficialVideoDetail(${vid}, '${escapeHtml(v.name || '')}')">
+                    <div style="font-weight:500;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(v.name || '未知')}</div>
+                    <div style="font-size:12px;color:var(--text-secondary)">${escapeHtml(v.remarks || v.type || '')}</div>
+                    <div style="margin-top:8px"><span class="tag tag-blue">${v.total || 0} 集</span></div>
+                </div>`;
+            });
+            html += '</div>';
+            if (data.domain_used) {
+                html = `<div style="margin-bottom:12px;padding:8px 12px;background:var(--primary-bg);border-radius:6px;font-size:13px;color:var(--primary-text)">
+                    当前使用域名: <strong>${escapeHtml(data.domain_used)}</strong>
+                </div>` + html;
+            }
+            container.innerHTML = html;
+        }
+
+        async function showOfficialVideoDetail(vodId, videoName) {
+            if (!currentOfficialSite) return;
+            const container = document.getElementById('officialSiteVideosList');
+            showLoadingWithProgress(container, { label: '获取视频详情中，请稍候...' });
+            try {
+                const res = await fetch(API_BASE + '?action=official_sites/detail&name=' + encodeURIComponent(currentOfficialSite) + '&vod_id=' + encodeURIComponent(vodId) + '&_t=' + Date.now());
+                const data = await res.json();
+                if (!data.success || !data.urls || data.urls.length === 0) {
+                    container.innerHTML = `<div style="color:#f56c6c;text-align:center;padding:20px">${data.message || '未获取到播放地址'}</div>`;
+                    return;
+                }
+
+                let html = `<div style="margin-bottom:16px">
+                    <h3 style="margin:0 0 8px 0">${escapeHtml(videoName || data.name || '未知')}</h3>
+                    <div style="font-size:13px;color:var(--text-secondary)">共 ${data.urls.length} 集</div>
+                </div>`;
+
+                html += '<div style="display:flex;flex-direction:column;gap:8px">';
+                data.urls.forEach((item, index) => {
+                    const url = item.url || '';
+                    const name = item.name || ('第' + (index + 1) + '集');
+                    html += `<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--card-bg);border-radius:8px;border:1px solid var(--border-color)">
+                        <span style="font-weight:500;width:60px;text-align:center">${escapeHtml(name)}</span>
+                        <a href="${escapeHtml(url)}" target="_blank" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#409eff;font-size:13px" title="${escapeHtml(url)}">${escapeHtml(url)}</a>
+                        <button class="btn btn-sm btn-primary" onclick="copyText('${escapeHtml(url)}');showToast('已复制', 'success')">复制</button>
+                        <button class="btn btn-sm btn-secondary" onclick="learnOfficialVideo('${escapeHtml(url)}', '${escapeHtml(name)}')">学习</button>
+                    </div>`;
+                });
+                html += '</div>';
+
+                html += `<div style="margin-top:16px"><button class="btn btn-secondary" onclick="viewOfficialSiteVideos('${currentOfficialSite}')">返回视频列表</button></div>`;
+                container.innerHTML = html;
+            } catch (e) {
+                container.innerHTML = `<div style="color:#f56c6c;text-align:center;padding:20px">获取失败: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function searchOfficialVideos() {
+            const keyword = document.getElementById('officialVideoSearch').value.trim();
+            if (!keyword || !currentOfficialSite) return;
+            showLoadingWithProgress(document.getElementById('officialSiteVideosList'), { label: '搜索中，请稍候...' });
+            try {
+                const res = await fetch(API_BASE + '?action=official_sites/search&name=' + encodeURIComponent(currentOfficialSite) + '&keyword=' + encodeURIComponent(keyword) + '&_t=' + Date.now());
+                const data = await res.json();
+                renderOfficialVideos(data);
+            } catch (e) {
+                document.getElementById('officialSiteVideosList').innerHTML = 
+                    `<div style="color:#f56c6c;text-align:center;padding:20px">搜索失败: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        function refreshOfficialVideos() {
+            if (currentOfficialSite) {
+                viewOfficialSiteVideos(currentOfficialSite);
+            }
+        }
+
+        function closeOfficialSiteVideos() {
+            document.getElementById('officialSiteVideos').style.display = 'none';
+            currentOfficialSite = '';
+        }
+
+        async function learnOfficialVideo(url, name) {
+            if (!confirm('学习视频「' + name + '」的广告规则？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=analyze&url=' + encodeURIComponent(url) + '&auto_learn=1&_t=' + Date.now());
+
+                let data;
+                let text;
+                try {
+                    text = await res.text();
+                    data = JSON.parse(text);
+                } catch (jsonErr) {
+                    throw new Error('服务器返回非JSON响应: ' + text.substring(0, 200));
+                }
+
+                if (data.success) {
+                    showToast('学习成功，广告占比: ' + (data.stats?.adPercentage || 0).toFixed(1) + '%', 'success');
+                } else {
+                    showToast(data.message || '学习失败', 'error');
+                }
+            } catch (e) {
+                showToast('学习失败: ' + e.message, 'error');
+            }
+        }
+
+        function toggleDbType(type) {
+            document.getElementById('sqliteConfig').style.display = type === 'sqlite' ? 'block' : 'none';
+            document.getElementById('mysqlConfig').style.display = type === 'mysql' ? 'grid' : 'none';
+        }
+
+        function showDbConfig() {
+            document.getElementById('dbConfigPanel').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function checkDbStatus() {
+            try {
+                const res = await fetch(API_BASE + '?action=db/status');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                const status = data.status;
+                document.getElementById('dbType').textContent = status.use_db ? status.db_type.toUpperCase() : '未启用';
+                document.getElementById('dbStatus').textContent = status.use_db ? '运行中' : '未启用';
+                document.getElementById('dbStatus').style.color = status.use_db ? '#67c23a' : '#e6a23c';
+                document.getElementById('dbRuleCount').textContent = status.rule_count ?? '-';
+                document.getElementById('dbSiteCount').textContent = status.site_count ?? '-';
+
+                let tablesHtml = '<table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left;padding:6px">表名</th><th style="text-align:left;padding:6px">状态</th></tr></thead><tbody>';
+                if (status.tables) {
+                    for (const [table, exists] of Object.entries(status.tables)) {
+                        tablesHtml += `<tr><td style="padding:6px">${table}</td><td style="padding:6px">${exists ? '<span style="color:#67c23a">✓ 正常</span>' : '<span style="color:#f56c6c">✗ 缺失</span>'}</td></tr>`;
+                    }
+                }
+                tablesHtml += '</tbody></table>';
+                document.getElementById('dbTables').innerHTML = tablesHtml;
+
+                if (status.config) {
+                    const cfg = status.config;
+                    if (cfg.type === 'mysql') {
+                        document.querySelector('input[name="dbType"][value="mysql"]').checked = true;
+                        toggleDbType('mysql');
+                        document.getElementById('mysqlHost').value = cfg.mysql_host || '127.0.0.1';
+                        document.getElementById('mysqlPort').value = cfg.mysql_port || 3306;
+                        document.getElementById('mysqlDbname').value = cfg.mysql_dbname || 'm3u8_ad';
+                        document.getElementById('mysqlUsername').value = cfg.mysql_username || 'root';
+                        document.getElementById('mysqlPassword').value = cfg.mysql_password || '';
+                        document.getElementById('mysqlCharset').value = cfg.mysql_charset || 'utf8mb4';
+                    } else {
+                        document.querySelector('input[name="dbType"][value="sqlite"]').checked = true;
+                        toggleDbType('sqlite');
+                        document.getElementById('sqlitePath').value = cfg.sqlite_path || 'db/data.db';
+                    }
+                }
+            } catch (e) {
+                document.getElementById('dbStatus').textContent = '连接失败';
+                document.getElementById('dbStatus').style.color = '#f56c6c';
+                document.getElementById('dbTables').textContent = '获取失败: ' + e.message;
+            }
+        }
+
+        async function saveDbConfig() {
+            showToast('数据库配置为只读，请直接编辑 db/db_config.php 文件', 'warning');
+        }
+
+        async function testDbConnection() {
+            const resultEl = document.getElementById('testConnResult');
+            const dbType = document.querySelector('input[name="dbType"]:checked').value;
+            const config = { type: dbType };
+            if (dbType === 'sqlite') {
+                config.sqlite_path = document.getElementById('sqlitePath').value;
+            } else {
+                config.mysql_host = document.getElementById('mysqlHost').value;
+                config.mysql_port = parseInt(document.getElementById('mysqlPort').value) || 3306;
+                config.mysql_dbname = document.getElementById('mysqlDbname').value;
+                config.mysql_username = document.getElementById('mysqlUsername').value;
+                config.mysql_password = document.getElementById('mysqlPassword').value;
+                config.mysql_charset = document.getElementById('mysqlCharset').value;
+            }
+
+            resultEl.textContent = '测试中...';
+            resultEl.style.color = '#909399';
+
+            try {
+                const res = await fetch(API_BASE + '?action=db/test_connection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    let msg = '✓ 连接成功';
+                    if (data.info) {
+                        msg += ' - ' + data.info.version;
+                        if (data.info.table_count !== undefined) {
+                            msg += '，' + data.info.table_count + ' 张表';
+                        }
+                    }
+                    resultEl.textContent = msg;
+                    resultEl.style.color = '#67c23a';
+                    showToast('数据库连接成功！', 'success');
+                } else {
+                    resultEl.textContent = '✗ ' + data.message;
+                    resultEl.style.color = '#f56c6c';
+                    showToast('连接失败: ' + data.message, 'error');
+                }
+            } catch (e) {
+                resultEl.textContent = '✗ 测试失败: ' + e.message;
+                resultEl.style.color = '#f56c6c';
+                showToast('测试失败: ' + e.message, 'error');
+            }
+        }
+
+        async function migrateData() {
+            const statusEl = document.getElementById('migrateStatus');
+            const resultEl = document.getElementById('migrateResult');
+            statusEl.textContent = '迁移中...';
+            resultEl.style.display = 'none';
+
+            try {
+                const res = await fetch(API_BASE + '?action=db/migrate', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    statusEl.textContent = '迁移成功！';
+                    let summaryHtml = '迁移统计:\n';
+                    for (const [key, info] of Object.entries(data.summary)) {
+                        summaryHtml += `  ${key}: 迁移 ${info.migrated} 条, 跳过 ${info.skipped} 条\n`;
+                    }
+                    if (data.errors && data.errors.length > 0) {
+                        summaryHtml += '\n错误:\n';
+                        data.errors.forEach(err => {
+                            summaryHtml += `  [${err.category}] ${err.message}\n`;
+                        });
+                    }
+                    resultEl.querySelector('pre').textContent = summaryHtml;
+                    resultEl.style.display = 'block';
+                    showToast('数据迁移成功', 'success');
+                    checkDbStatus();
+                } else {
+                    statusEl.textContent = '迁移失败';
+                    showToast('迁移失败: ' + data.message, 'error');
+                }
+            } catch (e) {
+                statusEl.textContent = '迁移失败';
+                showToast('迁移失败: ' + e.message, 'error');
+            }
+        }
+
+        async function initDbTables() {
+            try {
+                const res = await fetch(API_BASE + '?action=db/init', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('表结构初始化成功', 'success');
+                    checkDbStatus();
+                } else {
+                    showToast('初始化失败: ' + data.message, 'error');
+                }
+            } catch (e) {
+                showToast('初始化失败: ' + e.message, 'error');
+            }
+        }
+
+        // ===== 背景图功能 =====
+        const BG_IMAGES = [];
+        for (let i = 1; i <= 20; i++) {
+            BG_IMAGES.push('img/bj/bg_' + i + '.jpg');
+        }
+        let currentBgIndex = -1;
+        let bgImageEnabled = localStorage.getItem('bgImageEnabled') === 'true';
+        let bgAutoChange = localStorage.getItem('bgAutoChange') === 'true';
+        let bgAutoTimer = null;
+
+        function getBasePath() {
+            const path = window.location.pathname;
+            return path.substring(0, path.lastIndexOf('/') + 1);
+        }
+
+        function toggleBgImage() {
+            bgImageEnabled = !bgImageEnabled;
+            localStorage.setItem('bgImageEnabled', bgImageEnabled);
+            applyBgImage();
+            updateBgButtons();
+            showToast(bgImageEnabled ? '背景图已开启' : '背景图已关闭', 'success');
+        }
+
+        function applyBgImage() {
+            const body = document.body;
+            if (bgImageEnabled) {
+                body.classList.add('bg-image-mode');
+                if (currentBgIndex < 0) {
+                    changeBgImage(true);
+                } else {
+                    const basePath = getBasePath();
+                    body.style.backgroundImage = 'url("' + basePath + BG_IMAGES[currentBgIndex] + '")';
+                }
+            } else {
+                body.classList.remove('bg-image-mode');
+                body.style.backgroundImage = 'none';
+                if (bgAutoTimer) {
+                    clearInterval(bgAutoTimer);
+                    bgAutoTimer = null;
+                }
+            }
+        }
+
+        function changeBgImage(silent = false) {
+            if (!bgImageEnabled) return;
+            let newIndex;
+            do {
+                newIndex = Math.floor(Math.random() * BG_IMAGES.length);
+            } while (newIndex === currentBgIndex && BG_IMAGES.length > 1);
+            currentBgIndex = newIndex;
+            const basePath = getBasePath();
+            document.body.style.backgroundImage = 'url("' + basePath + BG_IMAGES[currentBgIndex] + '")';
+            localStorage.setItem('currentBgIndex', currentBgIndex);
+            if (!silent) {
+                showToast('已更换背景图 ' + (currentBgIndex + 1) + '/' + BG_IMAGES.length, 'success');
+            }
+        }
+
+        function updateBgButtons() {
+            const toggleBtn = document.getElementById('bgToggleBtn');
+            const changeBtn = document.getElementById('bgChangeBtn');
+            if (toggleBtn) {
+                toggleBtn.classList.toggle('active', bgImageEnabled);
+                toggleBtn.textContent = bgImageEnabled ? '🖼️' : '🖼️';
+            }
+            if (changeBtn) {
+                changeBtn.style.display = bgImageEnabled ? 'flex' : 'none';
+            }
+        }
+
+        // ===== v3.0 新功能 =====
+
+        let analysisHistory = JSON.parse(localStorage.getItem('analysisHistory') || '[]');
+
+        function saveToHistory(url, type, result) {
+            const domain = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+            
+            const stats = result?.data?.stats || result?.stats || result || {};
+            const filtered = result?.data?.filtered || result?.filtered || {};
+            
+            const totalSegments = 
+                stats.totalSegments || 
+                stats.total_segments || 
+                filtered.totalSegments ||
+                filtered.total_segments ||
+                result.totalSegments ||
+                0;
+                
+            const adSegments = 
+                stats.adSegments || 
+                stats.ad_segments || 
+                filtered.removedSegments?.length ||
+                filtered.adSegments ||
+                result.adSegments ||
+                0;
+            
+            const record = {
+                id: Date.now(),
+                url: url,
+                domain: domain,
+                type: type,
+                time: new Date().toISOString(),
+                result: result ? {
+                    success: result.success !== false,
+                    totalSegments: totalSegments,
+                    adSegments: adSegments,
+                    duration: result.duration || 0
+                } : null
+            };
+            analysisHistory.unshift(record);
+            if (analysisHistory.length > 100) analysisHistory = analysisHistory.slice(0, 100);
+            localStorage.setItem('analysisHistory', JSON.stringify(analysisHistory));
+            updateDashboardStats();
+            renderDashboardRecent();
+        }
+
+        function updateDashboardStats() {
+            const total = analysisHistory.length;
+            const successCount = analysisHistory.filter(r => r.result && r.result.success).length;
+            const domains = new Set(analysisHistory.map(r => r.domain)).size;
+            const totalAdRemoved = analysisHistory.reduce((sum, r) => sum + (r.result ? r.result.adSegments || 0 : 0), 0);
+            const totalDuration = analysisHistory.reduce((sum, r) => sum + (r.result ? r.result.duration || 0 : 0), 0);
+            const avgTime = successCount > 0 ? (totalDuration / successCount / 1000).toFixed(1) + 's' : '0s';
+            
+            const aiSkipCount = analysisHistory.filter(r => r.type === 'ai_skip').length;
+            const md5Count = analysisHistory.filter(r => r.type === 'md5').length;
+            
+            const today = new Date().toDateString();
+            const todayCount = analysisHistory.filter(r => new Date(r.time).toDateString() === today).length;
+            const todayAdRemoved = analysisHistory.filter(r => new Date(r.time).toDateString() === today)
+                .reduce((sum, r) => sum + (r.result ? r.result.adSegments || 0 : 0), 0);
+
+            const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            const setTrend = (id, text, isUp = true) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.textContent = (isUp ? '↑ ' : '↓ ') + text;
+                    el.className = 'stat-trend ' + (isUp ? 'up' : 'down');
+                }
+            };
+            
+            setVal('dashTotalAnalyze', total);
+            setVal('dashAdRemoved', totalAdRemoved);
+            setVal('dashDomains', domains);
+            setVal('dashAvgTime', avgTime);
+            setVal('dashRules', successCount);
+            setVal('dashMd5', aiSkipCount);
+            
+            const trendEls = document.querySelectorAll('#page-dashboard .stat-trend');
+            if (trendEls.length >= 6) {
+                trendEls[0].textContent = '↑ 今日 +' + todayCount;
+                trendEls[1].textContent = '↑ 今日 +' + todayAdRemoved;
+                trendEls[2].textContent = '↑ 共 ' + domains + ' 个';
+                trendEls[3].textContent = '↓ 极速模式';
+                trendEls[4].textContent = '↑ 成功率 ' + (total > 0 ? Math.round(successCount / total * 100) : 0) + '%';
+                trendEls[5].textContent = '↑ AI 去广告';
+            }
+            
+            renderTopDomains();
+        }
+        
+        function renderTopDomains() {
+            const container = document.getElementById('dashTopDomains');
+            if (!container) return;
+            
+            const domainCounts = {};
+            analysisHistory.forEach(r => {
+                domainCounts[r.domain] = (domainCounts[r.domain] || 0) + 1;
+            });
+            
+            const sorted = Object.entries(domainCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            
+            if (sorted.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align:center;color:var(--v3-text-muted);padding:30px">
+                        暂无数据，分析更多视频后热门域名将在这里展示
+                    </div>`;
+                return;
+            }
+            
+            const maxCount = sorted[0][1];
+            container.innerHTML = sorted.map(([domain, count], index) => {
+                const percent = Math.round((count / maxCount) * 100);
+                const rankColors = [
+                    'background: linear-gradient(135deg, #f59e0b, #ef4444)',
+                    'background: linear-gradient(135deg, #94a3b8, #64748b)',
+                    'background: linear-gradient(135deg, #b45309, #92400e)',
+                    'background: var(--v3-primary-light)',
+                ];
+                const rankBg = rankColors[index] || 'background: var(--v3-bg-hover)';
+                const rankText = index < 3 ? 'color:white;font-weight:700' : 'color:var(--v3-text-secondary)';
+                return `
+                    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--v3-border-light)">
+                        <div style="width:28px;height:28px;border-radius:8px;${rankBg};display:flex;align-items:center;justify-content:center;font-size:13px;${rankText};flex-shrink:0">${index + 1}</div>
+                        <div style="flex:1;min-width:0">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                                <span style="font-size:13px;font-weight:500;color:var(--v3-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(domain)}</span>
+                                <span style="font-size:12px;color:var(--v3-text-muted);font-weight:600">${count} 次</span>
+                            </div>
+                            <div style="height:6px;background:var(--v3-bg-hover);border-radius:3px;overflow:hidden">
+                                <div style="height:100%;width:${percent}%;background:var(--v3-primary-gradient);border-radius:3px;transition:width 0.5s ease"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderDashboardRecent() {
+            const listEl = document.getElementById('dashRecentList');
+            if (!listEl) return;
+            const recent = analysisHistory.slice(0, 5);
+            if (recent.length === 0) {
+                listEl.innerHTML = '<li class="recent-item" style="justify-content:center;color:var(--v3-text-muted);padding:20px 0">暂无分析记录，快去分析一个视频吧！</li>';
+                return;
+            }
+            listEl.innerHTML = recent.map(r => {
+                const typeIcon = r.type === 'ai_skip' ? '🤖' : r.type === 'md5' ? '🔬' : '🎯';
+                const statusClass = r.result && r.result.success ? 'badge-success' : 'badge-danger';
+                const statusText = r.result && r.result.success ? '成功' : '失败';
+                const timeStr = formatTimeAgo(r.time);
+                return `
+                    <li class="recent-item" onclick="openFromHistory(${r.id})">
+                        <div class="recent-item-icon">${typeIcon}</div>
+                        <div class="recent-item-content">
+                            <div class="recent-item-title">${escapeHtml(r.domain)}</div>
+                            <div class="recent-item-meta">
+                                <span>${timeStr}</span>
+                                <span class="badge ${statusClass}">${statusText}</span>
+                            </div>
+                        </div>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        function formatTimeAgo(isoString) {
+            const diff = Date.now() - new Date(isoString).getTime();
+            const min = Math.floor(diff / 60000);
+            if (min < 1) return '刚刚';
+            if (min < 60) return min + '分钟前';
+            const hr = Math.floor(min / 60);
+            if (hr < 24) return hr + '小时前';
+            const day = Math.floor(hr / 24);
+            if (day < 7) return day + '天前';
+            return new Date(isoString).toLocaleDateString();
+        }
+
+        function openFromHistory(id) {
+            const record = analysisHistory.find(r => r.id === id);
+            if (!record) return;
+            if (record.type === 'ai_skip') {
+                navigateTo('ai_skip');
+                const input = document.getElementById('aiSkipUrl');
+                if (input) input.value = record.url;
+            } else {
+                navigateTo('analyze');
+                const input = document.getElementById('analyzeUrl');
+                if (input) input.value = record.url;
+            }
+        }
+
+        function renderHistory() {
+            const listEl = document.getElementById('historyList');
+            const countEl = document.getElementById('historyCount');
+            if (!listEl) return;
+            const filter = document.getElementById('historyFilter')?.value || 'all';
+            const search = document.getElementById('historySearch')?.value?.toLowerCase() || '';
+            let filtered = analysisHistory;
+            if (filter !== 'all') {
+                filtered = filtered.filter(r => r.type === filter);
+            }
+            if (search) {
+                filtered = filtered.filter(r =>
+                    r.url.toLowerCase().includes(search) ||
+                    r.domain.toLowerCase().includes(search)
+                );
+            }
+            if (countEl) countEl.textContent = filtered.length;
+            if (filtered.length === 0) {
+                listEl.innerHTML = `
+                    <div style="text-align:center;color:var(--v3-text-muted);padding:40px">
+                        <div style="font-size:40px;margin-bottom:12px">📭</div>
+                        <div>暂无匹配的记录</div>
+                    </div>`;
+                return;
+            }
+            listEl.innerHTML = filtered.map(r => {
+                const typeIcon = r.type === 'ai_skip' ? '🤖' : r.type === 'md5' ? '🔬' : '🎯';
+                const typeText = r.type === 'ai_skip' ? 'AI去广告' : r.type === 'md5' ? 'MD5分析' : '视频分析';
+                const statusClass = r.result && r.result.success ? 'badge-success' : 'badge-danger';
+                const statusText = r.result && r.result.success ? '成功' : '失败';
+                const adCount = r.result ? r.result.adSegments || 0 : 0;
+                const segCount = r.result ? r.result.totalSegments || 0 : 0;
+                return `
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--v3-border-light)">
+                        <div style="width:44px;height:44px;border-radius:10px;background:var(--v3-primary-light);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${typeIcon}</div>
+                        <div style="flex:1;min-width:0">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                                <span style="font-size:13px;font-weight:500;color:var(--v3-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1">${escapeHtml(r.domain)}</span>
+                                <span class="badge ${statusClass}">${statusText}</span>
+                                <span class="badge badge-info">${typeText}</span>
+                            </div>
+                            <div style="font-size:12px;color:var(--v3-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.url)}</div>
+                            <div style="font-size:11px;color:var(--v3-text-muted);margin-top:2px;display:flex;gap:12px">
+                                <span>${new Date(r.time).toLocaleString()}</span>
+                                ${r.result ? `<span>片段: ${segCount} / 广告: ${adCount}</span>` : ''}
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:6px;flex-shrink:0">
+                            <button class="btn btn-sm btn-secondary" onclick="openFromHistory(${r.id})">重新分析</button>
+                            <button class="btn btn-sm btn-secondary" onclick="copyText('${escapeHtml(r.url)}')">复制</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterHistory() {
+            renderHistory();
+        }
+
+        function clearHistory() {
+            if (!confirm('确定要清空所有分析历史吗？')) return;
+            analysisHistory = [];
+            localStorage.removeItem('analysisHistory');
+            renderHistory();
+            updateDashboardStats();
+            renderDashboardRecent();
+            showToast('历史记录已清空', 'success');
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar && overlay) {
+                sidebar.classList.toggle('show');
+                overlay.classList.toggle('show');
+            }
+        }
+
+        function navigateTo(pageName) {
+            const navItem = document.querySelector('.nav-item[data-page="' + pageName + '"]');
+            if (navItem) {
+                handleNavClick(navItem);
+            } else {
+                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+                const pageEl = document.getElementById('page-' + pageName);
+                if (pageEl) pageEl.classList.add('active');
+            }
+            if (window.innerWidth <= 768) {
+                toggleSidebar();
+            }
+            updateMobileNav(pageName);
+            if (pageName === 'history') renderHistory();
+            if (pageName === 'announcement') loadAnnouncementList();
+            if (pageName === 'dashboard') {
+                updateDashboardStats();
+                renderDashboardRecent();
+                renderTopDomains();
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+
+
+        function updateMobileNav(pageName) {
+            const navItems = document.querySelectorAll('.mobile-nav-item');
+            navItems.forEach(item => {
+                item.classList.toggle('active', item.dataset.page === pageName);
+            });
+        }
+
+        function mobileNavTo(pageName) {
+            navigateTo(pageName);
+        }
+
+        // 批量分析功能
+        function updateBatchUrlCount() {
+            const textarea = document.getElementById('batchUrls');
+            const countEl = document.getElementById('batchUrlCount');
+            if (!textarea || !countEl) return;
+            const urls = textarea.value.split('\n').filter(u => u.trim().length > 0);
+            countEl.textContent = urls.length;
+        }
+
+        function loadBatchDemo() {
+            const textarea = document.getElementById('batchUrls');
+            if (textarea) {
+                textarea.value = 'https://example.com/video1/index.m3u8\nhttps://example.com/video2/index.m3u8\nhttps://example.com/video3/index.m3u8';
+                updateBatchUrlCount();
+                showToast('示例数据已加载', 'success');
+            }
+        }
+
+        async function startBatchAnalyze() {
+            const textarea = document.getElementById('batchUrls');
+            if (!textarea) return;
+            const urls = textarea.value.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+            if (urls.length === 0) { showToast('请先输入视频链接', 'error'); return; }
+            if (urls.length > 20) { showToast('最多支持 20 个链接同时分析', 'error'); return; }
+
+            const fastMode = document.getElementById('batchFastMode')?.checked !== false;
+            const aiMode = document.getElementById('batchAiMode')?.checked !== false;
+
+            document.getElementById('batchResultCard').style.display = 'block';
+            document.getElementById('batchTotal').textContent = urls.length;
+            document.getElementById('batchSuccess').textContent = 0;
+            document.getElementById('batchFailed').textContent = 0;
+            document.getElementById('batchProgress').textContent = '0%';
+
+            const resultList = document.getElementById('batchResultList');
+            resultList.innerHTML = '';
+
+            let success = 0;
+            let failed = 0;
+
+            for (let i = 0; i < urls.length; i++) {
+                const url = urls[i];
+                const item = document.createElement('div');
+                item.style.cssText = 'display:flex;align-items:center;gap:12px;padding:12px;background:var(--v3-bg-hover);border-radius:10px;margin-bottom:8px';
+                item.innerHTML = `
+                    <div style="width:32px;height:32px;border-radius:8px;background:var(--v3-warning-light);display:flex;align-items:center;justify-content:center;font-size:16px">⏳</div>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;font-weight:500;color:var(--v3-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(url)}</div>
+                        <div style="font-size:11px;color:var(--v3-text-muted);margin-top:2px">等待分析...</div>
+                    </div>
+                `;
+                resultList.appendChild(item);
+
+                document.getElementById('batchProgress').textContent = Math.round(((i + 1) / urls.length) * 100) + '%';
+
+                try {
+                    const action = aiMode ? 'ai/skip' : 'analyze';
+                    const params = new URLSearchParams({ action, url });
+                    if (fastMode && aiMode) params.append('fast', '1');
+
+                    const res = await fetch(API_BASE + '?' + params.toString());
+                    const data = await res.json();
+
+                    if (data.success) {
+                        success++;
+                        item.querySelector('div:nth-child(1)').textContent = '✅';
+                        item.querySelector('div:nth-child(1)').style.background = 'var(--v3-success-light)';
+                        const adCount = aiMode ? (data.filtered?.removedSegments?.length || data.adSegments?.length || 0) : (data.adSegments || 0);
+                        const totalSeg = data.totalSegments || data.filtered?.segments?.length || 0;
+                        item.querySelector('div:nth-child(2) div:nth-child(2)').innerHTML =
+                            `<span class="badge badge-success">成功</span> <span style="color:var(--v3-text-muted)">片段: ${totalSeg} / 广告: ${adCount}</span>`;
+                        saveToHistory(url, aiMode ? 'ai_skip' : 'analyze', data);
+                    } else {
+                        failed++;
+                        item.querySelector('div:nth-child(1)').textContent = '❌';
+                        item.querySelector('div:nth-child(1)').style.background = 'var(--v3-danger-light)';
+                        item.querySelector('div:nth-child(2) div:nth-child(2)').innerHTML =
+                            `<span class="badge badge-danger">失败</span> <span style="color:var(--v3-text-muted)">${escapeHtml(data.message || '未知错误')}</span>`;
+                    }
+                } catch (e) {
+                    failed++;
+                    item.querySelector('div:nth-child(1)').textContent = '❌';
+                    item.querySelector('div:nth-child(1)').style.background = 'var(--v3-danger-light)';
+                    item.querySelector('div:nth-child(2) div:nth-child(2)').innerHTML =
+                        `<span class="badge badge-danger">失败</span> <span style="color:var(--v3-text-muted)">${escapeHtml(e.message)}</span>`;
+                }
+
+                document.getElementById('batchSuccess').textContent = success;
+                document.getElementById('batchFailed').textContent = failed;
+            }
+
+            document.getElementById('batchProgress').textContent = '100%';
+            showToast(`批量分析完成：成功 ${success} 个，失败 ${failed} 个`, success > failed ? 'success' : 'warning');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderSidebarMenu();
+            initTheme();
+            refreshRules();
+            initAccessPreview();
+            loadOfficialSites();
+            loadOfficialReplaceConfig();
+            loadPlayerConfig();
+            loadProxyList();
+            updateDashboardStats();
+            renderDashboardRecent();
+            renderTopDomains();
+            
+            const batchTextarea = document.getElementById('batchUrls');
+            if (batchTextarea) {
+                batchTextarea.addEventListener('input', updateBatchUrlCount);
+            }
+            
+            const savedBgIndex = parseInt(localStorage.getItem('currentBgIndex'));
+            if (!isNaN(savedBgIndex) && savedBgIndex >= 0 && savedBgIndex < BG_IMAGES.length) {
+                currentBgIndex = savedBgIndex;
+            }
+            applyBgImage();
+            updateBgButtons();
+            fetch(API_BASE + '?action=info/version')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.version) {
+                        const v = document.getElementById('sidebarVersion');
+                        if (v) v.textContent = '版本 ' + data.version;
+                    }
+                })
+                .catch(() => {});
+            setTimeout(() => checkUpdate(true), 2000);
+            // 自动更新模块：一进后台立即拉一次进度（若此前有运行中的任务则可以继续显示进度）
+            if (document.getElementById('page-autoupdate')) {
+                setTimeout(() => gxRefreshProgress(true), 400);
+            }
+        });
+
+        /* ============================================================
+         *   自动更新 / 维护 模块（进度条 + 彩色日志 + 启动接口）
+         * ============================================================ */
+        const GX_STATE = {
+            polling: false,
+            timer: null,
+            lastLogs: -1,            // 已输出的日志条数（防止重复渲染）
+            lastTaskId: null,
+            autoScroll: true,
+            intervalMs: 1200,
+            // ===== 卡住自愈 v5.10.8 =====
+            stuck_lastPct: -1,       // 上一次 percent
+            stuck_lastTs: 0,         // 上一次 percent 变化的时间戳(ms)
+            stuck_warnCount: 0,      // 已警告次数（避免无限刷日志）
+            stuck_maxWarns: 3,       // 最多警告次数
+            stuck_threshold_s: 25,   // 进度超过 N 秒不动 => 警告
+            stuck_forceStop_s: 180,  // 超过 3 分钟完全不动 => 停轮询+提示
+        };
+
+        // ---------- HMAC-SHA256 工具（顶层函数，供 gxBuildSignedPayload 调用）----------
+        function _gx_utf8e(s){ return unescape(encodeURIComponent(String(s == null ? '' : s))); }
+        function _gx_hex2a(h){ var b=[]; for(var i=0;i<h.length;i+=2) b.push(parseInt(h.substr(i,2),16)); return b; }
+        function _gx_a2hex(b){ var h=''; for(var i=0;i<b.length;i++){ h += ('0'+b[i].toString(16)).slice(-2); } return h; }
+        function _gx_sha256(bytes){
+            var K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+                0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+                0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+                0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+                0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+                0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+                0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+                0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+            var h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+            var bytes2=bytes.slice();
+            var bitLen=bytes2.length*8;
+            bytes2.push(0x80);
+            while(bytes2.length%64!==56) bytes2.push(0);
+            for(var i=7;i>=0;i--) bytes2.push((bitLen>>>(8*i))&0xff);
+            var rotr=function(x,n){ return (x>>>n)|(x<<(32-n)); };
+            for(var z=0;z<bytes2.length;z+=64){
+                var w=[];
+                for(var i=0;i<16;i++) w.push((bytes2[z+i*4]<<24)|(bytes2[z+i*4+1]<<16)|(bytes2[z+i*4+2]<<8)|bytes2[z+i*4+3]);
+                for(var i=16;i<64;i++){
+                    var s0=rotr(w[i-15],7)^rotr(w[i-15],18)^(w[i-15]>>>3);
+                    var s1=rotr(w[i-2],17)^rotr(w[i-2],19)^(w[i-2]>>>10);
+                    w[i]=(w[i-16]+s0+w[i-7]+s1)|0;
+                }
+                var a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+                for(var i=0;i<64;i++){
+                    var S1=rotr(e,6)^rotr(e,11)^rotr(e,25), ch=((e&f)^((~e)&g));
+                    var t1=(h+S1+ch+K[i]+w[i])|0;
+                    var S0=rotr(a,2)^rotr(a,13)^rotr(a,22), mj=((a&b)^(a&c)^(b&c));
+                    var t2=(S0+mj)|0;
+                    h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;
+                }
+                h0=(h0+a)|0;h1=(h1+b)|0;h2=(h2+c)|0;h3=(h3+d)|0;h4=(h4+e)|0;h5=(h5+f)|0;h6=(h6+g)|0;h7=(h7+h)|0;
+            }
+            var pad=function(n){ return ('00000000'+(n>>>0).toString(16)).slice(-8); };
+            return pad(h0)+pad(h1)+pad(h2)+pad(h3)+pad(h4)+pad(h5)+pad(h6)+pad(h7);
+        }
+        function _gx_toBytes(s){
+            var out=[]; var u=_gx_utf8e(s);
+            for(var i=0;i<u.length;i++) out.push(u.charCodeAt(i)&0xff);
+            return out;
+        }
+
+        /** HMAC-SHA256：优先使用浏览器原生 Web Crypto（与 PHP hash_hmac 100% 对齐），不支持时 fallback 到纯 JS 实现 */
+        async function gxHmacSha256(key, msg) {
+            // 1) 原生 Web Crypto（现代浏览器都支持，结果与 PHP hash_hmac 完全一致）
+            if (window.crypto && crypto.subtle && typeof crypto.subtle.importKey === 'function') {
+                try {
+                    var keyBytes = new Uint8Array(_gx_toBytes(key));
+                    var msgBytes = new Uint8Array(_gx_toBytes(msg));
+                    var cryptoKey = await crypto.subtle.importKey(
+                        'raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+                    );
+                    var sig = await crypto.subtle.sign('HMAC', cryptoKey, msgBytes);
+                    return _gx_a2hex(Array.from(new Uint8Array(sig)));
+                } catch (_e) { /* fall-through */ }
+            }
+            // 2) fallback：纯 JS HMAC-SHA256
+            var blockSize = 64;
+            var ke = _gx_toBytes(key);
+            var k2 = ke.slice();
+            if (k2.length > blockSize) k2 = _gx_hex2a(_gx_sha256(k2));
+            while (k2.length < blockSize) k2.push(0);
+            var o = [], ipad = [];
+            for (var t = 0; t < blockSize; t++) { o.push(k2[t] ^ 0x5c); ipad.push(k2[t] ^ 0x36); }
+            var mBytes = _gx_toBytes(msg);
+            var inner = _gx_sha256(ipad.concat(mBytes));
+            var outer = _gx_sha256(o.concat(_gx_hex2a(inner)));
+            return outer;
+        }
+
+        function gxNowTs() { return Math.floor(Date.now() / 1000); }
+
+        /**
+         * 构建签名后的启动 payload —— 改为请求服务端 gx_token.php 生成，
+         * 彻底避免客户端 Web Crypto 安全上下文限制、以及手写 JS HMAC 与 PHP 不一致的问题。
+         * 返回格式与之前完全一致：{ token, ts, action, max, force }
+         */
+        async function gxBuildSignedPayload(action, max, force) {
+            if (!window.__GX_TOKEN_URL__) throw new Error('__GX_TOKEN_URL__ 未配置');
+            var body = {
+                action: action,
+                max:    (max === null || max === undefined) ? 'null' : max,
+                force:  force ? 1 : 0
+            };
+            var resp = await fetch(window.__GX_TOKEN_URL__, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            var j = await resp.json();
+            if (!j || !j.ok || !j.data) {
+                throw new Error((j && j.error) ? j.error : '获取签名 token 失败');
+            }
+            return j.data;
+        }
+
+        function gxLogLine(timeStr, level, text) {
+            const logEl = document.getElementById('gxLog');
+            if (!logEl) return;
+            const lvl = (level||'info').toLowerCase();
+            const map = { info:'info', warn:'warn', warning:'warn', error:'error', ok:'ok', success:'ok', success_:'ok' };
+            const cls = map[lvl] || 'info';
+            const div = document.createElement('div');
+            div.innerHTML = `<span class="time">${timeStr||''}</span><span class="${cls}">${gxEscapeHtml(text)}</span>`;
+            logEl.appendChild(div);
+            if (GX_STATE.autoScroll) logEl.scrollTop = logEl.scrollHeight;
+        }
+        function gxEscapeHtml(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+
+        function gxToggleAutoScroll() {
+            GX_STATE.autoScroll = !GX_STATE.autoScroll;
+            const btn = document.getElementById('gxAutoScrollBtn');
+            if (btn) btn.textContent = '自动滚动: ' + (GX_STATE.autoScroll ? '开' : '关');
+        }
+
+        function gxSetPct(pct, stepText) {
+            pct = Math.max(0, Math.min(100, Math.round(pct||0)));
+            const bar = document.getElementById('gxProgressBar');
+            const txt = document.getElementById('gxPctText');
+            const stp = document.getElementById('gxStepText');
+            if (bar) bar.style.width = pct + '%';
+            if (txt) txt.textContent = `进度：${pct}%`;
+            if (stp && stepText != null) stp.textContent = stepText;
+        }
+
+        function gxSetOverview(text) {
+            const el = document.getElementById('gxOverview');
+            if (el) el.innerHTML = text;
+        }
+
+        function gxRenderSteps(progress) {
+            const steps = progress?.steps || {};
+            const keys = Object.keys(steps);
+            const listEl = document.getElementById('gxStepsList');
+            if (!listEl) return;
+            if (keys.length === 0) { listEl.innerHTML = '<div style="color:var(--text-secondary);font-size:13px">等待启动…</div>'; return; }
+            let html = '';
+            const icon = st => {
+                if (st.status === 'done' && st.success) return '<span class="gx-step-icon">✅</span>';
+                if (st.status === 'done' && !st.success) return '<span class="gx-step-icon">❌</span>';
+                if (st.status === 'running') return '<span class="gx-step-icon">⏳</span>';
+                return '<span class="gx-step-icon" style="color:#c0c4cc">·</span>';
+            };
+            const rowClass = st => {
+                if (st.status === 'done') return st.success ? 'gx-step-row done-ok' : 'gx-step-row done-fail';
+                if (st.status === 'running') return 'gx-step-row running';
+                return 'gx-step-row';
+            };
+            keys.forEach(k=>{
+                const st = steps[k];
+                const pct = Math.round((st.percent || 0)*100)/100;
+                html += `<div class="${rowClass(st)}">
+                    ${icon(st)}
+                    <div class="gx-step-name">${gxEscapeHtml(k)}</div>
+                    <div class="gx-step-sub" title="${gxEscapeHtml(st.sub_message || st.message || '')}">${gxEscapeHtml(st.sub_message || st.message || (st.status==='pending'?'待执行':''))}</div>
+                    <div class="gx-step-pct">${pct.toFixed(0)}%</div>
+                </div>`;
+            });
+            listEl.innerHTML = html;
+        }
+
+        function gxAppendNewLogs(progress) {
+            const logs = progress?.logs || [];
+            if (logs.length <= GX_STATE.lastLogs) return;
+            for (let i = GX_STATE.lastLogs < 0 ? 0 : GX_STATE.lastLogs; i < logs.length; i++) {
+                const L = logs[i] || {};
+                const t = (L.time || '').replace(/^.*T/, '').replace(/\..*/, '');
+                gxLogLine(t, L.level || 'info', L.message || '');
+            }
+            GX_STATE.lastLogs = logs.length;
+        }
+
+        function gxResetLogs() {
+            GX_STATE.lastLogs = -1;
+            const el = document.getElementById('gxLog');
+            if (el) el.innerHTML = '';
+        }
+
+        function gxStopTask() {
+            GX_STATE.polling = false;
+            if (GX_STATE.timer) { clearTimeout(GX_STATE.timer); GX_STATE.timer = null; }
+            const sb = document.getElementById('gxStopBtn');
+            if (sb) sb.style.display = 'none';
+            showToast('已停止进度轮询（不影响后台任务）', 'warn');
+        }
+
+        function gxStartPolling() {
+            if (GX_STATE.polling) return;
+            GX_STATE.polling = true;
+            const sb = document.getElementById('gxStopBtn');
+            if (sb) sb.style.display = '';
+            const tick = () => {
+                if (!GX_STATE.polling) return;
+                gxRefreshProgress(false).then(()=>{
+                    GX_STATE.timer = setTimeout(tick, GX_STATE.intervalMs);
+                }).catch(()=>{
+                    GX_STATE.timer = setTimeout(tick, GX_STATE.intervalMs);
+                });
+            };
+            tick();
+        }
+
+        async function gxRefreshProgress(silent=false) {
+            try {
+                const r = await fetch(window.__GX_PROGRESS_URL__, { cache:'no-store' });
+                const data = await r.json();
+                const prog = data.progress;
+                if (!prog) {
+                    // 无进行中的任务：显示 last_run 摘要
+                    const lr = data.last_run;
+                    if (!silent) {
+                        gxSetPct(0, lr ? '上次执行：' + (lr.finished_at||'') : '等待启动…');
+                        gxRenderSteps({});
+                    }
+                    if (lr) {
+                        const ok = lr.success ? '✅ 成功' : (lr.failed_tasks&&lr.failed_tasks.length? '⚠️ 部分失败: '+lr.failed_tasks.join(',') : '❌ 失败');
+                        gxSetOverview(`📌 最近一次执行 @ ${lr.finished_at||''} — 动作: <b>${gxEscapeHtml(lr.action||'')}</b>，耗时 ${lr.cost_seconds||0}s，${ok}`);
+                    } else {
+                        gxSetOverview('暂无运行任务，点击「开始执行」启动。');
+                    }
+                    if (GX_STATE.polling && (!prog)) {
+                        // 连续若干次无 progress 后停止轮询（此处简单停一次）
+                        GX_STATE.polling = false;
+                        if (GX_STATE.timer) { clearTimeout(GX_STATE.timer); GX_STATE.timer=null; }
+                        const sb = document.getElementById('gxStopBtn');
+                        if (sb) sb.style.display = 'none';
+                    }
+                    return;
+                }
+                // 切换 task_id 时重置日志 & 卡住检测
+                if (GX_STATE.lastTaskId !== prog.task_id) {
+                    GX_STATE.lastTaskId = prog.task_id;
+                    GX_STATE.stuck_lastPct = -1;
+                    GX_STATE.stuck_lastTs = Date.now();
+                    GX_STATE.stuck_warnCount = 0;
+                    gxResetLogs();
+                }
+                // ===== v5.10.8 进度卡住自愈检测 =====
+                const now = Date.now();
+                const pct = Math.round((prog.percent||0)*100)/100;
+                // percent 变化时：刷新基线
+                if (Math.abs(pct - GX_STATE.stuck_lastPct) > 0.001) {
+                    GX_STATE.stuck_lastPct = pct;
+                    GX_STATE.stuck_lastTs = now;
+                    GX_STATE.stuck_warnCount = 0; // 进度有推进，重置告警计数
+                } else {
+                    // percent 没动：判断是否超阈值
+                    const stuckSec = (now - GX_STATE.stuck_lastTs) / 1000;
+                    const isFinishedState = ['success','failed','partial'].indexOf(prog.overall_status) >= 0;
+                    if (!isFinishedState && GX_STATE.stuck_lastPct >= 0) {
+                        // 超过 3 分钟完全不动 → 停轮询 + 提示用户手动刷新
+                        if (stuckSec >= GX_STATE.stuck_forceStop_s) {
+                            if (GX_STATE.polling) {
+                                GX_STATE.polling = false;
+                                if (GX_STATE.timer) { clearTimeout(GX_STATE.timer); GX_STATE.timer=null; }
+                                const sb = document.getElementById('gxStopBtn');
+                                if (sb) sb.style.display = 'none';
+                            }
+                            gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'error',
+                                `⚠️ 进度已 ${Math.round(stuckSec)}s 未变化（${pct}%），已停止轮询。` +
+                                ` 请 <a href="javascript:void(0)" onclick="gxRefreshProgress(true);showToast('已手动刷新进度','warn')" style="color:#fbbf24;text-decoration:underline">点此手动刷新</a>` +
+                                ` 或检查后台任务是否异常。`);
+                            showToast('进度长时间未变化，已停止轮询。可手动刷新或重新启动任务。', 'warn');
+                        }
+                        // 超过 25s 不动且警告次数未达上限 → 打一条 warn（避免刷屏）
+                        else if (stuckSec >= GX_STATE.stuck_threshold_s && GX_STATE.stuck_warnCount < GX_STATE.stuck_maxWarns) {
+                            GX_STATE.stuck_warnCount++;
+                            const curStep = prog.current_step || 'site_check';
+                            let hint = '';
+                            if (curStep.indexOf('site_') === 0 || curStep === 'site_check_prepare' || curStep === 'site_check_summary' || curStep === 'site_check') {
+                                hint = '（资源站巡检为独立小步骤，单站 ≤8s，若超过该时间说明某站网络慢，可耐心等待或稍后手动刷新）';
+                            } else if (curStep === 'ai_learn') {
+                                hint = '（AI 学习需抓取多站点样本，可能耗时 30-60s，属正常现象）';
+                            } else if (curStep === 'official_refresh') {
+                                hint = '（官替刷新含搜索抽检，可能耗时 10-20s）';
+                            }
+                            gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'warn',
+                                `⏳ 进度 ${pct}% 已 ${Math.round(stuckSec)}s 未变化，当前步骤 [${curStep}]。${hint}`);
+                        }
+                    }
+                }
+                const cur = prog.current_step ? `当前步骤：${prog.current_step}${prog.current_message?` · ${prog.current_message}`:''}` : (prog.overall_status||'');
+                gxSetPct(pct, cur);
+                gxRenderSteps(prog);
+                gxAppendNewLogs(prog);
+                const status2text = {
+                    pending:'等待执行',
+                    running:'⏳ 执行中',
+                    success:'✅ 执行完成',
+                    failed: '❌ 执行失败',
+                    partial:'⚠️ 部分成功',
+                };
+                const dur = prog.duration_sec != null ? `，耗时 ${prog.duration_sec}s` : '';
+                gxSetOverview(`🆔 Task: <b>${gxEscapeHtml(prog.task_id||'')}</b> · 动作: <b>${gxEscapeHtml(prog.action||'')}</b> · 状态: <b>${status2text[prog.overall_status]||prog.overall_status}</b>${dur}`);
+                // 完成时停止轮询
+                if (['success','failed','partial'].indexOf(prog.overall_status) >= 0) {
+                    if (GX_STATE.polling) {
+                        GX_STATE.polling = false;
+                        if (GX_STATE.timer) { clearTimeout(GX_STATE.timer); GX_STATE.timer=null; }
+                        const sb = document.getElementById('gxStopBtn');
+                        if (sb) sb.style.display = 'none';
+                        showToast(prog.overall_status==='success' ? '更新任务执行完成！' : '任务执行结束（部分步骤失败）', prog.overall_status==='success'?'success':'warn');
+                    }
+                }
+            } catch (e) {
+                if (!silent) {
+                    gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'error', 'gx_progress.php 拉取失败: ' + e.message);
+                }
+            }
+        }
+
+        async function gxStartTask() {
+            const action = document.getElementById('gxAction').value;
+            const maxVal = parseInt(document.getElementById('gxMax').value, 10);
+            const max = isNaN(maxVal) ? null : maxVal;
+            const force = document.getElementById('gxForce').checked;
+
+            if (!window.__GX_SECRET_READY__) {
+                showToast('gx_secret 未初始化：请先访问一次 /gx.php?action=reset_key 自动生成密钥后再刷新后台', 'error');
+                return;
+            }
+            const btn = document.getElementById('gxStartBtn');
+            try {
+                if (btn) { btn.disabled = true; btn.textContent = '🔄 提交中...'; }
+                // 启动新任务：重置卡住检测器 v5.10.8
+                GX_STATE.stuck_lastPct = -1;
+                GX_STATE.stuck_lastTs = Date.now();
+                GX_STATE.stuck_warnCount = 0;
+                const body = await gxBuildSignedPayload(action, max, force);
+                gxResetLogs();
+                gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'info', `请求启动：action=${action}, max=${max==null?'默认':max}, force=${force?'是':'否'}`);
+                const r = await fetch(window.__GX_EXEC_URL__, {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify(body),
+                });
+                let data;
+                try { data = await r.json(); } catch(e){ data = {success:false, message:await r.text()}; }
+                if (!r.ok || !data.success) {
+                    gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'error', `启动失败(${data.code||r.status}): ${data.message||'未知错误'}`);
+                    showToast('启动失败: ' + (data.message||r.status), 'error');
+                    return;
+                }
+                gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'ok', (data.message || '任务已启动') + (data.pid?` (pid=${data.pid})`:'') + (data.task_id?` (task_id=${data.task_id})`:''));
+                if (data.progress) {
+                    // 立即展示初始进度
+                    const pct = Math.round((data.progress.percent||0)*100)/100;
+                    gxSetPct(pct, data.progress.current_step || '任务启动中…');
+                    gxRenderSteps(data.progress);
+                    gxAppendNewLogs(data.progress);
+                }
+                showToast('任务已启动，进度条实时更新中…', 'success');
+                // 开始轮询
+                gxStartPolling();
+            } catch (e) {
+                gxLogLine(new Date().toLocaleTimeString('zh-CN',{hour12:false}), 'error', '请求异常: ' + e.message);
+                showToast('请求异常: ' + e.message, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '▶ 开始执行'; }
+            }
+        }
+    </script>
+</body>
+</html>
