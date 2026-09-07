@@ -28,7 +28,27 @@ if (!$_mxGXSecret) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>M3U8 广告分析后台</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/dplayer/1.27.1/DPlayer.min.css">
-    <script src="https://cdn.bootcdn.net/ajax/libs/hls.js/1.5.15/hls.min.js"></script>
+    <script>
+        // hls.js 多 CDN 兜底加载（bootcdn 不可达时依次尝试 jsdelivr / unpkg）
+        (function loadHlsJs() {
+            if (window.Hls && Hls.isSupported()) return;
+            var urls = [
+                'https://cdn.bootcdn.net/ajax/libs/hls.js/1.5.15/hls.min.js',
+                'https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js',
+                'https://unpkg.com/hls.js@1.5.15/dist/hls.min.js'
+            ];
+            var i = 0;
+            (function next() {
+                if (i >= urls.length || (window.Hls && Hls.isSupported())) return;
+                var s = document.createElement('script');
+                s.src = urls[i++];
+                s.async = true;
+                s.onload = function () { if (!(window.Hls && Hls.isSupported())) next(); };
+                s.onerror = next;
+                document.head.appendChild(s);
+            })();
+        })();
+    </script>
     <script src="https://cdn.bootcdn.net/ajax/libs/dplayer/1.27.1/DPlayer.min.js"></script>
     <script>
         // 自动更新（进度条）模块的前端常量
@@ -2817,6 +2837,47 @@ if (!$_mxGXSecret) {
             color: rgba(255,255,255,0.65) !important;
         }
 
+        /* ===== 侧边栏折叠 ===== */
+        .sidebar { transition: width .25s ease, padding .25s ease; }
+        .sidebar.collapsed {
+            width: 64px !important;
+            padding: 16px 8px !important;
+        }
+        .sidebar.collapsed .sidebar-logo { padding: 8px 4px 16px !important; }
+        .sidebar.collapsed .sidebar-logo h2,
+        .sidebar.collapsed .sidebar-logo p { display: none !important; }
+        .sidebar.collapsed .menu-group-title { display: none !important; }
+        .sidebar.collapsed .nav-item {
+            padding: 10px 0 !important;
+            justify-content: center !important;
+            gap: 0 !important;
+            border-left: none !important;
+        }
+        .sidebar.collapsed .nav-item .menu-text,
+        .sidebar.collapsed .nav-item .menu-badge { display: none !important; }
+        .sidebar.collapsed .sidebar-footer { display: none !important; }
+        .sidebar-collapse-toggle {
+            background: rgba(255,255,255,0.14);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 10px;
+            width: 36px;
+            height: 36px;
+            font-size: 16px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .2s ease;
+        }
+        .sidebar-collapse-toggle:hover {
+            background: rgba(255,255,255,0.25);
+            border-color: rgba(255,255,255,0.45);
+        }
+        @media (max-width: 768px) {
+            .sidebar-collapse-toggle { display: none; }
+        }
+
         /* 顶部栏：毛玻璃 + 渐变光带 */
         .header {
             background: rgba(255,255,255,0.10) !important;
@@ -2924,6 +2985,7 @@ if (!$_mxGXSecret) {
             <div class="header">
                 <div class="header-content">
                     <button class="mobile-menu-toggle" onclick="toggleSidebar()" title="菜单">☰</button>
+                    <button class="sidebar-collapse-toggle" onclick="toggleSidebarCollapse()" title="折叠 / 展开侧边栏" id="sidebarCollapseBtn">◧</button>
                     <div class="header-left">
                         <h1>M3U8 广告分析与规则管理后台</h1>
                         <p>靶机测试工具 - 分析视频广告特征，管理域名去广告规则</p>
@@ -6121,7 +6183,10 @@ if (!$_mxGXSecret) {
                 @media (max-width: 900px){ .m3u8test .m3u8-duo { grid-template-columns: 1fr; } }
                 .m3u8test .m3u8-box pre { background: #0f172a; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 11px; line-height: 1.5; color: #cbd5e1; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
                 .m3u8test .hint { font-size: 11px; color: var(--muted); margin-top: 8px; }
-                .m3u8test .seglist-skin { max-height: 420px; overflow: auto; }
+                .m3u8test .seglist-skin { max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+                .m3u8test table.segs { table-layout: fixed; min-width: 700px; }
+                .m3u8test table.segs td.addr { font-family: monospace; font-size: 11px; color: var(--tx2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+                .m3u8test table.segs td.addr:hover { color: var(--accent2); }
                 .m3u8test .markbar { display: inline-flex; gap: 6px; align-items: center; }
             </style>
             <div class="m3u8test">
@@ -6205,7 +6270,7 @@ if (!$_mxGXSecret) {
                     <div class="hint" style="margin-top:0;margin-bottom:8px">未标记：播放定位到广告段后点「标记」，或用「区间标记」批量打标，再点「规则学习建议」生成规则</div>
                     <div class="seglist-skin">
                         <table class="segs">
-                            <thead><tr><th>段号</th><th>时长</th><th>类型</th><th>起始</th><th>标记</th><th>操作</th></tr></thead>
+                            <thead><tr><th style="width:52px">段号</th><th style="width:64px">时长</th><th style="width:70px">类型</th><th style="width:56px">起始</th><th style="width:70px">标记</th><th>地址</th><th style="width:150px">操作</th></tr></thead>
                             <tbody id="m3u8SegBody"></tbody>
                         </table>
                     </div>
@@ -6364,12 +6429,31 @@ if (!$_mxGXSecret) {
 
                 function m3u8SetPlayer(el, src) {
                     m3u8PlayerSrc = src;
-                    el.src = src;
-                    el.addEventListener('canplay', m3u8OnPlayStart);
+                    if (window.__m3u8hls) { try { window.__m3u8hls.destroy(); } catch (e) {} window.__m3u8hls = null; }
+                    el.removeAttribute('src'); el.load();
+                    // 原生 <video> 不支持 HLS（Chrome/Firefox），必须用 hls.js 播放 m3u8
+                    if (window.Hls && Hls.isSupported()) {
+                        const hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60, enableWorker: true });
+                        window.__m3u8hls = hls;
+                        hls.on(Hls.Events.MANIFEST_PARSED, () => { el.play().catch(() => {}); });
+                        hls.on(Hls.Events.ERROR, (evt, data) => {
+                            if (data && data.fatal) {
+                                showToast('播放错误: ' + (data.type || '') + ' / ' + (data.details || ''), 'error');
+                            }
+                        });
+                        hls.loadSource(src);
+                        hls.attachMedia(el);
+                    } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
+                        // Safari 原生 HLS 兜底
+                        el.src = src;
+                        el.addEventListener('canplay', m3u8OnPlayStart);
+                        el.play().catch(() => {});
+                    } else {
+                        showToast('当前浏览器不支持 m3u8 播放（缺少 hls.js）', 'error');
+                    }
                     el.addEventListener('timeupdate', m3u8OnTime);
-                    el.addEventListener('play', ()=> { document.getElementById('m3u8FollowState').textContent='播放中'; });
-                    el.addEventListener('pause', ()=> { document.getElementById('m3u8FollowState').textContent='已暂停'; });
-                    el.play().catch(()=>{});
+                    el.addEventListener('play', () => { document.getElementById('m3u8FollowState').textContent = '播放中'; });
+                    el.addEventListener('pause', () => { document.getElementById('m3u8FollowState').textContent = '已暂停'; });
                 }
 
                 function m3u8OnPlayStart() {
@@ -6495,6 +6579,7 @@ if (!$_mxGXSecret) {
                         const mark = m3u8Marked[s.index] ? '<span class="badge badge-warn">'+escapeHtml(m3u8Marked[s.index])+'</span>' : '-';
                         return '<tr class="'+(s.isAd?'ad ':'')+(s.index===m3u8CurIndex?'cur':'')+'" data-idx="'+s.index+'">'
                             +'<td>'+s.index+'</td><td>'+s.duration+'</td><td>'+typePill+'</td><td>'+m3u8FmtTime(s.start)+'</td><td>'+mark+'</td>'
+                            +'<td class="addr" title="'+escapeHtml(s.absUri||s.uri)+'">'+escapeHtml(s.absUri||s.uri)+'</td>'
                             +'<td><span class="op"><button onclick="m3u8Locate('+s.index+')">播放</button><button onclick="m3u8HighlightSeg('+s.index+')">定位</button><button onclick="m3u8ToggleMark('+s.index+')">标记</button></span></td></tr>';
                     }).join('');
                     const lm = document.getElementById('m3u8LoadMore');
@@ -6547,7 +6632,7 @@ if (!$_mxGXSecret) {
                 function m3u8CopyFilt(){ const d=m3u8TestData; if(d) copyText(d.filtered_m3u8); }
                 function m3u8CopyUri(){ const el=document.getElementById('csUri'); if(el.textContent!=='-') copyText(el.textContent); }
                 function m3u8OpenUri(){ const el=document.getElementById('csUri'); if(el.textContent!=='-') window.open(el.textContent,'_blank'); }
-                function m3u8StopPlay(){ const v=document.getElementById('m3u8PlayerCtrl'); v.pause(); v.src=''; document.getElementById('m3u8FollowState').textContent='未播放'; }
+                function m3u8StopPlay(){ if (window.__m3u8hls) { try { window.__m3u8hls.destroy(); } catch(e){} window.__m3u8hls=null; } const v=document.getElementById('m3u8PlayerCtrl'); v.pause(); v.removeAttribute('src'); v.load(); document.getElementById('m3u8FollowState').textContent='未播放'; }
                 function m3u8UpdatePlaybar(){ document.getElementById('m3u8testPlaybar').style.display='flex'; }
             </script>
         </div>
@@ -15220,6 +15305,21 @@ if (!$_mxGXSecret) {
                 overlay.classList.toggle('show');
             }
         }
+
+        function toggleSidebarCollapse() {
+            const sidebar = document.getElementById('sidebar');
+            const collapsed = sidebar.classList.toggle('collapsed');
+            try { localStorage.setItem('mxadmin_sidebar_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+        }
+
+        // 恢复上次侧边栏折叠状态
+        (function () {
+            try {
+                if (localStorage.getItem('mxadmin_sidebar_collapsed') === '1') {
+                    document.getElementById('sidebar').classList.add('collapsed');
+                }
+            } catch (e) {}
+        })();
 
         function navigateTo(pageName) {
             const navItem = document.querySelector('.nav-item[data-page="' + pageName + '"]');
