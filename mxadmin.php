@@ -3809,7 +3809,7 @@ if (!$_mxGXSecret) {
                     </div>
                     <div class="form-group">
                         <label>优先级</label>
-                        <input type="number" id="sitePriority" min="1" max="99" value="50">
+                        <input type="number" id="sitePriority" min="1" max="2000" value="100" title="优先级数字越小越优先，默认 100">
                     </div>
                 </div>
                 <div class="form-group">
@@ -11708,7 +11708,7 @@ if (!$_mxGXSecret) {
             }
             let html = '<table class="rules-table"><thead><tr><th>优先级</th><th>名称</th><th>官网</th><th>采集接口</th><th>状态</th><th>响应时间</th><th>扩展备注</th><th>操作</th></tr></thead><tbody>';
             for (const site of sites) {
-                const priority = site.priority || 99;
+                const priority = site.priority || 100;
                 const health = healthCheckData[site.name];
                 let statusTag = site.status === 'active'
                     ? '<span class="tag tag-green">正常</span>'
@@ -11848,7 +11848,7 @@ if (!$_mxGXSecret) {
                 siteFillApiUrls(urls);
                 document.getElementById('siteType').value = data.site.type || 'maccms';
                 document.getElementById('siteStatus').value = data.site.status || 'active';
-                document.getElementById('sitePriority').value = data.site.priority || 50;
+                document.getElementById('sitePriority').value = data.site.priority || 100;
                 document.getElementById('siteNote').value = data.site.note || '';
                 document.getElementById('siteName').disabled = true;
                 document.getElementById('siteEditor').style.display = 'block';
@@ -11869,7 +11869,7 @@ if (!$_mxGXSecret) {
             const urls = siteCollectApiUrls();
             const type = document.getElementById('siteType').value;
             const status = document.getElementById('siteStatus').value;
-            const priority = parseInt(document.getElementById('sitePriority').value) || 50;
+            const priority = parseInt(document.getElementById('sitePriority').value) || 100;
             const note = document.getElementById('siteNote').value.trim();
 
             if (!name) { showToast('请输入资源站名称', 'error'); return; }

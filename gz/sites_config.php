@@ -12,7 +12,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '推荐',
-      'priority' => 1,
+      'priority' => 100,
     ),
     1 => 
     array (
@@ -22,7 +22,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '推荐',
-      'priority' => 1,
+      'priority' => 100,
     ),
     2 => 
     array (
@@ -32,7 +32,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '推荐，API已更新',
-      'priority' => 1,
+      'priority' => 100,
     ),
     3 => 
     array (
@@ -42,7 +42,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：SSL连接超时，域名无法解析，确认失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     4 => 
@@ -53,7 +53,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '卡',
-      'priority' => 2,
+      'priority' => 100,
     ),
     5 => 
     array (
@@ -63,7 +63,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '',
-      'priority' => 2,
+      'priority' => 100,
     ),
     6 => 
     array (
@@ -73,7 +73,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：HTTP 200但API无有效数据，确认失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     7 => 
@@ -84,7 +84,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：SSL连接超时，域名无法解析，确认失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     8 => 
@@ -95,7 +95,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '',
-      'priority' => 2,
+      'priority' => 100,
     ),
     9 => 
     array (
@@ -105,7 +105,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'API已更新',
-      'priority' => 3,
+      'priority' => 100,
     ),
     10 => 
     array (
@@ -115,7 +115,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => 'SSL连接失败',
-      'priority' => 99,
+      'priority' => 100,
     ),
     11 => 
     array (
@@ -125,7 +125,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => 'SSL连接失败',
-      'priority' => 99,
+      'priority' => 100,
     ),
     12 => 
     array (
@@ -135,7 +135,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '修复API地址，2026-07-23验证可用，响应时间约969ms',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     13 => 
@@ -146,7 +146,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'API已更新',
-      'priority' => 4,
+      'priority' => 100,
     ),
     14 => 
     array (
@@ -156,7 +156,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'API已更新',
-      'priority' => 4,
+      'priority' => 100,
     ),
     15 => 
     array (
@@ -166,7 +166,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'API已更新',
-      'priority' => 4,
+      'priority' => 100,
     ),
     16 => 
     array (
@@ -176,7 +176,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：SSL连接超时，域名无法解析，确认失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     17 => 
@@ -187,7 +187,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'API已更新',
-      'priority' => 4,
+      'priority' => 100,
     ),
     18 => 
     array (
@@ -197,7 +197,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'API已更新',
-      'priority' => 4,
+      'priority' => 100,
     ),
     19 => 
     array (
@@ -207,7 +207,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '',
-      'priority' => 4,
+      'priority' => 100,
     ),
     20 => 
     array (
@@ -217,7 +217,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '无水印，但卡',
-      'priority' => 5,
+      'priority' => 100,
     ),
     21 => 
     array (
@@ -227,7 +227,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => 'SSL连接失败',
-      'priority' => 99,
+      'priority' => 100,
     ),
     22 => 
     array (
@@ -237,7 +237,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '',
-      'priority' => 5,
+      'priority' => 100,
     ),
     23 => 
     array (
@@ -247,7 +247,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '',
-      'priority' => 5,
+      'priority' => 100,
     ),
     24 => 
     array (
@@ -257,7 +257,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => 'SSL连接失败',
-      'priority' => 99,
+      'priority' => 100,
     ),
     25 => 
     array (
@@ -267,7 +267,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '',
-      'priority' => 5,
+      'priority' => 100,
     ),
     26 => 
     array (
@@ -277,7 +277,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '',
-      'priority' => 5,
+      'priority' => 100,
     ),
     27 => 
     array (
@@ -287,7 +287,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '修复SSL问题，改用HTTP协议，2026-07-23验证可用，响应时间约1123ms',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     28 => 
@@ -298,7 +298,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '',
-      'priority' => 6,
+      'priority' => 100,
     ),
     29 => 
     array (
@@ -308,7 +308,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => 'SSL连接失败',
-      'priority' => 99,
+      'priority' => 100,
     ),
     30 => 
     array (
@@ -318,7 +318,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => 'SSL连接失败',
-      'priority' => 99,
+      'priority' => 100,
     ),
     31 => 
     array (
@@ -328,7 +328,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '仅支持HTTP',
-      'priority' => 6,
+      'priority' => 100,
     ),
     32 => 
     array (
@@ -338,7 +338,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => 'SSL连接失败',
-      'priority' => 99,
+      'priority' => 100,
     ),
     33 => 
     array (
@@ -348,7 +348,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'API已更新',
-      'priority' => 7,
+      'priority' => 100,
     ),
     34 => 
     array (
@@ -358,7 +358,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'IP验证无法播放，开全局代理或返回原始链接',
-      'priority' => 7,
+      'priority' => 100,
     ),
     35 => 
     array (
@@ -368,7 +368,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '',
-      'priority' => 7,
+      'priority' => 100,
     ),
     36 => 
     array (
@@ -378,7 +378,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：SSL连接超时，确认跑路失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     37 => 
@@ -389,7 +389,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '跑路',
-      'priority' => 99,
+      'priority' => 100,
     ),
     38 => 
     array (
@@ -399,7 +399,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '跑路',
-      'priority' => 99,
+      'priority' => 100,
     ),
     39 => 
     array (
@@ -409,7 +409,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '跑路',
-      'priority' => 99,
+      'priority' => 100,
     ),
     40 => 
     array (
@@ -419,7 +419,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：HTTP 200但API无视频数据，确认跑路失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     41 => 
@@ -430,7 +430,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '修复API地址，更换域名，2026-07-23验证可用，响应时间约1065ms（原停更状态已恢复）',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     42 => 
@@ -441,7 +441,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：SSL连接失败，原备注停更，确认失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     43 => 
@@ -452,7 +452,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：HTTP 404，API接口不存在，确认跑路失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     44 => 
@@ -463,7 +463,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '跑路',
-      'priority' => 99,
+      'priority' => 100,
     ),
     45 => 
     array (
@@ -473,7 +473,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：SSL连接超时，确认跑路失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     46 => 
@@ -484,7 +484,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：IP直连SSL超时，原备注翻墙，确认不可用',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     47 => 
@@ -495,7 +495,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：SSL连接失败，域名解析异常，确认失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     48 => 
@@ -506,7 +506,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：SSL连接失败，原备注停运，确认失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     49 => 
@@ -517,7 +517,7 @@ return array (
       'type' => 'maccms',
       'status' => 'paused',
       'note' => '2026-07-23深度检测：SSL连接失败，确认失效',
-      'priority' => 99,
+      'priority' => 100,
       'last_check' => '2026-07-23',
     ),
     50 => 
@@ -528,7 +528,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增，4K资源',
-      'priority' => 5,
+      'priority' => 100,
     ),
     51 => 
     array (
@@ -538,7 +538,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增',
-      'priority' => 5,
+      'priority' => 100,
     ),
     52 => 
     array (
@@ -548,7 +548,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增',
-      'priority' => 5,
+      'priority' => 100,
     ),
     53 => 
     array (
@@ -558,7 +558,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增',
-      'priority' => 5,
+      'priority' => 100,
     ),
     54 => 
     array (
@@ -568,7 +568,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增',
-      'priority' => 5,
+      'priority' => 100,
     ),
     55 => 
     array (
@@ -578,7 +578,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增，仅支持HTTP',
-      'priority' => 6,
+      'priority' => 100,
     ),
     56 => 
     array (
@@ -588,7 +588,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增',
-      'priority' => 5,
+      'priority' => 100,
     ),
     57 => 
     array (
@@ -598,7 +598,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增',
-      'priority' => 6,
+      'priority' => 100,
     ),
     58 => 
     array (
@@ -608,7 +608,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增',
-      'priority' => 6,
+      'priority' => 100,
     ),
     59 => 
     array (
@@ -618,7 +618,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增',
-      'priority' => 6,
+      'priority' => 100,
     ),
     60 => 
     array (
@@ -628,7 +628,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '新增',
-      'priority' => 6,
+      'priority' => 100,
     ),
     61 => 
     array (
@@ -638,7 +638,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '官方推荐',
-      'priority' => 1,
+      'priority' => 100,
     ),
     62 => 
     array (
@@ -648,7 +648,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '官方推荐',
-      'priority' => 2,
+      'priority' => 100,
     ),
     63 => 
     array (
@@ -658,7 +658,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '官方推荐',
-      'priority' => 2,
+      'priority' => 100,
     ),
     64 => 
     array (
@@ -668,7 +668,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '官方推荐',
-      'priority' => 2,
+      'priority' => 100,
     ),
     65 => 
     array (
@@ -678,7 +678,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '短剧资源',
-      'priority' => 3,
+      'priority' => 100,
     ),
     66 => 
     array (
@@ -688,7 +688,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '官方推荐',
-      'priority' => 2,
+      'priority' => 100,
     ),
     67 => 
     array (
@@ -698,7 +698,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '官方推荐',
-      'priority' => 2,
+      'priority' => 100,
     ),
     68 => 
     array (
@@ -708,7 +708,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '海外资源',
-      'priority' => 6,
+      'priority' => 100,
     ),
     69 => 
     array (
@@ -718,7 +718,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 6,
+      'priority' => 100,
     ),
     70 => 
     array (
@@ -728,7 +728,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     71 => 
     array (
@@ -738,7 +738,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     72 => 
     array (
@@ -748,7 +748,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '备用线路',
-      'priority' => 7,
+      'priority' => 100,
     ),
     73 => 
     array (
@@ -758,7 +758,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     74 => 
     array (
@@ -768,7 +768,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 6,
+      'priority' => 100,
     ),
     75 => 
     array (
@@ -778,7 +778,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 6,
+      'priority' => 100,
     ),
     76 => 
     array (
@@ -788,7 +788,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     77 => 
     array (
@@ -798,7 +798,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     78 => 
     array (
@@ -808,7 +808,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     79 => 
     array (
@@ -818,7 +818,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     80 => 
     array (
@@ -828,7 +828,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     81 => 
     array (
@@ -838,7 +838,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 6,
+      'priority' => 100,
     ),
     82 => 
     array (
@@ -848,7 +848,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     83 => 
     array (
@@ -858,7 +858,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     84 => 
     array (
@@ -868,7 +868,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 6,
+      'priority' => 100,
     ),
     85 => 
     array (
@@ -878,7 +878,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     86 => 
     array (
@@ -888,7 +888,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => 'JSON接口',
-      'priority' => 7,
+      'priority' => 100,
     ),
     87 => 
     array (
@@ -898,7 +898,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '公开测试接口',
-      'priority' => 8,
+      'priority' => 100,
     ),
     88 => 
     array (
@@ -908,7 +908,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     89 => 
     array (
@@ -918,7 +918,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     90 => 
     array (
@@ -928,7 +928,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     91 => 
     array (
@@ -938,7 +938,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     92 => 
     array (
@@ -948,7 +948,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     93 => 
     array (
@@ -958,7 +958,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '酷点备用线路',
-      'priority' => 8,
+      'priority' => 100,
     ),
     94 => 
     array (
@@ -968,7 +968,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     95 => 
     array (
@@ -978,7 +978,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     96 => 
     array (
@@ -988,7 +988,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     97 => 
     array (
@@ -998,7 +998,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     98 => 
     array (
@@ -1008,7 +1008,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     99 => 
     array (
@@ -1018,7 +1018,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     100 => 
     array (
@@ -1028,7 +1028,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     101 => 
     array (
@@ -1038,7 +1038,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     102 => 
     array (
@@ -1048,7 +1048,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     103 => 
     array (
@@ -1058,7 +1058,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     104 => 
     array (
@@ -1068,7 +1068,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     105 => 
     array (
@@ -1078,7 +1078,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     106 => 
     array (
@@ -1088,7 +1088,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 8,
+      'priority' => 100,
     ),
     107 => 
     array (
@@ -1098,7 +1098,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     108 => 
     array (
@@ -1108,7 +1108,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '补充资源站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     109 => 
     array (
@@ -1118,7 +1118,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     110 => 
     array (
@@ -1128,7 +1128,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     111 => 
     array (
@@ -1138,7 +1138,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     112 => 
     array (
@@ -1148,7 +1148,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     113 => 
     array (
@@ -1158,7 +1158,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     114 => 
     array (
@@ -1168,7 +1168,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     115 => 
     array (
@@ -1178,7 +1178,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     116 => 
     array (
@@ -1188,7 +1188,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     117 => 
     array (
@@ -1198,7 +1198,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     118 => 
     array (
@@ -1208,7 +1208,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     119 => 
     array (
@@ -1218,7 +1218,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     120 => 
     array (
@@ -1228,7 +1228,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
     121 => 
     array (
@@ -1238,7 +1238,7 @@ return array (
       'type' => 'maccms',
       'status' => 'active',
       'note' => '萌芽合作站',
-      'priority' => 9,
+      'priority' => 100,
     ),
   ),
   'auto_learn' => 

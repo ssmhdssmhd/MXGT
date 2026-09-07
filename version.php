@@ -1,13 +1,24 @@
 <?php
 return array (
-  'version' => 'v5.15.4',
+  'version' => 'v5.15.5',
   'branch' => 'main',
-  'build' => '20260907-v5-15-4-fix-repetitive-dur-false-positive',
-  'version_code' => 51504,
-  'commit' => 'v5.15.4-release',
+  'build' => '20260907-v5-15-5-site-priority-100-auto-block',
+  'version_code' => 51505,
+  'commit' => 'v5.15.5-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.15.5' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【资源站优先级统一100 + 自动屏蔽不可搜索】资源站列表全部优先级统一为 100（默认 100，越小越优先按优先级排序）；搜索时自动屏蔽不能搜索的资源站',
+      'changes' =>
+      array (
+        0 => '【优先级统一100】资源站列表全部站点 priority 统一改为 100；新增/编辑默认值 100（addSite、后台表单、JS 提交/回填默认）+ 排序兜底 99→100（文件与 DB 两个管理器）；后台列表与搜索均按 priority 升序自动排序（数字越小越优先），支持手动调低某站优先级让其靠前',
+        1 => '【自动屏蔽不可搜索】searchAllSites 搜索时若某资源站搜索失败，自动将该站点置为暂停（屏蔽），备注记录「自动屏蔽·不可搜索: 原因」，退出活跃列表不再参与搜索；返回结果新增 auto_blocked 计数与 blocked_sites 列表',
+        2 => '【验证】sites_config.php 122 站全部 priority=100（唯一值）；getAllSites 98 活跃按优先级升序；php -l gz/ResourceSiteManager.php / db/DbResourceSiteManager.php / gz/sites_config.php / mxadmin.php 全部通过',
+      ),
+    ),
     'v5.15.4' =>
     array (
       'date' => '2026-09-07',

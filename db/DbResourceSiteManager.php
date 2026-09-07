@@ -177,7 +177,7 @@ class DbResourceSiteManager {
             'type' => 'maccms',
             'status' => 'active',
             'note' => '',
-            'priority' => 50
+            'priority' => 100
         ], $siteData);
         if (!empty($urls)) {
             $site['api_url'] = $urls[0];
@@ -426,7 +426,7 @@ class DbResourceSiteManager {
                 'api_urls' => $site['api_urls'] ?? [],
                 'urls_checked' => $health['urls_checked'] ?? [],
                 'status' => $site['status'] ?? 'active',
-                'priority' => $site['priority'] ?? 99,
+                'priority' => $site['priority'] ?? 100,
                 'healthy' => $health['healthy'],
                 'message' => $health['message'],
                 'response_time' => $health['response_time']
@@ -938,6 +938,7 @@ class DbResourceSiteManager {
 
         $results = [];
         $totalVideos = 0;
+        $blockedSites = [];
 
         foreach ($sites as $site) {
             $searchResult = $this->searchVideos($site, $keyword, 1, $limitPerSite);
@@ -951,16 +952,23 @@ class DbResourceSiteManager {
                     'site' => $site['name'],
                     'site_url' => $site['site_url'] ?? '',
                     'count' => count($searchResult['videos']),
-                    'videos' => $searchResult['videos']
+                    'videos' => $searchResult['videos'],
+                    'auto_blocked' => false
                 ];
                 $totalVideos += count($searchResult['videos']);
             } else {
+                // 自动屏蔽不能搜索的资源站：搜索失败的站点自动置为暂停（屏蔽），退出活跃列表
+                $blockReason = trim((string)($searchResult['message'] ?? '搜索失败'));
+                $blockReason = mb_substr($blockReason, 0, 80);
+                $this->updateSiteStatus($site['name'], 'paused', '自动屏蔽·不可搜索: ' . $blockReason);
+                $blockedSites[] = $site['name'];
                 $results[] = [
                     'site' => $site['name'],
                     'site_url' => $site['site_url'] ?? '',
                     'count' => 0,
                     'videos' => [],
-                    'error' => $searchResult['message']
+                    'error' => $searchResult['message'],
+                    'auto_blocked' => true
                 ];
             }
         }
@@ -970,6 +978,8 @@ class DbResourceSiteManager {
             'keyword' => $keyword,
             'sites_searched' => count($sites),
             'total_videos' => $totalVideos,
+            'auto_blocked' => count($blockedSites),
+            'blocked_sites' => $blockedSites,
             'results' => $results
         ];
     }

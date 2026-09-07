@@ -1,5 +1,30 @@
 # 更新日志
 
+## v5.15.5 (2026-09-07) — 资源站优先级统一100 + 自动屏蔽不可搜索
+
+### 资源站列表全部优先级统一为 100（默认 100，越小越优先按优先级排序）；搜索时自动屏蔽不能搜索的资源站
+
+> 本次两项：① **优先级统一 100** —— 资源站列表 122 个站点 priority 全部统一为 100，新增/编辑默认值 100，后台按 priority **升序自动排序**（数字越小越优先），支持手动调低某站数值让其靠前匹配；② **自动屏蔽不可搜索** —— 搜索（searchAllSites）时若某个资源站搜索失败，自动将该站置为暂停（屏蔽），备注记录原因并退出活跃列表，不再反复请求无效站点。
+
+#### 1. 优先级统一 100（[ResourceSiteManager.php](file:///workspace/gz/ResourceSiteManager.php) + [DbResourceSiteManager.php](file:///workspace/db/DbResourceSiteManager.php) + [sites_config.php](file:///workspace/gz/sites_config.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+
+- `sites_config.php` 全部 **122 个站点 priority 统一改为 100**；
+- `addSite` 新增默认优先级 **50 → 100**；列表/健康检查排序兜底 **99 → 100**（文件与 DB 两个管理器同步改）；
+- 后台「添加资源站」表单优先级默认值 `value=100`（范围扩到 1~2000）、编辑回填/提交默认 `|| 100`；
+- 排序规则不变：`getAllSites`（文件 usort）/DB `ORDER BY priority ASC` 均按 priority **升序**（越小越优先）自动排序，后台资源站列表按 priority 展示。
+
+#### 2. 自动屏蔽不可搜索（[ResourceSiteManager.php](file:///workspace/gz/ResourceSiteManager.php) + [DbResourceSiteManager.php](file:///workspace/db/DbResourceSiteManager.php)）
+
+- `searchAllSites` 搜索某站失败时自动调用 `updateSiteStatus(..., 'paused', '自动屏蔽·不可搜索: 原因')` 置为暂停（屏蔽），退出活跃资源站列表不再参与搜索；
+- 返回新增 `auto_blocked`（本次屏蔽数）与 `blocked_sites`（被屏蔽站点名列表），每个结果的 `auto_blocked` 标记该站是否本次被屏蔽。
+
+#### 3. 验证
+
+- `sites_config.php` 122 站 priority 唯一值=100；`getAllSites` 98 个活跃全部 priority=100 并按升序；
+- `php -l` 通过：`gz/ResourceSiteManager.php` / `db/DbResourceSiteManager.php` / `gz/sites_config.php` / `mxadmin.php`。
+
+---
+
 ## v5.15.4 (2026-09-07) — 修复去广告整片误删黑屏
 
 ### 统一时长占比过高视为内容节奏，不再判为广告；修复影片被整片占位替换导致"没画面"

@@ -9,11 +9,16 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.15.4（2026-09-07）
+## 当前版本 v5.15.5（2026-09-07）
 
-> 修复去广告整片误删导致的"没画面"：统一时长占比过高视为内容节奏，不再判为广告。
+> 资源站列表全部优先级统一为 100（默认 100，越小越优先按优先级排序）；搜索时自动屏蔽不能搜索的资源站。
 
-### 🎬 去广告整片误删黑屏修复（[src/AdRuleEngine.php](file:///workspace/src/AdRuleEngine.php)）
+### 🗂️ 资源站优先级统一100 + 🚫 自动屏蔽不可搜索（[ResourceSiteManager.php](file:///workspace/gz/ResourceSiteManager.php) + [DbResourceSiteManager.php](file:///workspace/db/DbResourceSiteManager.php) + [sites_config.php](file:///workspace/gz/sites_config.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+
+- **优先级统一 100**：资源站列表全部 **122 个站点 priority 统一改为 100**；新增/编辑默认值 **100**（addSite、后台表单默认 `value=100`、编辑回填/提交兜底 `||100`），排序兜底 **99→100**；后台列表与搜索均按 priority **升序自动排序**（数字越小越优先），支持手动调低某站数值让其靠前匹配；
+- **自动屏蔽不可搜索**：`searchAllSites` 搜索某站失败时自动置为**暂停（屏蔽）**，备注记录「自动屏蔽·不可搜索: 原因」，退出活跃列表不再反复请求无效站点；返回新增 `auto_blocked`（本次屏蔽数）与 `blocked_sites`（被屏蔽站点名）。
+
+### 🎬 去广告整片误删黑屏修复（上一版 v5.15.4）
 
 - **根因**：`repetitive-duration` 规则把影片**统一时长的正常码率切片**全量误判为广告（权重 55≥50 单独即删），如 `v.lzcdn31.com` 源 **37.8%** 的切片都是 4.0s，广告占比达 **58.5%** → 正片被整体替换为黑屏占位 TS，`mxjx` 输出**进度条在走但没画面**；
 - **修复**：该时长桶占总段数 **≥35%** 即为视频自身切片节奏（内容），直接放行，不再判为广告；
