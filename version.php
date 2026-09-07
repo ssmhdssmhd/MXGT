@@ -1,13 +1,26 @@
 <?php
 return array (
-  'version' => 'v5.13.10',
+  'version' => 'v5.13.11',
   'branch' => 'main',
-  'build' => '20260907-v5-13-10-m3u8-parse-test-page',
-  'version_code' => 51310,
-  'commit' => 'v5.13.10-add-m3u8-parse-test-tools',
+  'build' => '20260907-v5-13-11-ads-free-url-and-ad-tags',
+  'version_code' => 51311,
+  'commit' => 'v5.13.11-fix-adfilter-ad-free-link-and-ad-tag/subtitle-depth',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.13.11' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【真链接广告拦截验证 + 无广告链接修复】使用内置广告真实链接验证前置/中插/后置广告、CUE/DATERANGE/AD标签、内置广告字幕均被正确标记并完美拦截；修复过滤后无广告链接无法直播的绝对地址缺陷',
+      'changes' =>
+      array (
+        0 => '【src/M3U8Parser】parse() 解析后为每个片段填充 absoluteUri（经 resolveUri 按媒体URL基地址解析），配合 OutputGenerator useAbsoluteUrls 产出「绝对地址」的过滤后 M3U8——返回的无广告链接可直接交给播放器播放，不再因相对路径解析错源而黑屏',
+        1 => '【src/M3U8Parser】getBaseUrl/resolveUri 补全端口号，避免自定义端口（如 :8091）在绝对地址中被丢弃导致片段加载失败',
+        2 => '【src/M3U8Parser】修复 #EXT-X-MEDIA 解析偏移错误（15→13）：原偏移导致 TYPE 读空，媒体轨（含广告字幕 SUBTITLES / CLOSED-CAPTIONS）过滤失效；修复后 filterSubtitles 能正确剥离内置广告字幕轨、隐藏式CC轨及变体上的 SUBTITLES/CLOSED-CAPTIONS 属性，仅保留音频与视频',
+        3 => '【拦截验证】真实测试链接（cache/m3u8/test）：前置/中插/后置广告按关键词+文件名+片段模式全部命中移除；EXT-X-AD-START/END、EXT-X-DATERANGE、EXT-X-CUE-OUT/IN 广告标签段被识别且输出中标签全部剔除；混合流 mixed.m3u8 89 段中 14 段广告全部拦截，过滤后 M3U8 纯净（#EXT-X-ENDLIST 保留、广告标签清零、显示绝对地址）',
+        4 => '【lint 通过】php -l src/M3U8Parser.php → No syntax errors detected',
+      ),
+    ),
     'v5.13.10' =>
     array (
       'date' => '2026-09-07',

@@ -72,6 +72,15 @@ class M3U8Parser {
         }
 
         $result = $this->parseContent($content);
+        // 为每个片段填充绝对地址，确保后续 useAbsoluteUrls 输出可直接播放
+        if (!empty($result['segments'])) {
+            foreach ($result['segments'] as &$seg) {
+                if (empty($seg['absoluteUri'])) {
+                    $seg['absoluteUri'] = $this->resolveUri($seg['uri']);
+                }
+            }
+            unset($seg);
+        }
         unset($content);
         return $result;
     }
@@ -84,7 +93,11 @@ class M3U8Parser {
         $parsed = parse_url($url);
         $pathParts = explode('/', $parsed['path']);
         array_pop($pathParts);
-        return $parsed['scheme'] . '://' . $parsed['host'] . implode('/', $pathParts) . '/';
+        $base = $parsed['scheme'] . '://' . $parsed['host'];
+        if (isset($parsed['port'])) {
+            $base .= ':' . $parsed['port'];
+        }
+        return $base . implode('/', $pathParts) . '/';
     }
 
     private function fetchUrl($url) {
@@ -260,7 +273,7 @@ class M3U8Parser {
             }
 
             if (strpos($line, '#EXT-X-MEDIA:') === 0) {
-                $attrs = $this->parseAttributes(substr($line, 15));
+                $attrs = $this->parseAttributes(substr($line, 13));
                 $playlist['mediaTags'][] = [
                     'type' => isset($attrs['TYPE']) ? strtoupper($attrs['TYPE']) : '',
                     'uri' => isset($attrs['URI']) ? $attrs['URI'] : '',
@@ -539,7 +552,11 @@ class M3U8Parser {
         }
         if (strpos($uri, '/') === 0) {
             $parsed = parse_url($this->baseUrl);
-            return $parsed['scheme'] . '://' . $parsed['host'] . $uri;
+            $base = $parsed['scheme'] . '://' . $parsed['host'];
+            if (isset($parsed['port'])) {
+                $base .= ':' . $parsed['port'];
+            }
+            return $base . $uri;
         }
         return $this->baseUrl . $uri;
     }
