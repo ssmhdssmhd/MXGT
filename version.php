@@ -1,13 +1,24 @@
 <?php
 return array (
-  'version' => 'v5.15.0',
+  'version' => 'v5.15.1',
   'branch' => 'main',
-  'build' => '20260907-v5-15-0-release',
-  'version_code' => 51500,
-  'commit' => 'v5.15.0-release',
+  'build' => '20260907-v5-15-1-release',
+  'version_code' => 51501,
+  'commit' => 'v5.15.1-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.15.1' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【公告正文携带 README 更新内容 + M3U8 对比折叠】公告自动读取 README.md 当前版本更新内容作为正文；解析测试原始/过滤后 M3U8 默认折叠可展开',
+      'changes' =>
+      array (
+        0 => '【新增-公告】announcement/list 实时公告正文自动从 README.md「当前版本」章节提取更新内容（截取到第一个「上一版」小标题为止），content 字段携带完整更新说明，新增 readme_content 字段，日期优先取 README 标题中的日期',
+        1 => '【优化-界面】M3U8 解析测试「原始 M3U8 / 过滤后 M3U8」改为默认折叠（避免大文本撑高页面影响美观），标题栏新增「展开/收起」按钮，展开后限高 360px 内滚动；每次重新解析自动重置为折叠态',
+        2 => '【验证】php -l mx.php / mxadmin.php 通过；本地实测 announcement/list 返回完整 README 更新正文；内联 JS node --check 通过',
+      ),
+    ),
     'v5.15.0' =>
     array (
       'date' => '2026-09-07',

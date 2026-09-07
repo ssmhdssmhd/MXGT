@@ -5414,13 +5414,30 @@ try {
                 $_firstKey = array_key_first($_cl);
                 $_title = $_cl[$_firstKey]['title'] ?? '';
             }
+            // ② 从 README.md 提取「当前版本」章节的更新内容（用于公告正文，替代只显示一句话标题）
+            $_readmeContent = '';
+            $_readmeDate = '';
+            $readmeFile = __DIR__ . '/README.md';
+            if (file_exists($readmeFile)) {
+                $_readmeText = @file_get_contents($readmeFile);
+                // 截取到第一个「上一版」小标题为止，只保留当前版本的更新内容
+                if (is_string($_readmeText) && preg_match('/^##\s*当前版本\s+v[\d.]+\s*(?:（([\d\-]+)）)?[^\n]*\n(.*?)(?=\n###[^\n]*上一版|\n##\s|\z)/ms', $_readmeText, $_m)) {
+                    $_readmeContent = trim($_m[2] ?? '');
+                    $_readmeDate = trim($_m[1] ?? '');
+                }
+            }
             if ($_cv !== '') {
-                $now = date('Y-m-d');
+                $now = $_readmeDate !== '' ? $_readmeDate : date('Y-m-d');
                 $latestText = "最新版本 {$_cv} 发布：" . ($_title !== '' ? $_title : '');
+                $fullContent = "[{$now}] {$latestText}";
+                if ($_readmeContent !== '') {
+                    $fullContent .= "\n\n" . $_readmeContent;
+                }
                 $announcements[] = [
                     'date' => $now,
                     'text' => $latestText,
-                    'content' => "[{$now}] {$latestText}",
+                    'content' => $fullContent,
+                    'readme_content' => $_readmeContent,
                     'is_latest_version' => true
                 ];
             }

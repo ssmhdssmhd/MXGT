@@ -6197,6 +6197,8 @@ if (!$_mxGXSecret) {
                 .m3u8test .m3u8-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
                 @media (max-width: 900px){ .m3u8test .m3u8-duo { grid-template-columns: 1fr; } }
                 .m3u8test .m3u8-box pre { background: #0f172a; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 11px; line-height: 1.5; color: #cbd5e1; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
+                .m3u8test .m3u8-duo .panel pre { max-height: 360px; overflow: auto; transition: display .15s ease; }
+                .m3u8test .duo-toggle { padding: 4px 9px; }
                 .m3u8test .hint { font-size: 11px; color: var(--muted); margin-top: 8px; }
                 .m3u8test .seglist-skin { max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
                 .m3u8test table.segs { table-layout: fixed; min-width: 700px; }
@@ -6292,25 +6294,27 @@ if (!$_mxGXSecret) {
                     <div style="text-align:center;margin-top:8px"><button class="btn btn-sec" id="m3u8LoadMore" onclick="m3u8LoadMore()" style="display:inline-flex">加载更多（已显示 X / Y）</button></div>
                 </div>
 
-                <!-- ⑦ 原始 VS 过滤后 M3U8 -->
+                <!-- ⑦ 原始 VS 过滤后 M3U8（默认折叠，展开查看全文） -->
                 <div class="m3u8-duo" id="m3u8Duo" style="display:none">
                     <div class="panel">
                         <div class="ptitle">
                             <span>原始 M3U8</span>
                             <span class="markbar">
+                                <button class="btn btn-sec duo-toggle" data-target="m3u8OrigPre" onclick="m3u8ToggleDuo(this)">展开</button>
                                 <button class="btn btn-sec" style="padding:4px 9px" onclick="m3u8CopyOrig()">复制</button>
                             </span>
                         </div>
-                        <pre id="m3u8OrigPre"></pre>
+                        <pre id="m3u8OrigPre" style="display:none"></pre>
                     </div>
                     <div class="panel">
                         <div class="ptitle">
                             <span>过滤后 M3U8</span>
                             <span class="markbar">
+                                <button class="btn btn-sec duo-toggle" data-target="m3u8FiltPre" onclick="m3u8ToggleDuo(this)">展开</button>
                                 <button class="btn btn-sec" style="padding:4px 9px" onclick="m3u8CopyFilt()">复制内容</button>
                             </span>
                         </div>
-                        <pre id="m3u8FiltPre"></pre>
+                        <pre id="m3u8FiltPre" style="display:none"></pre>
                     </div>
                 </div>
             </div>
@@ -6665,6 +6669,21 @@ if (!$_mxGXSecret) {
                     const d=m3u8TestData; if(!d) return;
                     document.getElementById('m3u8OrigPre').textContent = d.original_m3u8;
                     document.getElementById('m3u8FiltPre').textContent = d.filtered_m3u8;
+                    // 每次重新解析默认折叠原始/过滤后 M3U8（避免大文本撑高页面）
+                    document.querySelectorAll('#m3u8Duo .duo-toggle').forEach(b => {
+                        const pre = document.getElementById(b.getAttribute('data-target'));
+                        if (pre) pre.style.display = 'none';
+                        b.textContent = '展开';
+                    });
+                }
+
+                // 原始/过滤后 M3U8 折叠展开
+                function m3u8ToggleDuo(btn) {
+                    const pre = document.getElementById(btn.getAttribute('data-target'));
+                    if (!pre) return;
+                    const hidden = pre.style.display === 'none';
+                    pre.style.display = hidden ? 'block' : 'none';
+                    btn.textContent = hidden ? '收起' : '展开';
                 }
                 function m3u8CopyOrig(){ const d=m3u8TestData; if(d) copyText(d.original_m3u8); }
                 function m3u8CopyFilt(){ const d=m3u8TestData; if(d) copyText(d.filtered_m3u8); }
