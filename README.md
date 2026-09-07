@@ -9,11 +9,17 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.14.5（2026-09-07）
+## 当前版本 v5.14.6（2026-09-07）
 
-> 公告实时化：`announcement/list` 基于 `version.php` 实时生成「最新版本公告」，不再依赖过期的 `gg.txt`。
+> 自动学习失败修复：`M3U8Parser` 自动跟随 Master playlist variant，解决多线程/自动学习全部学习失败。
 
-### 🔍 最新公告实时化
+### 🔧 自动学习失败修复
+
+- **根因**：自动学习拿到的视频 URL 多为 Master playlist（`#EXT-X-STREAM-INF`），解析器此前不跟随 variant，只得到 0 片段，学习链路报 `Unsupported operand types: array * int`，导致多线程/自动学习全部失败。
+- **修复**：`src/M3U8Parser.php` 的 `parse()` 检测到 Master 且无片段时，自动跟随最高带宽 variant 重新解析媒体流（保留 `isMaster`/`variants`，新增 `selectedVariantUri`）。
+- **验证**：实测 master 链接解析 0→645 片段，广告占比 71.16% 正常可学习。
+
+### 🔍 最新公告实时化（上一版 v5.14.5）
 
 - **实时最新公告**：公告接口 `announcement/list` 自动基于 `version.php` 生成首条「最新版本 v5.14.5 发布：<变更标题>」，始终显示当前最新版本，不再受手工维护的 `gg.txt` 过期影响。
 - **历史公告保留**：`gg.txt` 里的历史公告正常叠加返回，回复结构不变。

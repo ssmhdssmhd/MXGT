@@ -72,6 +72,34 @@ class M3U8Parser {
         }
 
         $result = $this->parseContent($content);
+        // Master playlist：自动跟随最高带宽的 variant 解析真正的媒体流，保证拿到片段列表
+        if (!empty($result['isMaster']) && !empty($result['variants']) && empty($result['segments'])) {
+            $variants = $result['variants'];
+            usort($variants, function ($a, $b) {
+                return ($b['bandwidth'] ?? 0) <=> ($a['bandwidth'] ?? 0);
+            });
+            $variantUri = $variants[0]['uri'] ?? '';
+            if ($variantUri !== '') {
+                $variantUrl = $this->resolveUri($variantUri);
+                $variantContent = $this->fetchUrl($variantUrl);
+                $variantResult = $this->parseContent($variantContent);
+                unset($variantContent);
+                if (!empty($variantResult['segments'])) {
+                    // 保留 master 元信息，用 variant 的片段与媒体信息
+                    $result['segments'] = $variantResult['segments'];
+                    $result['targetDuration'] = $variantResult['targetDuration'];
+                    $result['mediaSequence'] = $variantResult['mediaSequence'];
+                    $result['endlist'] = $variantResult['endlist'];
+                    $result['cueMarkers'] = $variantResult['cueMarkers'];
+                    $result['scte35Markers'] = $variantResult['scte35Markers'];
+                    $result['dateRangeTags'] = $variantResult['dateRangeTags'];
+                    $result['adMarkers'] = $variantResult['adMarkers'];
+                    $result['selectedVariant'] = $variants[0];
+                    $result['selectedVariantUri'] = $variantUrl;
+                }
+                unset($variantResult);
+            }
+        }
         // 为每个片段填充绝对地址，确保后续 useAbsoluteUrls 输出可直接播放
         if (!empty($result['segments'])) {
             foreach ($result['segments'] as &$seg) {

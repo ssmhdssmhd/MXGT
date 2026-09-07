@@ -1,13 +1,24 @@
 <?php
 return array (
-  'version' => 'v5.14.5',
+  'version' => 'v5.14.6',
   'branch' => 'main',
-  'build' => '20260907-v5-14-5-release',
-  'version_code' => 51405,
-  'commit' => 'v5.14.5-release',
+  'build' => '20260907-v5-14-6-release',
+  'version_code' => 51406,
+  'commit' => 'v5.14.6-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.14.6' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【自动学习失败修复】M3U8Parser 自动跟随 Master playlist variant，解决多线程/自动学习全部学习失败',
+      'changes' =>
+      array (
+        0 => '【修复-自动学习】src/M3U8Parser.php parse() 检测到 Master playlist（#EXT-X-STREAM-INF）且无片段时，自动跟随最高带宽 variant 重新解析媒体流，拿到真实片段列表；此前只解析出 0 片段导致学习链路报「Unsupported operand types: array * int」、自动学习/多线程学习全部失败',
+        1 => '【兼容】保留 isMaster/variants 元信息，新增 selectedVariant/selectedVariantUri 字段；已有直接解析媒体流的场景不受影响',
+        2 => '【验证】php -l 通过；本地实测 master 链接解析 0→645 片段，adPercentage 71.16% 正常可学习',
+      ),
+    ),
     'v5.14.5' =>
     array (
       'date' => '2026-09-07',
