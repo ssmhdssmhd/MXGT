@@ -13,6 +13,18 @@
 
 > 在线更新源修复 + 健康检测卡死修复：修正 `UpdateManager` 更新源（qcb→MXGT），并修复 `sites/health_check` 全量检测长时间挂起。
 
+## 📥 发布包下载
+
+| 项目 | 内容 |
+|---|---|
+| 版本 | **v5.14.4** |
+| 构建时间 | 2026-09-08 03:03（北京时间） |
+| 发布包 | `release/MXGT_v5.14.4_202609080303.zip`（5.8M，155 个文件） |
+| 下载 | https://github.com/ssmhdssmhd/MXGT/releases/download/v5.14.4/MXGT_v5.14.4_202609080303.zip |
+| 源码 | [ssmhdssmhd/MXGT](https://github.com/ssmhdssmhd/MXGT) `main` 分支 |
+
+发布包为可部署源码（已排除 `db/data.db` 数据库文件及 `sq.php` / `db_config.php` 等敏感配置），解压覆盖上线即可，保留你自己的授权与数据库配置。
+
 ### 🔧 在线更新源修复 + 健康检测修复
 
 - **在线更新源修复**：`src/UpdateManager.php` 更新源由 `ssmhdssmhd/qcb` 更正为 `ssmhdssmhd/MXGT`，与 `update.php` 统一。此前 `mx.php?action=update/check` 与 `update/download` 走 `UpdateManager`，仍指向旧仓库 `qcb`（最新仅 v5.13.8＜远程 v5.14.2），导致一直判定"无更新"、版本拉不上去。
