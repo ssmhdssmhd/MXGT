@@ -447,12 +447,44 @@ class OfficialReplaceManager {
             }
 
             $targetEpisodeUrl = preg_replace('/#.*$/', '', $targetEpisodeUrl);
+
+            // 相对地址兜底：资源站偶尔返回相对路径（如 /2026/xx/index.m3u8），播放器无法直接播放，补全为绝对地址
+            if (!empty($targetEpisodeUrl) && !preg_match('#^https?://#i', $targetEpisodeUrl)) {
+                $baseParsed = parse_url($url);
+                if (!empty($baseParsed['scheme']) && !empty($baseParsed['host'])) {
+                    $baseHost = $baseParsed['scheme'] . '://' . $baseParsed['host'];
+                    if (isset($baseParsed['port'])) {
+                        $baseHost .= ':' . $baseParsed['port'];
+                    }
+                    $targetEpisodeUrl = $baseHost . (strpos($targetEpisodeUrl, '/') === 0 ? '' : '/') . $targetEpisodeUrl;
+                }
+            }
             
             foreach ($allUrls as &$urlItem) {
                 if (is_array($urlItem) && isset($urlItem['url'])) {
                     $urlItem['url'] = preg_replace('/#.*$/', '', $urlItem['url']);
+                    if (!preg_match('#^https?://#i', $urlItem['url'])) {
+                        $baseParsed = parse_url($url);
+                        if (!empty($baseParsed['scheme']) && !empty($baseParsed['host'])) {
+                            $baseHost = $baseParsed['scheme'] . '://' . $baseParsed['host'];
+                            if (isset($baseParsed['port'])) {
+                                $baseHost .= ':' . $baseParsed['port'];
+                            }
+                            $urlItem['url'] = $baseHost . (strpos($urlItem['url'], '/') === 0 ? '' : '/') . $urlItem['url'];
+                        }
+                    }
                 } elseif (is_string($urlItem)) {
                     $urlItem = preg_replace('/#.*$/', '', $urlItem);
+                    if (!preg_match('#^https?://#i', $urlItem)) {
+                        $baseParsed = parse_url($url);
+                        if (!empty($baseParsed['scheme']) && !empty($baseParsed['host'])) {
+                            $baseHost = $baseParsed['scheme'] . '://' . $baseParsed['host'];
+                            if (isset($baseParsed['port'])) {
+                                $baseHost .= ':' . $baseParsed['port'];
+                            }
+                            $urlItem = $baseHost . (strpos($urlItem, '/') === 0 ? '' : '/') . $urlItem;
+                        }
+                    }
                 }
             }
             unset($urlItem);

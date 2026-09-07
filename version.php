@@ -1,13 +1,26 @@
 <?php
 return array (
-  'version' => 'v5.14.8',
+  'version' => 'v5.14.9',
   'branch' => 'main',
-  'build' => '20260907-v5-14-8-release',
-  'version_code' => 51408,
-  'commit' => 'v5.14.8-release',
+  'build' => '20260907-v5-14-9-release',
+  'version_code' => 51409,
+  'commit' => 'v5.14.9-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.14.9' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【沫兮去广告链接不能播放修复 + 官替优化】mxjx 输出 m3u8 不再被 JSON 守卫改写并显式加跨域；官替相对地址自动补全绝对化',
+      'changes' =>
+      array (
+        0 => '【修复-播放】mx.php mxjx 接口输出去广告 M3U8 时，彻底清除最外层 JSON_OUTPUT_GUARD 的 ob 包裹层（此前 ob_clean 只清最内层，外层把 #EXTM3U 文本当 JSON 改写导致去广告后的无广告链接无法播放），缓存命中路径同步修复',
+        1 => '【新增-跨域】mxjx 输出 M3U8 时显式输出 Access-Control-Allow-Origin: * / Methods / Headers，解决播放器页面与接口跨域（不同端口/子域/域名）时浏览器拦截 m3u8 与后续 TS 请求',
+        2 => '【确认-无硬编码】沫兮/官替生成的 mxjx 链接 selfUrl 全部基于 $_SERVER 动态推导（协议+Host+目录），url 参数使用传入的真实地址 urlencode，无任何硬编码域名/IP',
+        3 => '【优化-官替】DbOfficialReplaceManager / OfficialReplaceManager 对资源站返回的相对播放地址（如 /2026/xx/index.m3u8）自动基于视频页域名补全为绝对地址，m3u8_url 与剧集列表 all_urls 同步处理，避免播放器拿到相对地址黑屏',
+        4 => '【验证】php -l 全部通过；本地实测 mxjx：Content-Type=application/vnd.apple.mpegurl、Access-Control-Allow-Origin=*、BODY 为真实 #EXTM3U 内容、TS 重写为绝对地址，缓存 HIT 路径同样正常',
+      ),
+    ),
     'v5.14.8' =>
     array (
       'date' => '2026-09-07',

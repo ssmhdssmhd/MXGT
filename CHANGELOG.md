@@ -1,5 +1,30 @@
 # 更新日志
 
+## v5.14.9 (2026-09-07) — 沫兮去广告链接播放修复 + 官替优化
+
+### 无广告链接可播放（JSON 守卫修复 + 跨域）、官替相对地址绝对化
+
+> 沫兮 API 去广告完成后返回的 mxjx 无广告链接此前无法播放：最外层 JSON_OUTPUT_GUARD 的 ob 包裹层把 `#EXTM3U` 文本当 JSON 改写，且缺少跨域头。本次彻底修复，并优化官替相对播放地址。
+
+#### 1. mxjx 输出 M3U8 播放修复（[mx.php](file:///workspace/mx.php)）
+
+- **ob 包裹层彻底清理**：`mxjx` 输出去广告 M3U8 前 `while (ob_get_level() > 0) ob_end_clean()` 清掉最外层 JSON_OUTPUT_GUARD 包裹（此前 `ob_clean` 只清最内层，外层把 m3u8 文本改写成 JSON → 无法播放）；缓存命中（X-Cache: HIT）路径同步修复；
+- **显式跨域**：输出 M3U8 时携带 `Access-Control-Allow-Origin: *` / Methods / Headers，跨端口、跨子域、跨域名播放不再被浏览器拦截 m3u8 与后续 TS 请求；
+- **无硬编码确认**：沫兮 / 官替生成的 `mxjx` 链接 `selfUrl` 全部由 `$_SERVER` 动态推导（协议 + Host + 目录），`url` 参数为传入的真实地址，无硬编码域名 / IP。
+
+#### 2. 官替优化（[db/DbOfficialReplaceManager.php](file:///workspace/db/DbOfficialReplaceManager.php) + [gz/OfficialReplaceManager.php](file:///workspace/gz/OfficialReplaceManager.php)）
+
+- 资源站偶尔返回**相对播放地址**（如 `/2026/09/07/xx/index.m3u8`），播放器无法直接播放 → 自动基于视频页域名补全为绝对地址；
+- `m3u8_url` 与剧集列表 `all_urls`（数组与字符串两种形态）同步处理；
+- 官替返回的 `ad_skip_url` 走 mxjx，直接受益于第 1 项修复。
+
+#### 3. 验证
+
+- `php -l` 全部通过；
+- 本地实测 `mxjx`（公开测试流）：`Content-Type: application/vnd.apple.mpegurl`、`Access-Control-Allow-Origin: *`、BODY 为真实 `#EXTM3U` 内容、TS 重写为绝对地址；二次请求缓存 HIT 路径同样正常。
+
+---
+
 ## v5.14.8 (2026-09-07) — M3U8测试播放修复 + 片段列表布局 + 侧边栏折叠
 
 ### 视频可播放、片段列表显示地址、侧边栏可折叠隐藏

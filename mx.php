@@ -1511,7 +1511,8 @@ try {
                     if ($proxy) {
                         header('X-Proxy: ' . $proxy);
                     }
-                    ob_clean();
+                    // 清除最外层 JSON_OUTPUT_GUARD 的 ob 包裹层，避免非 JSON 的 m3u8 被改写为 JSON 导致无法播放
+                    while (ob_get_level() > 0) { ob_end_clean(); }
                     echo $cachedContent;
                     exit;
                 }
@@ -1737,6 +1738,10 @@ try {
 
                 header('Content-Type: application/vnd.apple.mpegurl; charset=utf-8');
                 header('Content-Disposition: inline; filename="playlist.m3u8"');
+                // 显式跨域：播放器页面与接口常跨域（不同端口/子域/域名），无 CORS 时浏览器会拦截 m3u8 与后续 TS 请求
+                header('Access-Control-Allow-Origin: *');
+                header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+                header('Access-Control-Allow-Headers: Content-Type, Accept');
                 header('X-Cache: MISS');
                 header('X-Request-Time: ' . time());
                 if ($safeguardTriggered) {
@@ -1751,7 +1756,8 @@ try {
                     header('X-Deep-Ad-Removed: ' . $deepAdRemoved);
                     header('X-Deep-Ad-Segments: ' . count($deepAdSegments));
                 }
-                ob_clean();
+                // 清除最外层 JSON_OUTPUT_GUARD 的 ob 包裹层，避免非 JSON 的 m3u8 被改写为 JSON 导致无法播放
+                while (ob_get_level() > 0) { ob_end_clean(); }
                 echo $newM3U8Content;
                 exit;
 
