@@ -1,13 +1,22 @@
 <?php
 return array (
-  'version' => 'v5.14.1',
+  'version' => 'v5.14.2',
   'branch' => 'main',
-  'build' => '20260907-v5-14-1-domain-discovery-and-site-rules',
-  'version_code' => 51401,
-  'commit' => 'v5.14.1-add-domain-discovery-and-resource-site-rules-pages',
+  'build' => '20260907-v5-14-2-release',
+  'version_code' => 51402,
+  'commit' => 'v5.14.2-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.14.2' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【版本标识】发布版本号提升至 v5.14.2',
+      'changes' =>
+      array (
+        0 => '【版本】version_code 由 51401 提升至 51402，build/commit 标记为 v5.14.2-release，无业务逻辑改动',
+      ),
+    ),
     'v5.14.1' =>
     array (
       'date' => '2026-09-07',

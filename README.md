@@ -9,7 +9,9 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.14.1（2026-09-07）
+## 当前版本 v5.14.2（2026-09-07）
+
+> 发布版本号标识提升至 v5.14.2（version_code 51402），无业务逻辑改动，功能与 v5.14.1 一致。
 
 ### 🆕 新增后台两个独立页面：域名发现 + 资源站规则
 
