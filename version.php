@@ -1,13 +1,28 @@
 <?php
 return array (
-  'version' => 'v5.13.9',
+  'version' => 'v5.13.10',
   'branch' => 'main',
-  'build' => '20260907-v5-13-9-update-source-mxgt',
-  'version_code' => 51309,
-  'commit' => 'v5.13.9-update-source-point-to-mxgt',
+  'build' => '20260907-v5-13-10-m3u8-parse-test-page',
+  'version_code' => 51310,
+  'commit' => 'v5.13.10-add-m3u8-parse-test-tools',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.13.10' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【新增 M3U8 解析测试工具页】侧边栏新增解析测试，支持实时播放定位、片段列表、原始/过滤后 M3U8 对比、批量标记',
+      'changes' =>
+      array (
+        0 => '【页面】后台侧边栏「接口工具」新增「M3U8解析测试」，暗色主题，含 URL/站点/代理输入栏、开始解析',
+        1 => '【解析】新增 mx.php?action=parse_test 接口，返回片段明细（广告/正片标记、时长、起始时间）、原始/过滤后 M3U8 文本、统计（总段/广告/保留/耗时）',
+        2 => '【播放】支持 4 种模式切换（播放过滤后/播放原始/整片/过滤后），用 Blob 直接播放，规避 mxjx 通道 JSON 守卫改写问题',
+        3 => '【实时定位】跟随播放定位片段：播放时自动高亮对应片段行并滚动到可见，更新命中广告区域',
+        4 => '【片段列表】全部/广告/正片/已标记 过滤、按段号/地址搜索、加载更多、区间批量标记、疑/止/广告类型下拉标记、取消标记',
+        5 => '【对比】原始 M3U8 与过滤后 M3U8 左右分栏展示，一键复制',
+        6 => '【lint 通过】php -l mx.php + mxadmin.php + version.php → 全部 No syntax errors detected',
+      ),
+    ),
     'v5.13.9' =>
     array (
       'date' => '2026-09-07',

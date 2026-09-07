@@ -5642,6 +5642,494 @@ if (!$_mxGXSecret) {
             </div>
         </div>
 
+        <div class="page" id="page-m3u8_test">
+            <style>
+                .m3u8test { --b: #0f172a; --card: #1e293b; --border: #1e293b; --line: #334155; --tx: #f1f5f9; --tx2: #94a3b8; --muted: #64748b; --accent: #6366f1; --accent2: #3b82f6; --ok: #22c55e; --warn: #f97316; --err: #ef4444; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--tx); }
+                .m3u8test * { box-sizing: border-box; }
+                .m3u8test .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+                .m3u8test .bar input[type=text], .m3u8test .bar select { background: #0f172a; border: 1px solid var(--line); color: var(--tx); border-radius: 8px; padding: 9px 12px; font-size: 13px; outline: none; }
+                .m3u8test .bar input[type=text] { flex: 1; min-width: 240px; }
+                .m3u8test .bar select { max-width: 200px; }
+                .m3u8test .btn { border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: .2s; }
+                .m3u8test .btn:disabled { opacity: .5; cursor: not-allowed; }
+                .m3u8test .btn-prim { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; }
+                .m3u8test .btn-sec { background: #0f172a; color: var(--tx); border: 1px solid var(--line); }
+                .m3u8test .btn-ok { background: rgba(34,197,94,.15); color: var(--ok); border: 1px solid rgba(34,197,94,.3); }
+                .m3u8test .btn-warn { background: rgba(249,115,22,.15); color: var(--warn); border: 1px solid rgba(249,115,22,.3); }
+                .m3u8test .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+                .m3u8test .badge-ok { background: rgba(34,197,94,.15); color: var(--ok); }
+                .m3u8test .badge-warn { background: rgba(249,115,22,.15); color: var(--warn); }
+                .m3u8test .badge-ad { background: rgba(239,68,68,.15); color: var(--err); }
+                .m3u8test .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+                .m3u8test .panel .ptitle { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-weight: 600; font-size: 14px; }
+                .m3u8test .stats-row { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin-top: 12px; }
+                .m3u8test .stats-row .st { display: flex; flex-direction: column; }
+                .m3u8test .stats-row .st .v { font-size: 18px; font-weight: 700; }
+                .m3u8test .stats-row .st .l { font-size: 11px; color: var(--tx2); }
+                .m3u8test .stats-row .st.err .v { color: var(--err); }
+                .m3u8test .stats-row .st.ok .v { color: var(--ok); }
+                .m3u8test .stats-row .st.stan { color: var(--tx2); font-size: 12px; }
+                .m3u8test .child-url { font-family: monospace; font-size: 11px; color: var(--muted); margin-top: 4px; word-break: break-all; }
+                .m3u8test .playbar-tools { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-top: 12px; }
+                .m3u8test .seg-tabs { display: inline-flex; background: #0f172a; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+                .m3u8test .seg-tabs button { border: none; background: transparent; color: var(--tx2); padding: 8px 14px; font-size: 13px; cursor: pointer; }
+                .m3u8test .seg-tabs button.on { background: var(--accent); color: #fff; }
+                .m3u8test .checkbox-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tx2); cursor: pointer; }
+                .m3u8test .checkbox-label input { accent-color: var(--accent); }
+                .m3u8test .player-wrap { position: relative; background: var(--b); border: 1px solid var(--line); border-radius: 12px; margin-top: 12px; overflow: hidden; }
+                .m3u8test .player-wrap video, .m3u8test .player-wrap iframe { width: 100%; aspect-ratio: 16/9; display: block; background: #000; border: none; }
+                .m3u8test .player-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 13px; }
+                .m3u8test .curseg { display: grid; grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); gap: 8px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin-top: 12px; }
+                .m3u8test .curseg .field { display: flex; flex-direction: column; gap: 2px; }
+                .m3u8test .curseg .field .k { font-size: 11px; color: var(--muted); }
+                .m3u8test .curseg .field .val { font-size: 13px; color: var(--tx); word-break: break-all; }
+                .m3u8test .curseg .field .val.code { font-family: monospace; font-size: 12px; }
+                .m3u8test .seglist-ops { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+                .m3u8test .seglist-ops input[type=text] { background: #0f172a; border: 1px solid var(--line); color: var(--tx); border-radius: 8px; padding: 7px 10px; font-size: 12px; outline: none; margin-left: auto; }
+                .m3u8test table.segs { width: 100%; border-collapse: collapse; font-size: 12px; }
+                .m3u8test table.segs th { text-align: left; color: var(--tx2); font-weight: 600; padding: 8px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--card); }
+                .m3u8test table.segs td { padding: 7px 8px; border-bottom: 1px solid rgba(51,65,85,.4); color: var(--tx); }
+                .m3u8test table.segs tr.cur { background: rgba(99,102,241,.12); }
+                .m3u8test table.segs tr.ad { background: rgba(239,68,68,.07); }
+                .m3u8test table.segs tr.ad .t-ad { color: var(--err); }
+                .m3u8test table.segs .op { display: inline-flex; gap: 6px; }
+                .m3u8test table.segs .op button { border: none; background: #0f172a; color: var(--tx2); border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; }
+                .m3u8test table.segs .op button:hover { color: var(--accent2); }
+                .m3u8test .m3u8-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+                @media (max-width: 900px){ .m3u8test .m3u8-duo { grid-template-columns: 1fr; } }
+                .m3u8test .m3u8-box pre { background: #0f172a; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 11px; line-height: 1.5; color: #cbd5e1; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
+                .m3u8test .hint { font-size: 11px; color: var(--muted); margin-top: 8px; }
+                .m3u8test .seglist-skin { max-height: 420px; overflow: auto; }
+                .m3u8test .markbar { display: inline-flex; gap: 6px; align-items: center; }
+            </style>
+            <div class="m3u8test">
+                <!-- ① 控制栏：URL / 站点 / 代理 / 开始解析 -->
+                <div class="bar">
+                    <input type="text" id="m3u8testUrl" placeholder="输入 m3u8 地址，如 http://vip.dytt.com/xxx/index.m3u8" />
+                    <select id="m3u8testSite">
+                        <option value="">（自动匹配站点）</option>
+                        <option value="watermelon">西瓜</option>
+                        <option value="mars">火星</option>
+                    </select>
+                    <select id="m3u8testProxy">
+                        <option value="">不使用代理（代理池暂无节点，可到系统设置补充）</option>
+                        <option value="default">使用代理</option>
+                    </select>
+                    <button class="btn btn-prim" id="m3u8testBtn" onclick="m3u8TestStart()">开始解析</button>
+                </div>
+
+                <!-- ② 统计行 -->
+                <div class="stats-row" id="m3u8testStats" style="display:none">
+                    <div class="st"><span class="v" id="stTotal">0</span><span class="l">总片段</span></div>
+                    <div class="st err"><span class="v" id="stAd">0</span><span class="l">过滤广告段</span></div>
+                    <div class="st ok"><span class="v" id="stKeep">0</span><span class="l">保留段</span></div>
+                    <div class="st"><span class="v" id="stElapsed">0 ms</span><span class="l">耗时</span></div>
+                    <div class="st stan" id="stTags"></div>
+                    <div class="child-url" id="stChildUrl"></div>
+                </div>
+
+                <!-- ③ 播放控制条 -->
+                <div class="playbar-tools" id="m3u8testPlaybar" style="display:none">
+                    <div style="font-size:12px;color:var(--tx2)">命中区域 <span id="m3u8HitRegion" style="color:var(--accent2)">-</span></div>
+                    <button class="btn btn-sec" style="padding:6px 12px" onclick="m3u8PrevRegion()">← 上一处</button>
+                    <button class="btn btn-sec" style="padding:6px 12px" onclick="m3u8NextRegion()">下一处 →</button>
+                    <label class="checkbox-label"><input type="checkbox" id="m3u8LocThenPlay" checked /> 定位并播放</label>
+                    <div class="seg-tabs" id="m3u8PlayMode"></div>
+                    <label class="checkbox-label" style="margin-left:auto"><input type="checkbox" id="m3u8Follow" checked /> 跟随播放定位片段 <span id="m3u8FollowState" style="color:var(--muted)">未播放</span></label>
+                </div>
+
+                <!-- ④ 视频播放器 -->
+                <div class="player-wrap" id="m3u8PlayWrap">
+                    <div class="player-empty" id="m3u8PlayEmpty"><div style="font-size:44px">▶</div><div>输入地址并选择站点，解析后可直接定位命中区域、播放预览并查看片段</div></div>
+                    <video id="m3u8PlayerCtrl" controls playsinline style="display:none"></video>
+                </div>
+
+                <!-- ⑤ 当前片段信息 -->
+                <div class="curseg" id="m3u8CurSeg" style="display:none">
+                    <div class="field"><span class="k">原始播放片段</span><span class="val" id="csSegIndex">-</span></div>
+                    <div class="field"><span class="k">原始段号</span><span class="val" id="csOrigIndex">-</span></div>
+                    <div class="field"><span class="k">时长</span><span class="val" id="csDur">-</span></div>
+                    <div class="field"><span class="k">起始</span><span class="val" id="csStart">-</span></div>
+                    <div class="field"><span class="k">地址</span><span class="val code" id="csUri">-</span></div>
+                    <div class="markbar">
+                        <button class="btn btn-sec" style="padding:6px 10px" onclick="m3u8CopyUri()">复制地址</button>
+                        <button class="btn btn-sec" style="padding:6px 10px" onclick="m3u8OpenUri()">新窗口打开</button>
+                        <button class="btn btn-warn" style="padding:6px 10px" onclick="m3u8StopPlay()">停止</button>
+                    </div>
+                </div>
+                <div class="hint">提示：源站若限制 Referer，播放走本地代理转发（后台 /api/test/hls），失败请查看浏览器控制台</div>
+
+                <!-- ⑥ 片段列表 -->
+                <div class="panel" id="m3u8SegPanel" style="display:none;margin-top:14px">
+                    <div class="ptitle">
+                        <span>📋 片段列表</span>
+                        <div class="seg-tabs" id="m3u8SegFilter"></div>
+                    </div>
+                    <div class="seglist-ops">
+                        <span class="markbar">
+                            <button class="btn btn-sec" style="padding:5px 10px" onclick="m3u8RangeMarkOpen()">区间标记</button>
+                            <button class="btn btn-warn" style="padding:5px 10px" onclick="m3u8MarkCur('suspect')">疑</button>
+                            <button class="btn btn-warn" style="padding:5px 10px" onclick="m3u8MarkCur('stop')">止</button>
+                            <select id="m3u8AdType" style="background:#0f172a;border:1px solid var(--line);color:var(--tx);border-radius:6px;padding:5px 8px;font-size:12px;outline:none">
+                                <option value="ad_black">广告（黑屏）</option>
+                                <option value="ad_jump">广告（跳台）</option>
+                                <option value="ad_logo">广告（角标）</option>
+                            </select>
+                            <button class="btn btn-sec" style="padding:5px 10px" onclick="m3u8ApplyMark()">应用</button>
+                            <button class="btn btn-sec" style="padding:5px 10px" onclick="m3u8ClearMark()">取消标记</button>
+                        </span>
+                        <input type="text" id="m3u8SegSearch" placeholder="按段号/地址筛选" oninput="m3u8RenderSegs()" />
+                    </div>
+                    <div class="hint" style="margin-top:0;margin-bottom:8px">未标记：播放定位到广告段后点「标记」，或用「区间标记」批量打标，再点「规则学习建议」生成规则</div>
+                    <div class="seglist-skin">
+                        <table class="segs">
+                            <thead><tr><th>段号</th><th>时长</th><th>类型</th><th>起始</th><th>标记</th><th>操作</th></tr></thead>
+                            <tbody id="m3u8SegBody"></tbody>
+                        </table>
+                    </div>
+                    <div style="text-align:center;margin-top:8px"><button class="btn btn-sec" id="m3u8LoadMore" onclick="m3u8LoadMore()" style="display:inline-flex">加载更多（已显示 X / Y）</button></div>
+                </div>
+
+                <!-- ⑦ 原始 VS 过滤后 M3U8 -->
+                <div class="m3u8-duo" id="m3u8Duo" style="display:none">
+                    <div class="panel">
+                        <div class="ptitle">
+                            <span>原始 M3U8</span>
+                            <span class="markbar">
+                                <button class="btn btn-sec" style="padding:4px 9px" onclick="m3u8CopyOrig()">复制</button>
+                            </span>
+                        </div>
+                        <pre id="m3u8OrigPre"></pre>
+                    </div>
+                    <div class="panel">
+                        <div class="ptitle">
+                            <span>过滤后 M3U8</span>
+                            <span class="markbar">
+                                <button class="btn btn-sec" style="padding:4px 9px" onclick="m3u8CopyFilt()">复制内容</button>
+                            </span>
+                        </div>
+                        <pre id="m3u8FiltPre"></pre>
+                    </div>
+                </div>
+            </div>
+            <script>
+                // ===== M3U8 解析测试 =====
+                let m3u8TestData = null;
+                let m3u8SegView = [];
+                let m3u8SegFilter = 'all';
+                let m3u8PlayMode = 'filtered'; // filtered | original | full
+                let m3u8Marked = {};
+                let m3u8CurIndex = -1;
+                let m3u8PageSize = 200;
+                let m3u8PageShown = 0;
+                let m3u8PlayerSrc = '';
+
+                function m3u8BasePath() {
+                    const p = document.getElementById('preview-v2-api');
+                    if (p && p.textContent) {
+                        const m = p.textContent.match(/https?:\/\/[^\s\/]+\/([^\?]*mx\.php)/);
+                        if (m) return m[1];
+                    }
+                    return 'mx.php';
+                }
+
+                function m3u8ApiUrl() {
+                    return m3u8BasePath() || 'mx.php';
+                }
+
+                async function m3u8TestStart() {
+                    const url = document.getElementById('m3u8testUrl').value.trim();
+                    if (!url) { showToast('请输入 m3u8 地址', 'error'); return; }
+                    const proxy = document.getElementById('m3u8testProxy').value;
+                    const btn = document.getElementById('m3u8testBtn');
+                    btn.disabled = true; btn.textContent = '解析中...';
+                    try {
+                        const api = m3u8ApiUrl();
+                        const resp = await fetch(api + '?action=parse_test&url=' + encodeURIComponent(url) + '&proxy=' + encodeURIComponent(proxy));
+                        const data = await resp.json();
+                        if (!data.success) { showToast(data.message || '解析失败', 'error'); return; }
+                        m3u8TestData = data;
+                        m3u8Marked = {};
+                        m3u8CurIndex = -1;
+                        m3u8PageShown = 0;
+                        m3u8RenderStats(data);
+                        m3u8BuildPlayModeTabs();
+                        m3u8BuildFilterTabs();
+                        m3u8UpdatePlaybar();
+                        m3u8ShowPlayer();
+                        m3u8RenderSegs();
+                        m3u8RenderM3u8();
+                        document.getElementById('m3u8SegPanel').style.display = 'block';
+                        document.getElementById('m3u8Duo').style.display = 'grid';
+                        document.getElementById('m3u8CurSeg').style.display = 'grid';
+                        // 片段数少时直接可呈现，无需加载更多
+                        const shown = document.getElementById('m3u8LoadMore');
+                        shown.style.display = data.segments.length > m3u8PageSize ? 'inline-flex' : 'none';
+                        showToast('解析完成：' + data.stats.totalSegments + ' 段', 'success');
+                    } catch(e) { showToast('解析异常: ' + e.message, 'error'); }
+                    btn.disabled = false; btn.textContent = '开始解析';
+                }
+
+                function m3u8RenderStats(d) {
+                    document.getElementById('m3u8testStats').style.display = 'flex';
+                    document.getElementById('stTotal').textContent = d.stats.totalSegments;
+                    document.getElementById('stAd').textContent = d.stats.adSegments;
+                    document.getElementById('stKeep').textContent = d.stats.keptSegments;
+                    document.getElementById('stElapsed').textContent = d.elapsed_ms + ' ms';
+                    const tags = [];
+                    if (d.domain) tags.push('<span class="badge badge-ok">' + escapeHtml(d.domain.split('.')[0]) + '</span>');
+                    if (d.proxy) tags.push('<span class="badge badge-ok">直连出网</span>');
+                    else tags.push('<span class="badge badge-ok">直连出网</span>');
+                    document.getElementById('stTags').innerHTML = tags.join(' ');
+                    document.getElementById('stChildUrl').textContent = d.mediaUrl ? '子 M3U8：' + d.mediaUrl : '';
+                }
+
+                function m3u8BuildPlayModeTabs() {
+                    const tc = document.getElementById('m3u8PlayMode');
+                    const items = [['filtered','播放过滤后'],['original','播放原始'],['full','整片'],['txt','过滤后']];
+                    tc.innerHTML = '';
+                    items.forEach(([k,t])=>{
+                        const b=document.createElement('button');
+                        b.textContent=t; b.className = m3u8PlayMode===k?'on':'';
+                        b.onclick=()=>{ m3u8PlayMode=k; m3u8BuildPlayModeTabs(); m3u8ShowPlayer(); };
+                        tc.appendChild(b);
+                    });
+                }
+
+                function m3u8BuildFilterTabs() {
+                    const d = m3u8TestData;
+                    if (!d) return;
+                    const total = d.segments.length, ad = d.stats.adSegments, keep = d.stats.keptSegments;
+                    const markKeys = Object.keys(m3u8Marked).length;
+                    const items = [['all','全部 '+total],['ad','广告 '+ad],['keep','正片 '+keep],['mark','已标记 '+markKeys]];
+                    const tc = document.getElementById('m3u8SegFilter');
+                    tc.innerHTML='';
+                    items.forEach(([k,t])=>{
+                        const b=document.createElement('button');
+                        b.textContent=t; b.className = m3u8SegFilter===k?'on':'';
+                        b.onclick=()=>{ m3u8SegFilter=k; m3u8PageShown=0; m3u8RenderSegs(); m3u8BuildFilterTabs(); };
+                        tc.appendChild(b);
+                    });
+                }
+
+                function m3u8ShowPlayer() {
+                    document.getElementById('m3u8PlayEmpty').style.display = 'none';
+                    const v = document.getElementById('m3u8PlayerCtrl');
+                    const d = m3u8TestData;
+                    if (!d) return;
+                    if (window.__m3u8hls) { try{ window.__m3u8hls.destroy(); }catch(e){} window.__m3u8hls=null; }
+                    v.pause(); v.removeAttribute('src'); v.load();
+                    v.style.display = 'block';
+                    // 所有模式都用 parse_test 返回的 M3U8 文本构造 Blob 播放，
+                    // 避免 mxjx 通道 JSON_OUTPUT_GUARD 改写 m3u8 导致播放失败。
+                    let text = '';
+                    if (m3u8PlayMode === 'filtered' || m3u8PlayMode === 'txt') {
+                        // 过滤后：仅保留正片段
+                        text = d.segments.filter(s=>!s.isAd).map(s=>{
+                            return '#EXTINF:'+s.duration+',\n' + (s.uri);
+                        }).join('\n');
+                        text = '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-TARGETDURATION:10\n' + text + '\n#EXT-X-ENDLIST\n';
+                    } else if (m3u8PlayMode === 'original') {
+                        text = d.original_m3u8;
+                    } else if (m3u8PlayMode === 'full') {
+                        // 整片：含广告，原样播放
+                        text = d.original_m3u8;
+                    }
+                    const blob = new Blob([text], {type:'application/vnd.apple.mpegurl'});
+                    const url = URL.createObjectURL(blob);
+                    m3u8SetPlayer(v, url);
+                }
+
+                function m3u8SetPlayer(el, src) {
+                    m3u8PlayerSrc = src;
+                    el.src = src;
+                    el.addEventListener('canplay', m3u8OnPlayStart);
+                    el.addEventListener('timeupdate', m3u8OnTime);
+                    el.addEventListener('play', ()=> { document.getElementById('m3u8FollowState').textContent='播放中'; });
+                    el.addEventListener('pause', ()=> { document.getElementById('m3u8FollowState').textContent='已暂停'; });
+                    el.play().catch(()=>{});
+                }
+
+                function m3u8OnPlayStart() {
+                    document.getElementById('m3u8FollowState').textContent='播放中';
+                }
+
+                function m3u8OnTime() {
+                    if (!m3u8TestData) return;
+                    const t = this.currentTime;
+                    if (!document.getElementById('m3u8Follow').checked) return;
+                    // 根据时间定位片段（过滤后时间轴）
+                    const d = m3u8TestData;
+                    let acc = 0;
+                    let found = -1;
+                    let target;
+                    if (m3u8PlayMode === 'filtered' || m3u8PlayMode === 'txt') {
+                        target = d.segments.filter(s=>!s.isAd);
+                    } else {
+                        target = d.segments;
+                    }
+                    for (let i=0;i<target.length;i++){ if(t >= acc && t < acc+target[i].duration){ found=target[i].index; break;} acc+=target[i].duration; }
+                    if (found>0) m3u8HighlightSeg(found);
+                }
+
+                function m3u8HighlightSeg(idx) {
+                    m3u8CurIndex = idx;
+                    // 更新当前片段信息面板
+                    const d = m3u8TestData;
+                    const seg = d.segments.find(s=>s.index===idx);
+                    if (seg) {
+                        document.getElementById('csSegIndex').textContent = '第 ' + idx + ' 段';
+                        document.getElementById('csOrigIndex').textContent = seg.index;
+                        document.getElementById('csDur').textContent = seg.duration + ' s';
+                        document.getElementById('csStart').textContent = m3u8FmtTime(seg.start);
+                        document.getElementById('csUri').textContent = seg.uri;
+                        document.getElementById('csUri').title = seg.uri;
+                    }
+                    // 高亮表格行并滚动到可见
+                    const rows = document.querySelectorAll('#m3u8SegBody tr');
+                    rows.forEach(r=>r.classList.remove('cur'));
+                    const curRow = document.querySelector('#m3u8SegBody tr[data-idx="'+idx+'"]');
+                    if (curRow){ curRow.classList.add('cur'); curRow.scrollIntoView({block:'nearest'}); }
+                    // 更新命中区域
+                    m3u8UpdateHitRegion();
+                }
+
+                function m3u8UpdateHitRegion() {
+                    const d = m3u8TestData;
+                    if (!d) return;
+                    // 统计所有广告段聚类区间
+                    const adIdxs = d.segments.filter(s=>s.isAd).map(s=>s.index);
+                    const region = m3u8Cluster(adIdxs, 2);
+                    const adCount = adIdxs.length;
+                    document.getElementById('m3u8HitRegion').textContent = adCount? (region.min+'-'+region.max+' 段'):'无广告';
+                }
+
+                function m3u8Cluster(arr, gap) {
+                    if(!arr.length) return {min:0,max:0};
+                    arr.sort((a,b)=>a-b);
+                    return { min: arr[0], max: arr[arr.length-1] };
+                }
+
+                let m3u8Regions = [];
+                function m3u8RebuildRegions() {
+                    const d = m3u8TestData;
+                    const adIdxs = d.segments.filter(s=>s.isAd).map(s=>s.index).sort((a,b)=>a-b);
+                    m3u8Regions = [];
+                    let cur=null;
+                    adIdxs.forEach((idx,i)=>{
+                        if (cur && idx - cur.last <= 2) { cur.last=idx; }
+                        else { if(cur) m3u8Regions.push(cur); cur={start:idx,last:idx}; }
+                    });
+                    if (cur) m3u8Regions.push(cur);
+                }
+
+                let m3u8RegionCur = 0;
+                function m3u8PrevRegion() { m3u8RebuildRegions(); if(!m3u8Regions.length) return; m3u8RegionCur=(m3u8RegionCur-1+m3u8Regions.length)%m3u8Regions.length; m3u8Locate(m3u8Regions[m3u8RegionCur].start); }
+                function m3u8NextRegion() { m3u8RebuildRegions(); if(!m3u8Regions.length) return; m3u8RegionCur=(m3u8RegionCur+1)%m3u8Regions.length; m3u8Locate(m3u8Regions[m3u8RegionCur].start); }
+
+                function m3u8Locate(idx) {
+                    const d = m3u8TestData;
+                    const seg = d.segments.find(s=>s.index===idx);
+                    if(!seg) return;
+                    m3u8HighlightSeg(idx);
+                    if (document.getElementById('m3u8LocThenPlay').checked) {
+                        m3u8SeekToSegment(idx);
+                    }
+                }
+
+                function m3u8SeekToSegment(idx) {
+                    // 计算该段在对应播放模式时间轴上的偏移
+                    const d = m3u8TestData;
+                    let target;
+                    if (m3u8PlayMode==='filtered' || m3u8PlayMode==='txt') target=d.segments.filter(s=>!s.isAd);
+                    else target=d.segments;
+                    const seg = d.segments.find(s=>s.index===idx);
+                    let time=0;
+                    for (const s of target){ if(s.index===idx) break; time += s.duration; }
+                    const v = document.getElementById('m3u8PlayerCtrl');
+                    try { v.currentTime = time; v.play(); } catch(e){}
+                }
+
+                function m3u8FmtTime(sec){
+                    sec = Math.max(0, Math.floor(sec||0));
+                    const m = Math.floor(sec/60), s=sec%60;
+                    return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+                }
+
+                function m3u8RenderSegs() {
+                    const d = m3u8TestData; if(!d) return;
+                    const q = (document.getElementById('m3u8SegSearch').value||'').trim().toLowerCase();
+                    let list = d.segments;
+                    if (m3u8SegFilter==='ad') list=list.filter(s=>s.isAd);
+                    else if (m3u8SegFilter==='keep') list=list.filter(s=>!s.isAd);
+                    else if (m3u8SegFilter==='mark') list=list.filter(s=>m3u8Marked[s.index]);
+                    if (q) list=list.filter(s=>String(s.index).toLowerCase().includes(q) || s.uri.toLowerCase().includes(q));
+                    m3u8SegView = list;
+                    const slice = list.slice(0, m3u8PageSize);
+                    m3u8PageShown = slice.length;
+                    const body = document.getElementById('m3u8SegBody');
+                    body.innerHTML = slice.map(s=>{
+                        const typePill = s.isAd ? '<span class="badge badge-ad">广告</span>' : '<span class="badge badge-ok">正片</span>';
+                        const mark = m3u8Marked[s.index] ? '<span class="badge badge-warn">'+escapeHtml(m3u8Marked[s.index])+'</span>' : '-';
+                        return '<tr class="'+(s.isAd?'ad ':'')+(s.index===m3u8CurIndex?'cur':'')+'" data-idx="'+s.index+'">'
+                            +'<td>'+s.index+'</td><td>'+s.duration+'</td><td>'+typePill+'</td><td>'+m3u8FmtTime(s.start)+'</td><td>'+mark+'</td>'
+                            +'<td><span class="op"><button onclick="m3u8Locate('+s.index+')">播放</button><button onclick="m3u8HighlightSeg('+s.index+')">定位</button><button onclick="m3u8ToggleMark('+s.index+')">标记</button></span></td></tr>';
+                    }).join('');
+                    const lm = document.getElementById('m3u8LoadMore');
+                    lm.textContent = '加载更多（已显示 '+m3u8PageShown+' / '+list.length+'）';
+                    lm.style.display = m3u8PageShown>=list.length?'none':'inline-flex';
+                }
+
+                function m3u8LoadMore(){ m3u8PageSize += 200; m3u8RenderSegs(); }
+
+                function m3u8ToggleMark(idx){
+                    const typ = document.getElementById('m3u8AdType').value;
+                    if (m3u8Marked[idx]) delete m3u8Marked[idx];
+                    else m3u8Marked[idx] = typ;
+                    m3u8BuildFilterTabs(); m3u8RenderSegs();
+                }
+                function m3u8MarkCur(typ){
+                    if (m3u8CurIndex<0) { showToast('先定位一个片段','error'); return; }
+                    m3u8Marked[m3u8CurIndex]=typ;
+                    m3u8BuildFilterTabs(); m3u8RenderSegs();
+                }
+                function m3u8ApplyMark(){
+                    if (m3u8CurIndex<0){showToast('当前无定位片段','error');return;}
+                    const typ=document.getElementById('m3u8AdType').value;
+                    m3u8Marked[m3u8CurIndex]=typ;
+                    m3u8BuildFilterTabs(); m3u8RenderSegs();
+                }
+                function m3u8ClearMark(){
+                    if (m3u8CurIndex<0){showToast('当前无定位片段','error');return;}
+                    delete m3u8Marked[m3u8CurIndex];
+                    m3u8BuildFilterTabs(); m3u8RenderSegs();
+                }
+                function m3u8RangeMarkOpen(){
+                    const d=m3u8TestData; if(!d) return;
+                    const a = prompt('区间起始段号（1-'+d.segments.length+'）：');
+                    if(!a) return;
+                    const b = prompt('区间结束段号：');
+                    if(!b) return;
+                    const sa=parseInt(a), sb=parseInt(b);
+                    const typ=document.getElementById('m3u8AdType').value;
+                    d.segments.forEach(s=>{ if(s.index>=Math.min(sa,sb) && s.index<=Math.max(sa,sb)) m3u8Marked[s.index]=typ; });
+                    m3u8BuildFilterTabs(); m3u8RenderSegs();
+                }
+
+                function m3u8RenderM3u8(){
+                    const d=m3u8TestData; if(!d) return;
+                    document.getElementById('m3u8OrigPre').textContent = d.original_m3u8;
+                    document.getElementById('m3u8FiltPre').textContent = d.filtered_m3u8;
+                }
+                function m3u8CopyOrig(){ const d=m3u8TestData; if(d) copyText(d.original_m3u8); }
+                function m3u8CopyFilt(){ const d=m3u8TestData; if(d) copyText(d.filtered_m3u8); }
+                function m3u8CopyUri(){ const el=document.getElementById('csUri'); if(el.textContent!=='-') copyText(el.textContent); }
+                function m3u8OpenUri(){ const el=document.getElementById('csUri'); if(el.textContent!=='-') window.open(el.textContent,'_blank'); }
+                function m3u8StopPlay(){ const v=document.getElementById('m3u8PlayerCtrl'); v.pause(); v.src=''; document.getElementById('m3u8FollowState').textContent='未播放'; }
+                function m3u8UpdatePlaybar(){ document.getElementById('m3u8testPlaybar').style.display='flex'; }
+            </script>
+        </div>
+
     </div>
 
         </main>
@@ -5952,6 +6440,7 @@ if (!$_mxGXSecret) {
             {
                 group: '接口工具',
                 items: [
+                    { page: 'm3u8_test', icon: '🧪', text: 'M3U8解析测试', badge: 'NEW' },
                     { page: 'moxi_api', icon: '⚡', text: '沫兮API' },
                     { page: 'sniffer', icon: '🔍', text: '嗅探设置' },
 

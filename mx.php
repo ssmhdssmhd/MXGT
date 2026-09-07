@@ -6018,6 +6018,166 @@ try {
             }
             exit;
 
+        // ===== M3U8 解析测试页专用：返回片段明细 + 原始/过滤后 M3U8 文本 + 统计 =====
+        case 'parse_test':
+            $url = $_GET['url'] ?? '';
+            $proxy = $_GET['proxy'] ?? '';
+            if (empty($url)) {
+                sendJsonResponse(['success' => false, 'message' => '缺少 url 参数'], 400);
+            }
+            @set_time_limit(60);
+            $startT = microtime(true);
+            try {
+                $parsedUrl = parse_url($url);
+                $domain = $parsedUrl['host'] ?? '';
+                $mediaUrl = resolveMasterPlaylist($url, $proxy);
+                if ($mediaUrl !== $url) {
+                    $parsedUrl = parse_url($mediaUrl);
+                    $domain = $parsedUrl['host'] ?? '';
+                }
+                $mediaUrl2 = $mediaUrl;
+
+                $skipper = new M3U8AdSkipper();
+                if ($proxy) {
+                    $skipper->getParser()->setForceProxy($proxy);
+                }
+                $reflection = new ReflectionClass($skipper);
+                $ruleEngineProp = $reflection->getProperty('ruleEngine');
+                $ruleEngineProp->setAccessible(true);
+
+                $enhancedEngine = new EnhancedAdRuleEngine([
+                    'checkDiscontinuity' => true,
+                    'checkRepetitiveDuration' => true
+                ]);
+                $enhancedEngine->setDomain($domain);
+
+                if ($useDb) {
+                    try {
+                        $dbRules = $ruleManager->getRules($domain);
+                        if (!empty($dbRules)) {
+                            $engineReflection = new ReflectionClass($enhancedEngine);
+                            $applyMethod = $engineReflection->getMethod('applyDomainRules');
+                            $applyMethod->setAccessible(true);
+                            $applyMethod->invoke($enhancedEngine, $dbRules);
+                        }
+                        if (class_exists('DbAdSignature')) {
+                            $adSignature = new DbAdSignature();
+                            $sigRules = $adSignature->getRulesForDomain($domain);
+                            if (!empty($sigRules)) {
+                                $engineReflection = new ReflectionClass($enhancedEngine);
+                                $applyMethod = $engineReflection->getMethod('applyDomainRules');
+                                $applyMethod->setAccessible(true);
+                                $applyMethod->invoke($enhancedEngine, $sigRules);
+                            }
+                        }
+                    } catch (Throwable $e) {}
+                }
+
+                $ruleEngineProp->setValue($skipper, $enhancedEngine);
+                $filterProp = $reflection->getProperty('filter');
+                $filterProp->setAccessible(true);
+                $filter = $filterProp->getValue($skipper);
+                $filterReflection = new ReflectionClass($filter);
+                $filterEngineProp = $filterReflection->getProperty('ruleEngine');
+                $filterEngineProp->setAccessible(true);
+                $filterEngineProp->setValue($filter, $enhancedEngine);
+
+                $result = $skipper->processWithSafeguard($mediaUrl, [
+                    'useAbsoluteUrls' => true,
+                    'filterSubtitles' => true,
+                    'filterAdTags' => true,
+                    'addSkipperComment' => false
+                ]);
+
+                $originalPl = $result['original'] ?? [];
+                $filteredPl = $result['filtered'] ?? [];
+                $stats = $result['stats'] ?? [];
+                $safeguardTriggered = !empty($result['safeguardTriggered']);
+
+                $allSegments = $originalPl['segments'] ?? [];
+                $removedSegs = $filteredPl['removedSegments'] ?? [];
+                $keptUris = [];
+                foreach (($filteredPl['segments'] ?? []) as $k) {
+                    $keptUris[$k['uri'] ?? ''] = true;
+                }
+
+                $scheme = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+                $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+                $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+                $basePath = dirname($requestUri) === '/' ? '' : dirname($requestUri);
+                $selfUrl = $scheme . '://' . $host . $basePath;
+
+                // 生成原始 M3U8 文本（绝对地址）
+                $origGen = new OutputGenerator(['useAbsoluteUrls' => true, 'addSkipperComment' => false]);
+                $origText = $origGen->generate($originalPl, ['filterSubtitles' => false, 'filterAdTags' => false]);
+                // 生成过滤后 M3U8 文本
+                $filGen = new OutputGenerator(['useAbsoluteUrls' => true, 'addSkipperComment' => false]);
+                $filText = $filGen->generate($filteredPl, ['filterSubtitles' => true, 'filterAdTags' => true]);
+
+                // 片段列表：标注原始段号 + 是否广告
+                $segments = [];
+                $runTime = 0.0;
+                foreach ($allSegments as $i => $seg) {
+                    $uri = $seg['uri'] ?? '';
+                    $isAd = !isset($keptUris[$uri]);
+                    // 被删广告段尝试匹配 removedSegments 里的命中规则
+                    $matched = [];
+                    if ($isAd) {
+                        foreach ($removedSegs as $rm) {
+                            if (($rm['uri'] ?? '') === $uri) {
+                                foreach (($rm['adInfo']['matchedRules'] ?? []) as $r) {
+                                    $matched[] = is_array($r) ? ($r['name'] ?? '') : $r;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    $segments[] = [
+                        'index' => $i + 1,
+                        'duration' => round((float)($seg['duration'] ?? 0), 3),
+                        'start' => round($runTime, 2),
+                        'uri' => $uri,
+                        'absUri' => $seg['absoluteUri'] ?? $uri,
+                        'isAd' => $isAd,
+                        'matched' => $matched,
+                        'marked' => $seg['marked'] ?? 0
+                    ];
+                    $runTime += (float)($seg['duration'] ?? 0);
+                }
+
+                $elapsed = round((microtime(true) - $startT) * 1000);
+
+                sendJsonResponse([
+                    'success' => true,
+                    'url' => $url,
+                    'mediaUrl' => $mediaUrl2,
+                    'domain' => $domain,
+                    'elapsed_ms' => $elapsed,
+                    'proxy' => $proxy,
+                    'safeguardTriggered' => $safeguardTriggered,
+                    'mxjxUrl' => $selfUrl . '/mx.php?action=mxjx&url=' . rawurlencode($mediaUrl2) . '&_t=' . time(),
+                    'parseUrl' => $selfUrl . '/mx.php?action=mxjx&url=' . rawurlencode($mediaUrl2) . '&_t=' . time(),
+                    'stats' => [
+                        'totalSegments' => count($allSegments),
+                        'adSegments' => count($removedSegs),
+                        'keptSegments' => count($filteredPl['segments'] ?? []),
+                        'originalDuration' => round((float)($stats['originalDuration'] ?? 0), 2),
+                        'filteredDuration' => round((float)($stats['filteredDuration'] ?? 0), 2),
+                        'savedDuration' => round((float)($stats['savedDuration'] ?? 0), 2),
+                        'adPercentage' => round((float)($stats['adPercentage'] ?? 0), 2)
+                    ],
+                    'segments' => $segments,
+                    'original_m3u8' => $origText,
+                    'filtered_m3u8' => $filText
+                ]);
+            } catch (Throwable $e) {
+                sendJsonResponse([
+                    'success' => false,
+                    'message' => '解析失败: ' . $e->getMessage() . ' @' . basename($e->getFile()) . ':' . $e->getLine()
+                ], 500);
+            }
+            break;
+
         default:
             sendJsonResponse([
                 'success' => false,
