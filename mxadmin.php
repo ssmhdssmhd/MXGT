@@ -4916,6 +4916,21 @@ if (!$_mxGXSecret) {
                     <div id="moxiTestInfo"></div>
                 </div>
             </div>
+
+            <!-- ④ 去插播兜底线路设置 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <span class="step-title"><span class="step-badge success">③</span><span>去插播兜底线路</span></span>
+                    <span class="section-caption">启用后：输入官方资源 → 自动访问获取剧名/剧集 → 资源站搜索 → 用搜索到的链接跑兜底接口</span>
+                </div>
+                <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <label class="checkbox-label" style="font-size:13px"><input type="checkbox" id="fbGlobalEnabled" checked /> 启用兜底线路（官方资源优先走兜底清洗）</label>
+                    <button class="btn btn-primary" style="margin-left:auto" onclick="addFallbackLine()">➕ 添加线路</button>
+                    <button class="btn btn-success" onclick="saveFallbackConfig()">💾 保存配置</button>
+                </div>
+                <div id="fbLinesList"></div>
+                <div class="hint" style="margin-top:10px">兜底接口地址格式：接口地址模板 + <code>url=</code> 参数（系统自动拼接资源站搜索到的播放链接）。保存后新增/删除/启停即时生效。</div>
+            </div>
         </div>
 
         <div class="page" id="page-play">
@@ -6409,13 +6424,12 @@ if (!$_mxGXSecret) {
                     v.style.display = 'block';
                     // 所有模式都用 parse_test 返回的 M3U8 文本构造 Blob 播放，
                     // 避免 mxjx 通道 JSON_OUTPUT_GUARD 改写 m3u8 导致播放失败。
+                    // 注意：直接使用后端生成的文本（已含绝对地址 + EXT-X-KEY/EXT-X-MAP 等全部标签），
+                    // 不再用片段手拼，否则相对地址在 Blob 场景无法解析导致报错黑屏。
                     let text = '';
                     if (m3u8PlayMode === 'filtered' || m3u8PlayMode === 'txt') {
-                        // 过滤后：仅保留正片段
-                        text = d.segments.filter(s=>!s.isAd).map(s=>{
-                            return '#EXTINF:'+s.duration+',\n' + (s.uri);
-                        }).join('\n');
-                        text = '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-TARGETDURATION:10\n' + text + '\n#EXT-X-ENDLIST\n';
+                        // 过滤后：后端已生成绝对地址且保留全部标签（含占位/间断标记）
+                        text = d.filtered_m3u8;
                     } else if (m3u8PlayMode === 'original') {
                         text = d.original_m3u8;
                     } else if (m3u8PlayMode === 'full') {
@@ -6436,6 +6450,13 @@ if (!$_mxGXSecret) {
                         const hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60, enableWorker: true });
                         window.__m3u8hls = hls;
                         hls.on(Hls.Events.MANIFEST_PARSED, () => { el.play().catch(() => {}); });
+                        // 片段切换事件：精确跟随播放实时高亮（比 timeupdate 更准，逐片段触发）
+                        hls.on(Hls.Events.FRAG_CHANGED, (evt, data) => {
+                            const frag = data && data.frag;
+                            if (frag && typeof frag.start === 'number') {
+                                m3u8OnTimeAt(frag.start);
+                            }
+                        });
                         hls.on(Hls.Events.ERROR, (evt, data) => {
                             if (data && data.fatal) {
                                 showToast('播放错误: ' + (data.type || '') + ' / ' + (data.details || ''), 'error');
@@ -6446,25 +6467,42 @@ if (!$_mxGXSecret) {
                     } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
                         // Safari 原生 HLS 兜底
                         el.src = src;
+                        el.removeEventListener('canplay', m3u8OnPlayStart);
                         el.addEventListener('canplay', m3u8OnPlayStart);
                         el.play().catch(() => {});
                     } else {
                         showToast('当前浏览器不支持 m3u8 播放（缺少 hls.js）', 'error');
                     }
+                    // 防止重复绑定导致 timeupdate 多次触发
+                    el.removeEventListener('timeupdate', m3u8OnTime);
                     el.addEventListener('timeupdate', m3u8OnTime);
-                    el.addEventListener('play', () => { document.getElementById('m3u8FollowState').textContent = '播放中'; });
-                    el.addEventListener('pause', () => { document.getElementById('m3u8FollowState').textContent = '已暂停'; });
+                    el.removeEventListener('play', m3u8OnPlay);
+                    el.addEventListener('play', m3u8OnPlay);
+                    el.removeEventListener('pause', m3u8OnPause);
+                    el.addEventListener('pause', m3u8OnPause);
                 }
 
                 function m3u8OnPlayStart() {
                     document.getElementById('m3u8FollowState').textContent='播放中';
                 }
 
+                function m3u8OnPlay() {
+                    document.getElementById('m3u8FollowState').textContent = '播放中';
+                }
+
+                function m3u8OnPause() {
+                    document.getElementById('m3u8FollowState').textContent = '已暂停';
+                }
+
                 function m3u8OnTime() {
+                    m3u8OnTimeAt(this.currentTime);
+                }
+
+                // 根据播放时间定位片段（跟随播放实时切换）
+                function m3u8OnTimeAt(t) {
                     if (!m3u8TestData) return;
-                    const t = this.currentTime;
                     if (!document.getElementById('m3u8Follow').checked) return;
-                    // 根据时间定位片段（过滤后时间轴）
+                    // 根据时间定位片段（按当前播放模式对应的时间轴）
                     const d = m3u8TestData;
                     let acc = 0;
                     let found = -1;
@@ -14000,6 +14038,88 @@ if (!$_mxGXSecret) {
             }
         }
 
+        // ===== 去插播兜底线路设置 =====
+        let fbLinesCache = null;
+
+        async function loadFallbackConfig() {
+            try {
+                const res = await fetch(API_BASE + '?action=fallback/config&_t=' + Date.now());
+                const data = await res.json();
+                if (!data.success) { showToast(data.message || '获取兜底线路配置失败', 'error'); return; }
+                const cfg = data.config || {};
+                document.getElementById('fbGlobalEnabled').checked = !!cfg.enabled;
+                fbLinesCache = (cfg.lines && cfg.lines.length)
+                    ? cfg.lines
+                    : [{ id: 'fb_moxi_1', name: '沫兮兜底 1', url: 'https://mxqcb.ssmhd.com/api/clean/?url=', enabled: true, sort: 1 }];
+                renderFallbackLines();
+            } catch (e) {
+                showToast('获取兜底线路配置异常: ' + e.message, 'error');
+            }
+        }
+
+        function renderFallbackLines() {
+            const list = document.getElementById('fbLinesList');
+            if (!list) return;
+            if (!fbLinesCache || !fbLinesCache.length) {
+                list.innerHTML = '<div style="padding:20px;text-align:center;color:#909399;font-size:13px;border:1px dashed var(--line);border-radius:8px">暂无线路，点击「➕ 添加线路」新增</div>';
+                return;
+            }
+            list.innerHTML = fbLinesCache.map((line, i) => {
+                return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--fill-lighter);flex-wrap:wrap">
+                    <input type="checkbox" ${line.enabled ? 'checked' : ''} onchange="fbLinesCache[${i}].enabled=this.checked" title="启用此线路" />
+                    <input type="text" value="${escapeHtml(line.name || '')}" oninput="fbLinesCache[${i}].name=this.value" placeholder="线路名称，如：沫兮兜底 1" style="width:170px;background:#0f172a;border:1px solid var(--line);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:12px" />
+                    <input type="text" value="${escapeHtml(line.url || '')}" oninput="fbLinesCache[${i}].url=this.value" placeholder="接口地址，如：https://xxx/api/clean/?url=" style="flex:1;min-width:240px;background:#0f172a;border:1px solid var(--line);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:12px" />
+                    <button class="btn btn-warn" style="padding:5px 10px" onclick="removeFallbackLine(${i})">删除</button>
+                </div>`;
+            }).join('');
+        }
+
+        function addFallbackLine() {
+            if (!fbLinesCache) fbLinesCache = [];
+            fbLinesCache.push({ id: 'fb_' + Date.now(), name: '兜底线路 ' + (fbLinesCache.length + 1), url: '', enabled: true, sort: fbLinesCache.length + 1 });
+            renderFallbackLines();
+        }
+
+        function removeFallbackLine(idx) {
+            if (!fbLinesCache || idx < 0 || idx >= fbLinesCache.length) return;
+            if (!confirm('确定删除该兜底线路？')) return;
+            fbLinesCache.splice(idx, 1);
+            renderFallbackLines();
+        }
+
+        async function saveFallbackConfig() {
+            if (!fbLinesCache) fbLinesCache = [];
+            const payload = {
+                enabled: document.getElementById('fbGlobalEnabled').checked,
+                lines: fbLinesCache.map((l, i) => ({
+                    id: l.id || ('fb_' + (i + 1)),
+                    name: (l.name || '').trim(),
+                    url: (l.url || '').trim(),
+                    enabled: !!l.enabled,
+                    sort: i + 1
+                })).filter(l => l.url)
+            };
+            try {
+                const res = await fetch(API_BASE + '?action=fallback/config/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('兜底线路配置已保存', 'success');
+                    if (data.config && data.config.lines) {
+                        fbLinesCache = data.config.lines;
+                        renderFallbackLines();
+                    }
+                } else {
+                    showToast(data.message || '保存失败', 'error');
+                }
+            } catch (e) {
+                showToast('保存异常: ' + e.message, 'error');
+            }
+        }
+
         async function testMoxiApi() {
             const url = document.getElementById('moxiTestUrl').value.trim();
             if (!url) {
@@ -15336,6 +15456,7 @@ if (!$_mxGXSecret) {
             updateMobileNav(pageName);
             if (pageName === 'history') renderHistory();
             if (pageName === 'announcement') loadAnnouncementList();
+            if (pageName === 'moxi_api') loadFallbackConfig();
             if (pageName === 'dashboard') {
                 updateDashboardStats();
                 renderDashboardRecent();

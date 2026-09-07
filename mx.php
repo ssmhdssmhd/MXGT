@@ -367,6 +367,25 @@ function parse_internal_moxi($url, $selfUrl, $officialReplaceMgr = null, $siteMa
     $msg = '解析成功';
 
     if ($isOfficialUrl && $officialReplaceMgr) {
+        // 去插播兜底线路优先：访问官方资源 → 搜索 → 跑兜底接口
+        $fbResult = mxf_parse_official_fallback($url, $selfUrl, $siteManager);
+        if (!empty($fbResult['success'])) {
+            return [
+                'success' => true,
+                'code' => 200,
+                'message' => '兜底线路解析成功',
+                'play_url' => $fbResult['play_url'],
+                'video_name' => $fbResult['video_name'],
+                'episode' => $fbResult['episode'],
+                'original_url' => $url,
+                'is_official' => true,
+                'source' => 'moxi',
+                'fallback' => true,
+                'fallback_name' => $fbResult['fallback_name'] ?? '兜底线路',
+                'source_url' => $fbResult['source_url'] ?? '',
+                'fallback_api_url' => $fbResult['fallback_api_url'] ?? '',
+            ];
+        }
         $result = $officialReplaceMgr->resolve($url);
         if ($result['success']) {
             $m3u8Url = $result['m3u8_url'] ?? '';
@@ -451,6 +470,347 @@ function parse_internal_moxi($url, $selfUrl, $officialReplaceMgr = null, $siteMa
     ];
 }
 
+// ==================== 去插播兜底线路（fallback lines） ====================
+// 配置结构：
+// [
+//   'enabled' => bool,          // 全局开关
+//   'lines' => [                // 线路列表（可按顺序配置多条，启用时取第一条启用的）
+//     ['id' => 'fb_moxi_1', 'name' => '沫兮兜底 1', 'url' => 'https://mxqcb.ssmhd.com/api/clean/?url=', 'enabled' => true, 'sort' => 1],
+//   ],
+//   'update_date' => '...',
+// ]
+
+function mxf_extract_title_from_url($url) {
+    $parsed = parse_url($url);
+    $path = $parsed['path'] ?? '';
+    $host = $parsed['host'] ?? '';
+    if (empty($path)) return $host ?: '在线视频';
+    $pathParts = array_values(array_filter(explode('/', $path), function($v) { return !empty($v); }));
+    if (empty($pathParts)) return $host ?: '在线视频';
+    $fileName = end($pathParts);
+    $fileNameWithoutExt = preg_replace('/\.(m3u8|mp4|mkv|avi|mov|flv|ts|html?)$/i', '', $fileName);
+    $isEpisodeLike = false;
+    if (preg_match('/第?\d+[集期话]/u', $fileNameWithoutExt)) $isEpisodeLike = true;
+    if (preg_match('/^(episode|ep|e|集|期|话)[_\-]?\d+$/i', $fileNameWithoutExt)) $isEpisodeLike = true;
+    if (preg_match('/^\d+$/', $fileNameWithoutExt) && strlen($fileNameWithoutExt) <= 4) $isEpisodeLike = true;
+    if (preg_match('/[_\-]\d+$/', $fileNameWithoutExt) && strlen($fileNameWithoutExt) <= 15) {
+        $prefix = preg_replace('/[_\-]\d+$/', '', $fileNameWithoutExt);
+        if (in_array(strtolower($prefix), ['episode', 'ep', 'e', '第', '集', ''])) $isEpisodeLike = true;
+    }
+    if ($isEpisodeLike || $fileName === 'index.m3u8' || $fileNameWithoutExt === 'index') {
+        $candidates = [];
+        $dirParts = array_slice($pathParts, 0, -1);
+        foreach (array_reverse($dirParts) as $part) {
+            if (preg_match('/^[a-f0-9]{8,}$/i', $part)) continue;
+            if (is_numeric($part)) continue;
+            if (strlen($part) < 2) continue;
+            $lowerPart = strtolower($part);
+            if (in_array($lowerPart, ['video', 'videos', 'm3u8', 'movie', 'tv', 'play', 'player'])) continue;
+            $candidates[] = $part;
+        }
+        if (!empty($candidates)) {
+            $title = trim(preg_replace('/[_-]+/', ' ', $candidates[0]));
+            if (!empty($title)) {
+                if (preg_match('/^[a-z\s]+$/i', $title)) return ucwords($title);
+                return $title;
+            }
+        }
+        return $host ?: '在线视频';
+    }
+    $title = trim(preg_replace('/[_-]+/', ' ', $fileNameWithoutExt));
+    $title = trim(preg_replace('/\s*\d+\s*$/', '', $title));
+    if (empty($title) || strlen($title) < 2) {
+        $dirParts = array_slice($pathParts, 0, -1);
+        foreach (array_reverse($dirParts) as $part) {
+            if (preg_match('/^[a-f0-9]{8,}$/i', $part)) continue;
+            if (is_numeric($part)) continue;
+            if (strlen($part) < 2) continue;
+            if (in_array(strtolower($part), ['video', 'videos', 'm3u8', 'movie', 'tv'])) continue;
+            $title = trim(preg_replace('/[_-]+/', ' ', $part));
+            if (!empty($title)) {
+                if (preg_match('/^[a-z\s]+$/i', $title)) return ucwords($title);
+                return $title;
+            }
+        }
+        return $host ?: '在线视频';
+    }
+    if (preg_match('/^[a-z\s]+$/i', $title)) return ucwords($title);
+    return $title;
+}
+
+function mxf_extract_episode_from_url($url) {
+    $parsed = parse_url($url);
+    $path = $parsed['path'] ?? '';
+    if (empty($path)) return '正片';
+    $pathParts = array_values(array_filter(explode('/', $path), function($v) { return !empty($v); }));
+    foreach (array_reverse($pathParts) as $part) {
+        $part = preg_replace('/\.(m3u8|mp4|mkv|avi|mov|flv|ts|html?)$/i', '', $part);
+        if (preg_match('/第(\d+)[集期话]/u', $part, $m)) return '第' . $m[1] . '集';
+        if (preg_match('/(?:episode|ep|e)[_\-]?(\d+)/i', $part, $m)) return '第' . intval($m[1]) . '集';
+        if (preg_match('/^(\d+)$/', $part, $m)) {
+            $num = intval($m[1]);
+            if ($num > 0 && $num < 1000) return '第' . $num . '集';
+        }
+        if (preg_match('/[_\-](\d+)$/', $part, $m)) {
+            $num = intval($m[1]);
+            if ($num > 0 && $num < 1000) {
+                $prefix = preg_replace('/[_\-]\d+$/', '', $part);
+                if (empty($prefix) || in_array(strtolower($prefix), ['episode', 'ep', 'e'])) return '第' . $num . '集';
+            }
+        }
+    }
+    return '正片';
+}
+
+function mxf_load_fallback_config() {
+    global $rootDir, $useDb, $db;
+    $default = [
+        'enabled' => true,
+        'lines' => [
+            [
+                'id' => 'fb_moxi_1',
+                'name' => '沫兮兜底 1',
+                'url' => 'https://mxqcb.ssmhd.com/api/clean/?url=',
+                'enabled' => true,
+                'sort' => 1,
+            ],
+        ],
+        'update_date' => date('Y-m-d H:i:s'),
+    ];
+    if ($useDb && !empty($db)) {
+        try {
+            $row = $db->queryOne('SELECT config_value FROM sys_config WHERE config_key = ?', ['fallback_lines']);
+            if ($row && !empty($row['config_value'])) {
+                $cfg = json_decode($row['config_value'], true);
+                if (is_array($cfg)) return array_merge($default, $cfg);
+            }
+        } catch (Throwable $e) {}
+    }
+    $file = $rootDir . '/gz/fallback_config.php';
+    if (file_exists($file)) {
+        $cfg = @include $file;
+        if (is_array($cfg)) return array_merge($default, $cfg);
+    }
+    return $default;
+}
+
+function mxf_save_fallback_config($config) {
+    global $rootDir, $useDb, $db;
+    $config['update_date'] = date('Y-m-d H:i:s');
+    if ($useDb && !empty($db)) {
+        try {
+            $json = json_encode($config, JSON_UNESCAPED_UNICODE);
+            $exists = $db->queryOne('SELECT id FROM sys_config WHERE config_key = ?', ['fallback_lines']);
+            if ($exists) {
+                $db->update('sys_config', ['config_value' => $json, 'description' => '去插播兜底线路配置'], 'config_key = ?', ['fallback_lines']);
+            } else {
+                $db->insert('sys_config', ['config_key' => 'fallback_lines', 'config_value' => $json, 'description' => '去插播兜底线路配置']);
+            }
+            return true;
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+    $file = $rootDir . '/gz/fallback_config.php';
+    $dir = dirname($file);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    $content = '<?php' . "\n"
+        . '/**' . "\n"
+        . ' * 去插播兜底线路配置（由后台「沫兮API」页面自动维护）' . "\n"
+        . ' * 更新时间: ' . $config['update_date'] . "\n"
+        . ' *' . "\n"
+        . ' * 配置项说明：' . "\n"
+        . ' *   - enabled: 全局开关（关闭后走原有官替/官解链路）' . "\n"
+        . ' *   - lines:   兜底线路列表，取第一条启用的线路生效' . "\n"
+        . ' *     - name:  线路名称' . "\n"
+        . ' *     - url:   接口地址模板，占位参数 url= 会自动拼接要清洗的资源地址' . "\n"
+        . ' */' . "\n"
+        . 'return ' . var_export($config, true) . ";\n";
+    return @file_put_contents($file, $content) !== false;
+}
+
+function mxf_get_active_fallback_line() {
+    $cfg = mxf_load_fallback_config();
+    if (empty($cfg['enabled'])) return null;
+    $lines = $cfg['lines'] ?? [];
+    if (!is_array($lines) || empty($lines)) return null;
+    usort($lines, function($a, $b) {
+        return intval($a['sort'] ?? 0) <=> intval($b['sort'] ?? 0);
+    });
+    foreach ($lines as $line) {
+        if (!empty($line['enabled']) && !empty($line['url'])) return $line;
+    }
+    return null;
+}
+
+/**
+ * 调用兜底接口清洗指定 m3u8 地址
+ * @return array ['success'=>bool,'play_url'=>...,'api_url'=>...,'http_code'=>...,'content_type'=>...]
+ */
+function mxf_call_fallback_line($line, $m3u8Url) {
+    $template = trim((string)($line['url'] ?? ''));
+    $template = rtrim($template, '?&');
+    if (empty($template)) {
+        return ['success' => false, 'message' => '兜底线路 URL 为空'];
+    }
+    if (empty($m3u8Url)) {
+        return ['success' => false, 'message' => '缺少要清洗的资源地址'];
+    }
+    $sep = strpos($template, '?') !== false ? '&' : '?';
+    $apiUrl = $template . $sep . 'url=' . urlencode($m3u8Url);
+
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => $apiUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 5,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_USERAGENT      => 'M3U8-Fallback/1.0 (MXGT)',
+        CURLOPT_HTTPHEADER     => [
+            'Accept: application/json, text/plain, */*',
+        ],
+    ]);
+    $body = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    curl_close($ch);
+
+    if ($body === false || $httpCode >= 400) {
+        return ['success' => false, 'message' => '兜底接口请求失败(HTTP ' . $httpCode . ')'];
+    }
+
+    // 默认：接口本身即播放地址（返回 m3u8 文本时直接喂给播放器）
+    $playUrl = $apiUrl;
+    $json = json_decode($body, true);
+    if (is_array($json)) {
+        // 业务错误码（如 {"code":404,"msg":"非本站资源"}）视为失败，走原有链路回退
+        if (isset($json['code']) && (is_int($json['code']) || is_string($json['code'])) && is_numeric($json['code'])) {
+            $codeInt = intval($json['code']);
+            if (!in_array($codeInt, [0, 1, 200], true)) {
+                $errMsg = isset($json['msg']) ? (string)$json['msg'] : ('兜底接口返回 code=' . $json['code']);
+                return ['success' => false, 'message' => $errMsg, 'api_url' => $apiUrl, 'http_code' => $httpCode];
+            }
+        }
+        foreach (['play_url', 'url', 'm3u8_url', 'm3u8', 'real_url', 'realurl', 'result', 'data'] as $key) {
+            $val = $json[$key] ?? null;
+            if (is_string($val) && preg_match('#^https?://#i', trim($val))) {
+                $playUrl = trim($val);
+                break;
+            }
+            if (is_array($val)) {
+                foreach (['url', 'play_url', 'm3u8_url', 'm3u8', 'real_url'] as $sub) {
+                    if (isset($val[$sub]) && is_string($val[$sub]) && preg_match('#^https?://#i', trim($val[$sub]))) {
+                        $playUrl = trim($val[$sub]);
+                        break 2;
+                    }
+                }
+            }
+        }
+    }
+
+    return [
+        'success' => true,
+        'play_url' => $playUrl,
+        'api_url' => $apiUrl,
+        'http_code' => $httpCode,
+        'content_type' => $contentType,
+    ];
+}
+
+/**
+ * 兜底线路解析流程：官方资源 → 访问获取剧名/剧集 → 资源站搜索 → 用搜索到的链接跑兜底接口
+ * @return array|null 未启用兜底线路时返回 null
+ */
+function mxf_parse_official_fallback($url, $selfUrl, $siteManager) {
+    $line = mxf_get_active_fallback_line();
+    if (!$line) return null;
+
+    // ① 先访问官方资源，获取影视剧名和剧集
+    $videoTitle = '';
+    $episode = '';
+    $videoInfo = null;
+    try {
+        $pt = PtManager::getInstance();
+        $adapter = $pt->detectAdapter($url);
+        if ($adapter) {
+            $videoIds = $adapter->extractVideoId($url);
+            $videoInfo = $adapter->fetchVideoInfo($url, $videoIds);
+            if (!empty($videoInfo['title'])) {
+                $cleaned = $adapter->cleanTitle($videoInfo['title']);
+                $videoTitle = !empty($cleaned) ? $cleaned : $videoInfo['title'];
+            }
+            if (!empty($videoInfo['episode_info']['episode_name'])) {
+                $episode = $videoInfo['episode_info']['episode_name'];
+            } elseif (!empty($videoInfo['episode_info']['episode_num'])) {
+                $episode = '第' . intval($videoInfo['episode_info']['episode_num']) . '集';
+            } elseif (!empty($videoInfo['episode_num'])) {
+                $episode = '第' . intval($videoInfo['episode_num']) . '集';
+            }
+        }
+    } catch (Throwable $e) {}
+    if (empty($videoTitle)) $videoTitle = mxf_extract_title_from_url($url);
+    if (empty($episode)) $episode = mxf_extract_episode_from_url($url);
+
+    // ② 去资源站搜索
+    $searchUrl = '';
+    if ($siteManager && !empty($videoTitle)) {
+        try {
+            $searchResult = $siteManager->searchAllSites($videoTitle, 5, 5);
+            if (!empty($searchResult['success']) && !empty($searchResult['results'])) {
+                $bestMatch = null;
+                $bestScore = 0;
+                foreach ($searchResult['results'] as $siteResult) {
+                    if (empty($siteResult['videos'])) continue;
+                    foreach ($siteResult['videos'] as $video) {
+                        $videoName = $video['name'] ?? '';
+                        if (empty($videoName)) continue;
+                        similar_text($videoTitle, $videoName, $score);
+                        if ($score > $bestScore) {
+                            $bestScore = $score;
+                            $bestMatch = $video;
+                        }
+                    }
+                }
+                if ($bestMatch) {
+                    $searchUrl = $bestMatch['first_url'] ?? '';
+                    if (empty($searchUrl) && !empty($bestMatch['urls'][0]['url'])) {
+                        $searchUrl = $bestMatch['urls'][0]['url'];
+                    }
+                    if (empty($searchUrl)) $searchUrl = $bestMatch['raw_play_url'] ?? '';
+                    if (!empty($bestMatch['name'])) $videoTitle = $bestMatch['name'];
+                    if (!empty($bestMatch['remarks']) && empty($episode)) $episode = $bestMatch['remarks'];
+                }
+            }
+        } catch (Throwable $e) {}
+    }
+
+    // ③ 用资源搜索到的链接跑兜底接口
+    if (empty($searchUrl)) {
+        return ['success' => false, 'message' => '未在资源站搜索到匹配资源'];
+    }
+    $fb = mxf_call_fallback_line($line, $searchUrl);
+    if (empty($fb['success'])) {
+        return ['success' => false, 'message' => $fb['message'] ?? '兜底接口调用失败'];
+    }
+
+    return [
+        'success' => true,
+        'play_url' => $fb['play_url'],
+        'fallback_api_url' => $fb['api_url'],
+        'video_name' => $videoTitle,
+        'episode' => !empty($episode) ? $episode : '正片',
+        'source_url' => $searchUrl,
+        'fallback' => true,
+        'fallback_name' => $line['name'] ?? '兜底线路',
+    ];
+}
+
 function parse_internal_unified($url, $selfUrl, $parseType = 'parse', $officialReplaceMgr = null, $siteManager = null) {
     $officialDomains = ['v.qq.com', 'iqiyi.com', 'youku.com', 'mgtv.com', 'bilibili.com', 'sohu.com', 'pptv.com'];
     $parsedUrl = parse_url($url);
@@ -485,6 +845,26 @@ function parse_internal_unified($url, $selfUrl, $parseType = 'parse', $officialR
     $code = 200;
     $typeName = '';
     $extra = [];
+
+    // 去插播兜底线路优先：官方资源 → 访问获取剧名/剧集 → 搜索 → 跑兜底接口
+    if ($isOfficialUrl) {
+        $fbResult = mxf_parse_official_fallback($url, $selfUrl, $siteManager);
+        if (!empty($fbResult['success'])) {
+            return [
+                'success' => true,
+                'code' => 200,
+                'message' => '兜底线路解析成功',
+                'type' => 'fallback',
+                'type_name' => '去插播兜底解析',
+                'original_url' => $url,
+                'play_url' => $fbResult['play_url'],
+                'video_name' => $fbResult['video_name'],
+                'is_official' => true,
+                'is_m3u8' => $isM3u8Url,
+                'raw' => $fbResult,
+            ];
+        }
+    }
 
     switch ($parseType) {
         case 'cache':
@@ -3876,6 +4256,46 @@ try {
             sendJsonResponse($result);
             break;
 
+        // ============ 去插播兜底线路配置（后台「沫兮API」页面） ============
+        // 配置文件：gz/fallback_config.php（DB 模式存 sys_config: fallback_lines）
+        case 'fallback/config':
+            sendJsonResponse([
+                'success' => true,
+                'config' => mxf_load_fallback_config()
+            ]);
+            break;
+
+        case 'fallback/config/save':
+            $input = getInputJson();
+            $lines = [];
+            if (!empty($input['lines']) && is_array($input['lines'])) {
+                foreach ($input['lines'] as $i => $line) {
+                    if (!is_array($line)) continue;
+                    $url = trim((string)($line['url'] ?? ''));
+                    if (empty($url)) continue;
+                    $name = trim((string)($line['name'] ?? ''));
+                    $lines[] = [
+                        'id' => !empty($line['id']) ? preg_replace('/[^a-zA-Z0-9_\-]/', '', (string)$line['id']) : ('fb_' . ($i + 1)),
+                        'name' => !empty($name) ? $name : ('兜底线路 ' . ($i + 1)),
+                        'url' => $url,
+                        'enabled' => !empty($line['enabled']),
+                        'sort' => intval($line['sort'] ?? ($i + 1)),
+                    ];
+                }
+            }
+            $config = [
+                'enabled' => !empty($input['enabled']),
+                'lines' => $lines,
+                'update_date' => date('Y-m-d H:i:s'),
+            ];
+            $ok = mxf_save_fallback_config($config);
+            sendJsonResponse([
+                'success' => $ok,
+                'message' => $ok ? '兜底线路配置已保存' : '保存失败（请检查 gz/ 目录可写权限）',
+                'config' => $config
+            ], $ok ? 200 : 400);
+            break;
+
         case 'official_replace/config':
             $config = $officialReplaceMgr->getConfig();
             sendJsonResponse([
@@ -4132,6 +4552,30 @@ try {
             }
             @set_time_limit(120);
             try {
+                // 去插播兜底线路优先
+                $fbResult = mxf_parse_official_fallback($url, '', $siteManager);
+                if (!empty($fbResult['success'])) {
+                    sendJsonResponse([
+                        'success' => true,
+                        'platform' => $fbResult['fallback_name'] ?? '兜底线路',
+                        'original_url' => $url,
+                        'video_title' => $fbResult['video_name'] ?? '',
+                        'video_name' => $fbResult['video_name'] ?? '',
+                        'm3u8_url' => $fbResult['play_url'] ?? '',
+                        'target_episode' => $fbResult['episode'] ?? '正片',
+                        'match_score' => 100,
+                        'site' => $fbResult['fallback_name'] ?? '兜底线路',
+                        'all_urls' => [],
+                        'episodes' => 1,
+                        'base_title' => $fbResult['video_name'] ?? '',
+                        'used_keyword' => $fbResult['video_name'] ?? '',
+                        'match_method' => 'fallback_line',
+                        'fallback' => true,
+                        'fallback_name' => $fbResult['fallback_name'] ?? '兜底线路',
+                        'source_url' => $fbResult['source_url'] ?? '',
+                    ]);
+                    break;
+                }
                 $result = $officialReplaceMgr->resolve($url);
             } catch (Throwable $e) {
                 $result = ['success' => false, 'message' => '解析异常: ' . $e->getMessage()];
@@ -4151,6 +4595,38 @@ try {
             }
             @set_time_limit(120);
             try {
+                // 去插播兜底线路优先：访问官方资源 → 搜索 → 跑兜底接口
+                $fbResult = mxf_parse_official_fallback($url, '', $siteManager);
+                if (!empty($fbResult['success'])) {
+                    $fbName = $fbResult['fallback_name'] ?? '兜底线路';
+                    sendJsonResponse([
+                        'success' => true,
+                        'platform' => $fbName,
+                        'original_url' => $url,
+                        'video_title' => $fbResult['video_name'] ?? '',
+                        'video_name' => $fbResult['video_name'] ?? '',
+                        'video_pic' => '',
+                        'video_remarks' => $fbResult['episode'] ?? '',
+                        'match_score' => 100,
+                        'site' => $fbName,
+                        'm3u8_url' => $fbResult['source_url'] ?? '',
+                        'target_episode' => $fbResult['episode'] ?? '正片',
+                        'ad_skip_url' => $fbResult['play_url'] ?? '',
+                        'all_urls' => [],
+                        'episodes' => 1,
+                        'base_title' => $fbResult['video_name'] ?? '',
+                        'episode_num' => null,
+                        'used_keyword' => $fbResult['video_name'] ?? '',
+                        'match_method' => 'fallback_line',
+                        'total_ms' => null,
+                        'timestamp' => time(),
+                        'step_trace' => ['去插播兜底线路「' . $fbName . '」清洗: ' . ($fbResult['source_url'] ?? '')],
+                        'fallback' => true,
+                        'fallback_name' => $fbName,
+                        'source_url' => $fbResult['source_url'] ?? '',
+                    ]);
+                    break;
+                }
                 $result = $officialReplaceMgr->resolve($url);
             } catch (Throwable $e) {
                 $result = ['success' => false, 'message' => '解析异常: ' . $e->getMessage()];
@@ -4608,27 +5084,36 @@ try {
             };
             
             if ($isOfficialUrl) {
-                $result = $officialReplaceMgr->resolve($url);
-                if ($result['success']) {
-                    $m3u8Url = $result['m3u8_url'] ?? '';
-                    $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($m3u8Url);
-                    $juMing = $result['video_title'] ?? '';
-                    $jiShu = $result['target_episode'] ?? ($result['episode'] ?? '');
-                    if (empty($jiShu)) {
-                        $jiShu = '正片';
-                    }
+                // 去插播兜底线路优先：访问官方资源 → 搜索 → 跑兜底接口
+                $fbResult = mxf_parse_official_fallback($url, $selfUrl, $siteManager);
+                if (!empty($fbResult['success'])) {
+                    $playUrl = $fbResult['play_url'];
+                    $juMing = $fbResult['video_name'] ?? '';
+                    $jiShu = $fbResult['episode'] ?? '正片';
+                    $msg = '沫兮兜底解析成功';
                 } else {
-                    $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($url);
-                    $juMing = $result['video_title'] ?? '';
-                    if (empty($juMing)) {
-                        $juMing = $extractTitleFromUrl($url);
+                    $result = $officialReplaceMgr->resolve($url);
+                    if ($result['success']) {
+                        $m3u8Url = $result['m3u8_url'] ?? '';
+                        $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($m3u8Url);
+                        $juMing = $result['video_title'] ?? '';
+                        $jiShu = $result['target_episode'] ?? ($result['episode'] ?? '');
+                        if (empty($jiShu)) {
+                            $jiShu = '正片';
+                        }
+                    } else {
+                        $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($url);
+                        $juMing = $result['video_title'] ?? '';
+                        if (empty($juMing)) {
+                            $juMing = $extractTitleFromUrl($url);
+                        }
+                        $jiShu = $result['episode'] ?? '';
+                        if (empty($jiShu)) {
+                            $jiShu = $extractEpisodeFromUrl($url);
+                        }
+                        $code = 200;
+                        $msg = '解析成功';
                     }
-                    $jiShu = $result['episode'] ?? '';
-                    if (empty($jiShu)) {
-                        $jiShu = $extractEpisodeFromUrl($url);
-                    }
-                    $code = 200;
-                    $msg = '解析成功';
                 }
             } else {
                 $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($url);
@@ -6401,6 +6886,8 @@ try {
                     'ai_autolearn/sites' => '查看生效资源站列表',
                     'official_replace/config' => '官替配置',
                     'official_replace/config/save' => '保存官替配置',
+                    'fallback/config' => '去插播兜底线路-获取配置',
+                    'fallback/config/save' => '去插播兜底线路-保存配置',
                     'official_replace/platforms' => '官替平台列表',
                     'official_replace/platform/add' => '添加官替平台',
                     'official_replace/platform/update' => '更新官替平台',

@@ -1,13 +1,26 @@
 <?php
 return array (
-  'version' => 'v5.14.9',
+  'version' => 'v5.15.0',
   'branch' => 'main',
-  'build' => '20260907-v5-14-9-release',
-  'version_code' => 51409,
-  'commit' => 'v5.14.9-release',
+  'build' => '20260907-v5-15-0-release',
+  'version_code' => 51500,
+  'commit' => 'v5.15.0-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.15.0' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【去插播兜底线路 + M3U8测试播放修复】设置可配置多条兜底清洗线路（默认沫兮兜底 1），官方资源优先走 访问→搜索→跑兜底接口 链路；解析测试过滤后播放改用绝对地址 M3U8 文本并逐片段实时跟随',
+      'changes' =>
+      array (
+        0 => '【新增-兜底线路】后台「沫兮API」页新增「去插播兜底线路」设置：可增删多条线路（名称+接口地址模板+启停开关+全局开关），默认内置「沫兮兜底 1 https://mxqcb.ssmhd.com/api/clean/?url=」，DB 模式存 sys_config(fallback_lines)、文件模式存 gz/fallback_config.php，新增 fallback/config 与 fallback/config/save 接口',
+        1 => '【新增-解析链路】启用兜底后，输入官方资源（腾讯/爱奇艺/优酷/芒果/B站/搜狐/PP）自动走：①先访问官方页面通过 pt 平台适配器获取剧名+剧集（失败回退 URL 推断）→ ②资源站搜索匹配最佳片源 → ③用搜索到的链接调用兜底接口清洗 → ④返回清洗后播放地址；接口兼容 json 返回 url/play_url/m3u8_url 等字段，业务错误码（如 code=404 非本站资源）自动识别并优雅回退到原有官替/官解链路；已接入 moxi / parse(统一入口) / official_replace resolve+info 四条入口',
+        3 => '【修复-解析测试播放】M3U8 解析测试页「播放过滤后」不再用片段手拼 M3U8（相对地址在 Blob 场景无法解析导致报错黑屏），改用后端已生成的绝对地址 filtered_m3u8 文本播放，保留 EXT-X-KEY/EXT-X-MAP 等全部标签，加密/地图片段也能正常播放',
+        4 => '【修复-实时跟随】片段跟随播放改为双通道：hls.js FRAG_CHANGED 逐片段精确高亮（比 timeupdate 更准）+ timeupdate 平滑补充；修复重复绑定监听器导致 timeupdate 多次触发的问题',
+        5 => '【验证】php -l mx.php/mxadmin.php 全部通过；本地实测 fallback/config 读写、官方资源兜底链路超时优雅回退官替、parse_test 返回绝对地址与完整过滤文本、JS 内联脚本 node --check 通过',
+      ),
+    ),
     'v5.14.9' =>
     array (
       'date' => '2026-09-07',

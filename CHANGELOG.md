@@ -1,5 +1,34 @@
 # 更新日志
 
+## v5.15.0 (2026-09-07) — 去插播兜底线路 + M3U8测试播放修复
+
+### 可配置多条兜底清洗线路（默认沫兮兜底 1），官方资源优先走「访问→搜索→跑兜底接口」；解析测试过滤后播放与实时跟随修复
+
+> 设置中新增「去插播兜底线路」，可增删多条接口地址模板；启用后输入官方资源自动先访问获取剧名/剧集、再资源站搜索、用搜索到的链接跑兜底接口返回清洗结果。同时修复 M3U8 解析测试「播放过滤后视频报错图片、片段不能跟随播放实时切换」两个问题。
+
+#### 1. 去插播兜底线路（[mx.php](file:///workspace/mx.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+
+- **设置入口**：后台「沫兮 API」页新增「去插播兜底线路」卡片：全局开关 + 线路列表（名称 / 接口地址模板 / 启停 / 删除 / ➕添加），默认内置「沫兮兜底 1 `https://mxqcb.ssmhd.com/api/clean/?url=`」；
+- **配置存储**：DB 模式存 `sys_config`（`fallback_lines`），文件模式存 `gz/fallback_config.php`；新增接口 `fallback/config`（读）与 `fallback/config/save`（写）；
+- **解析链路**：启用后输入官方资源（腾讯/爱奇艺/优酷/芒果/B站/搜狐/PP）自动走：
+  1. **先访问**：通过 pt 平台适配器（TencentVideo/Iqiyi/Youku/Mgtv/Bilibili/Sohu Adapter）访问官方页面，提取**影视剧名**与**剧集**（失败回退 URL 推断）；
+  2. **去搜索**：用剧名在资源站全站搜索，`similar_text` 取最佳匹配片源；
+  3. **跑兜底接口**：取搜索到的 m3u8 链接，拼接到兜底线路接口（`接口地址 + url=` 参数）调用清洗；
+  4. **返回结果**：兼容 JSON 返回 `url/play_url/m3u8_url` 等字段；业务错误码（如 `code=404 非本站资源`）自动识别并**优雅回退**到原有官替/官解链路；
+- **接入入口**：`moxi`（沫兮API）、`parse`（统一解析入口）、`official_replace/resolve`、`official_replace/info` 四条入口全部支持。
+
+#### 2. M3U8 解析测试播放修复（[mxadmin.php](file:///workspace/mxadmin.php)）
+
+- **报错图片修复**：「播放过滤后」不再用片段手拼 M3U8（相对地址在 Blob 场景无法解析 → 报错黑屏），改用后端已生成的**绝对地址 `filtered_m3u8` 文本**播放，保留 `EXT-X-KEY` / `EXT-X-MAP` 等全部标签，加密 / 地图片段同样可播；
+- **实时跟随修复**：新增 hls.js `FRAG_CHANGED` 事件**逐片段精确高亮**（比 timeupdate 更准）+ timeupdate 平滑补充；修复重复绑定监听器导致 timeupdate 多次触发的问题。
+
+#### 3. 验证
+
+- `php -l mx.php / mxadmin.php` 全部通过；
+- 本地实测：`fallback/config` 读写正常；官方资源兜底链路在网络不通时优雅回退官替；`parse_test` 返回绝对地址与完整过滤文本（原相对 `uri` + 绝对 `absUri` 同时存在）；内联 JS `node --check` 全部通过。
+
+---
+
 ## v5.14.9 (2026-09-07) — 沫兮去广告链接播放修复 + 官替优化
 
 ### 无广告链接可播放（JSON 守卫修复 + 跨域）、官替相对地址绝对化
