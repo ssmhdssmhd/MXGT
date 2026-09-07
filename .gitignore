@@ -90,3 +90,26 @@ gz/ai_auto_learn_dedup.php
 gz/ai_auto_learn_logs.php
 gz/rules_*.php
 !gz/rules_example.php
+
+# ===== 后台/在线 HTML 分享打包缓存（自动生成）=====
+.trae-html-share-packages/
+
+# ===== 临时/测试/诊断/备份文件 =====
+*.bak
+*.old
+*.orig
+*~
+tmp/
+temp/
+*.tmp
+backups/
+test_*.php
+test_*
+_*.php
+_diag*
+_probe*
+_e2e*
+_build*
+_run_orm*
+_setup*
+!index.php

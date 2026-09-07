@@ -1,5 +1,43 @@
 # 更新日志
 
+## v5.14.0 (2026-09-07) — UI 重构
+
+### 后台整体推倒重写视觉层：深紫→洋红渐变 + 玻璃拟态（Glassmorphism）
+
+> 参照视觉稿对 `mxadmin.php` 后台外观做整体重写（皮肤层），业务逻辑零改动。
+
+#### 1. 视觉层改动（[mxadmin.php](file:///workspace/mxadmin.php) 新增 GlassSkin v6 覆盖 <style>）
+
+| 模块 | 效果 |
+|------|------|
+| 页面背景 | 浅色 → `#581c87→#7e22ce→#a21caf→#c026d3` 135° 渐变，`background-attachment: fixed` 固定滚动 |
+| 侧边栏 `.sidebar` | 半透明白玻璃 `rgba(255,255,255,0.10)` + `backdrop-filter: blur(20px) saturate(160%)`，右缘半透明分隔线 |
+| Logo `.sidebar-logo h2` | 白色→浅紫→紫 渐变文字；副标题白色 70% 透明度 |
+| 菜单分组 `.menu-group` | 玻璃化 + 悬停紫色柔影；分组标题半透明白字 |
+| 菜单项 `.nav-item` | 白字 85% 透明度；激活项 `#a855f7→#d946ef` 紫粉渐变胶囊 + 发光阴影 + 白左边线 |
+| 顶部栏 `.header` | 毛玻璃 `blur(18px)` + 底部渐变光带，移除原实色渐变条 |
+| 卡片 `.card` | 半透明白玻璃 `blur(16px)` + 圆角 18px + 紫色柔和投影；悬停抬升 |
+| 数值卡 `.stat-card` | 同玻璃化 + 左侧色条改六色渐变（success/danger/warning/purple/info/pink） |
+| 主按钮 `.btn-primary` | 紫粉渐变 + 紫色光晕 + 悬停增强 |
+| 表格表头 `thead th` | 紫→粉渐变白字 |
+| 输入框 / Toast | 玻璃化圆角、紫边聚焦、柔和阴影 |
+
+#### 2. 兼容性保证
+
+- 仅新增覆盖式 CSS，**不改动任何页面 DOM 结构与业务 JS**，21 个功能页面全部保留；
+- 背景图模式（`body.bg-image-mode`）自动叠加紫色半透明蒙层，保持统一观感。
+
+#### 3. 仓库清理（[.gitignore](file:///workspace/.gitignore)）
+
+新增忽略规则：`.trae-html-share-packages/`、`*.bak`、`test_*`、`_diag*`、`_probe*`、`_e2e*`、`_build*`、`_run_orm*`、`_setup*` 等测试/诊断/备份临时文件，避免污染仓库。
+
+#### 4. 验证
+
+- `php -l mxadmin.php` / `php -l version.php` → 全部 `No syntax errors detected`
+- 本地 `php -S` → `GET /mxadmin.php` HTTP 200，GlassSkin 皮肤层与页面结构正常加载
+
+---
+
 ## v5.13.3 (2026-08-14) — Hotfix
 
 ### 虾米官解替换为新地址 https://jx.xmflv.cc/?url=&ref= + 新增 HTML播放器接口类型 + {url}/{ref}/{origin}/{ts}/{t} 占位符 + Cloudflare WAF 403 兼容

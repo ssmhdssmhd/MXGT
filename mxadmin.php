@@ -2738,6 +2738,172 @@ if (!$_mxGXSecret) {
             }
         }
 
+        /* ==========================================================
+           GlassSkin v6 (推倒重写视觉层)
+           风格：深紫→洋红渐变背景 + 玻璃拟态 (Glassmorphism)
+           方式：覆盖所有布局/卡片/导航/数值卡，不改动页面结构与 JS
+           ========================================================== */
+        body {
+            background: linear-gradient(135deg, #581c87 0%, #7e22ce 35%, #a21caf 70%, #c026d3 100%) !important;
+            background-attachment: fixed !important;
+        }
+        body.bg-image-mode {
+            background: linear-gradient(135deg,
+                rgba(88,28,135,0.55) 0%,
+                rgba(126,34,206,0.5) 35%,
+                rgba(162,28,175,0.5) 70%,
+                rgba(192,38,211,0.55) 100%),
+                url('') center/cover fixed !important;
+        }
+        body.bg-image-mode::before { background: none; }
+
+        /* 侧边栏：半透明白色毛玻璃 */
+        .sidebar {
+            background: rgba(255,255,255,0.10) !important;
+            backdrop-filter: blur(20px) saturate(160%);
+            -webkit-backdrop-filter: blur(20px) saturate(160%);
+            border-right: 1px solid rgba(255,255,255,0.18) !important;
+        }
+        .sidebar-logo {
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+        }
+        .sidebar-logo h2 {
+            background: linear-gradient(135deg, #ffffff 0%, #f0abfc 60%, #a855f7 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 20px;
+        }
+        .sidebar-logo p {
+            color: rgba(255,255,255,0.70) !important;
+        }
+        .menu-group {
+            background: rgba(255,255,255,0.08) !important;
+            border: 1px solid rgba(255,255,255,0.14) !important;
+            backdrop-filter: blur(10px) saturate(140%);
+            -webkit-backdrop-filter: blur(10px) saturate(140%);
+        }
+        .menu-group:hover {
+            border-color: rgba(255,255,255,0.28) !important;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+        }
+        .menu-group-title {
+            color: rgba(255,255,255,0.60) !important;
+            background: rgba(255,255,255,0.06) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.10);
+        }
+        .nav-item {
+            color: rgba(255,255,255,0.85) !important;
+            border-left: 3px solid transparent;
+        }
+        .nav-item + .nav-item {
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .nav-item:hover {
+            color: #ffffff !important;
+            background: rgba(255,255,255,0.14) !important;
+            border-left-color: rgba(255,255,255,0.6) !important;
+        }
+        .nav-item.active {
+            color: #ffffff !important;
+            background: linear-gradient(135deg, #a855f7 0%, #d946ef 100%) !important;
+            border-left-color: #ffffff !important;
+            box-shadow: 0 4px 16px rgba(192,38,211,0.5);
+        }
+        .sidebar-footer {
+            border-top: 1px solid rgba(255,255,255,0.15);
+        }
+        .sidebar-version {
+            color: rgba(255,255,255,0.65) !important;
+        }
+
+        /* 顶部栏：毛玻璃 + 渐变光带 */
+        .header {
+            background: rgba(255,255,255,0.10) !important;
+            backdrop-filter: blur(18px) saturate(160%);
+            -webkit-backdrop-filter: blur(18px) saturate(160%);
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+            box-shadow: 0 6px 24px rgba(0,0,0,0.20);
+        }
+        .header::before {
+            background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+        }
+
+        /* 主内容容器 */
+        .container { padding: 30px; }
+
+        /* 卡片：玻璃拟态 */
+        .card {
+            background: rgba(255,255,255,0.72) !important;
+            backdrop-filter: blur(16px) saturate(150%);
+            -webkit-backdrop-filter: blur(16px) saturate(150%);
+            border: 1px solid rgba(255,255,255,0.65) !important;
+            box-shadow: 0 10px 30px rgba(76,0,153,0.18) !important;
+            border-radius: 18px !important;
+        }
+        .card:hover {
+            box-shadow: 0 16px 40px rgba(76,0,153,0.28) !important;
+        }
+        .card-title { color: var(--text-primary) !important; }
+
+        /* 数值卡：彩色渐变 */
+        .stat-card {
+            background: rgba(255,255,255,0.78) !important;
+            backdrop-filter: blur(16px) saturate(150%);
+            -webkit-backdrop-filter: blur(16px) saturate(150%);
+            border: 1px solid rgba(255,255,255,0.65) !important;
+            border-radius: 18px !important;
+            box-shadow: 0 10px 30px rgba(76,0,153,0.15) !important;
+        }
+        .stat-card:hover {
+            transform: translateY(-3px) !important;
+            box-shadow: 0 16px 40px rgba(76,0,153,0.28) !important;
+        }
+        .stat-card.success::before { background: linear-gradient(180deg, #34d399, #059669) !important; }
+        .stat-card.danger::before  { background: linear-gradient(180deg, #f87171, #dc2626) !important; }
+        .stat-card.warning::before{ background: linear-gradient(180deg, #fbbf24, #d97706) !important; }
+        .stat-card.purple::before { background: linear-gradient(180deg, #c084fc, #9333ea) !important; }
+        .stat-card.info::before   { background: linear-gradient(180deg, #38bdf8, #0284c7) !important; }
+        .stat-card.pink::before   { background: linear-gradient(180deg, #f472b6, #db2777) !important; }
+        .stat-icon {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        /* 按钮：渐变 + 玻璃 */
+        .btn-primary {
+            background: linear-gradient(135deg, #a855f7 0%, #d946ef 100%) !important;
+            box-shadow: 0 6px 18px rgba(168,85,247,0.4);
+        }
+        .btn-primary:hover {
+            box-shadow: 0 8px 24px rgba(217,70,239,0.5) !important;
+        }
+
+        /* 页头 */
+        .page-header { color: #ffffff; }
+        .page-title { color: #ffffff; text-shadow: 0 1px 8px rgba(0,0,0,0.2); }
+        .page-subtitle { color: rgba(255,255,255,0.75) !important; }
+
+        /* 输入框随卡片玻璃化 */
+        .input-group input, .form-control, .form-group input, .form-group select, textarea {
+            background: rgba(255,255,255,0.85) !important;
+            border-color: rgba(147,51,234,0.2) !important;
+        }
+        .input-group input:focus { border-color: #a855f7 !important; }
+
+        /* 表格头渐变 */
+        .rules-table thead th, table thead th {
+            background: linear-gradient(135deg, #9333ea 0%, #c026d3 100%) !important;
+            color: #ffffff !important;
+        }
+
+        /* Toast 玻璃 */
+        .toast {
+            backdrop-filter: blur(12px) saturate(150%);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25) !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
     </style>
 </head>
 <body>

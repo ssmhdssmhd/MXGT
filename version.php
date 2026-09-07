@@ -1,13 +1,29 @@
 <?php
 return array (
-  'version' => 'v5.13.11',
+  'version' => 'v5.14.0',
   'branch' => 'main',
-  'build' => '20260907-v5-13-11-ads-free-url-and-ad-tags',
-  'version_code' => 51311,
-  'commit' => 'v5.13.11-fix-adfilter-ad-free-link-and-ad-tag/subtitle-depth',
+  'build' => '20260907-v5-14-0-glassmorphism-admin-skin',
+  'version_code' => 51400,
+  'commit' => 'v5.14.0-glassmorphism-purple-gradient-admin-redesign',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.14.0' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【后台整体推倒重写视觉层】深紫→洋红渐变背景 + 玻璃拟态 (Glassmorphism) 现代后台外观',
+      'changes' =>
+      array (
+        0 => '【视觉重写】mxadmin.php 新增 GlassSkin v6 覆盖皮肤层：body 由浅色改为 深紫(#581c87)→紫(#7e22ce)→紫红(#a21caf)→洋红(#c026d3) 135° 渐变背景并固定滚动',
+        1 => '【侧边栏】半透明白色毛玻璃 (rgba(255,255,255,0.10) + backdrop-filter blur 20px)，Logo 渐变文字，菜单分组玻璃化，激活项改为 紫→粉 渐变胶囊 + 发光阴影',
+        2 => '【顶部栏】毛玻璃 + 柔和径向高光，底部渐变光带分隔，视觉与内容区一体化',
+        3 => '【卡片/数值卡】全属性半透明白玻璃 (blur 16px)，圆角 18px，紫色柔和投影；数值卡左侧色条改为六色渐变，悬停抬升',
+        4 => '【按钮/表格/输入/Toast】主按钮改紫粉渐变 + 紫色光晕；表格表头紫→粉渐变白字；输入框、Toast 玻璃化圆角',
+        5 => '【兼容】不改动任何页面结构与业务 JS，21 个页面全部保留原功能；背景图模式自动叠加紫色半透明蒙层保持统一观感',
+        6 => '【仓库清理】.gitignore 新增忽略：.trae-html-share-packages/ 打包缓存、*.bak/旧备份、test_*/_diag*/_probe*/_e2e*/_build* 等测试/诊断/临时文件，避免污染仓库',
+        7 => '【lint 通过】php -l mxadmin.php → No syntax errors detected；本地 php -S 返回 HTTP 200，GlassSkin 皮肤层与 22 个页面结构加载正常',
+      ),
+    ),
     'v5.13.11' =>
     array (
       'date' => '2026-09-07',
