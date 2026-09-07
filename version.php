@@ -1,13 +1,27 @@
 <?php
 return array (
-  'version' => 'v5.15.1',
+  'version' => 'v5.15.2',
   'branch' => 'main',
-  'build' => '20260907-v5-15-1-release',
-  'version_code' => 51501,
-  'commit' => 'v5.15.1-release',
+  'build' => '20260907-v5-15-2-admonitor-placeholder',
+  'version_code' => 51502,
+  'commit' => 'v5.15.2-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.15.2' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【去广告实时监控防误删 + 占位模式 + 更新提示修复】监控版本 v5.15.2.0001；M3U8 去广告改用等时长黑屏占位不删段，解决卡顿跳画面；误删反馈进保护名单自动还原；版本更新提示同版本只弹一次',
+      'changes' =>
+      array (
+        0 => '【新增-实时监控】新增 gz/AdMonitor.php 去广告实时监控：记录每次去广告处理（总段/删除/占比/守护/命中规则/删除索引与URI快照），自动识别高危/可疑删除（高占比/全部删除/零散删除/守护触发）；新增 monitor/status、monitor/list、monitor/feedback、monitor/protected、monitor/protected/add、monitor/protected/remove、monitor/reset 7 个接口；后台新增「去广告监控」页面（统计概览+记录列表+误删反馈+规则误报+保护名单管理）',
+        1 => '【新增-监控版本】监控版本 = 应用版本 + 三位数字计数（v5.15.2.0001），应用升级自动跟随前缀；后台「重置监控数据」递增计数（0001→0002…），保护名单与记录同步清空',
+        2 => '【新增-占位模式】mxjx 新增 ph=1 占位模式、parse_test 过滤后输出默认占位：广告段不再删除，改为等时长黑屏静音占位 TS（复用 placeholder_ts），保持时间轴连续，解决删除广告后卡顿/跳画面；player 播放页与解析测试播放链接默认带 ph=1',
+        3 => '【新增-防误删保护】parse_test / mxjx 解析自动加载保护名单（monitor 误删反馈的片段快照），命中受保护 URI 的片段自动还原保留不再删除；缓存键加入 ph/mon 参数，监控模式（mon=1）不命中旧缓存，确保每次真实记录',
+        4 => '【修复-版本更新提示】后台更新弹窗「稍后再说」用 localStorage 记录已忽略版本，同一版本不再重复弹窗提示；新版本发布后自动恢复弹窗',
+        5 => '【验证】php -l mx.php/mxadmin.php/src/M3U8AdSkipper.php/gz/AdMonitor.php/player/index.php 全部通过；AdMonitor 单元验证：高危识别、误删反馈入保护名单、规则误报计数、isProtected 命中、reset 版本递增 0001→0002 全部正常',
+      ),
+    ),
     'v5.15.1' =>
     array (
       'date' => '2026-09-07',

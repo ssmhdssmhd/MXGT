@@ -91,6 +91,9 @@ gz/ai_auto_learn_logs.php
 gz/rules_*.php
 !gz/rules_example.php
 
+# ===== 去广告监控运行时数据（自动生成）=====
+gz/monitor_data.php
+
 # ===== 后台/在线 HTML 分享打包缓存（自动生成）=====
 .trae-html-share-packages/
 

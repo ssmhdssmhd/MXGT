@@ -6694,6 +6694,61 @@ if (!$_mxGXSecret) {
             </script>
         </div>
 
+        <div class="page" id="page-ad_monitor">
+            <!-- ① 概览与统计 -->
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <span style="font-size:18px">🛡️ 去广告监控 · 防止误删正片</span>
+                    <span class="status-pill blue" id="adMonitorVersion">监控版本 -</span>
+                </div>
+                <div class="overview-grid" id="adMonitorStats" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+                    <div class="overview-item info"><div class="overview-title">监控次数</div><div class="overview-desc" style="font-size:22px;font-weight:700" id="amTotal">0</div></div>
+                    <div class="overview-item warning"><div class="overview-title">可疑记录</div><div class="overview-desc" style="font-size:22px;font-weight:700" id="amSuspicious">0</div></div>
+                    <div class="overview-item danger"><div class="overview-title">误删反馈</div><div class="overview-desc" style="font-size:22px;font-weight:700" id="amFalseDelete">0</div></div>
+                    <div class="overview-item success"><div class="overview-title">正确率</div><div class="overview-desc" style="font-size:22px;font-weight:700" id="amAccuracy">-</div></div>
+                    <div class="overview-item primary"><div class="overview-title">保护片段</div><div class="overview-desc" style="font-size:22px;font-weight:700" id="amProtected">0</div></div>
+                </div>
+                <div class="action-bar tight" style="margin-top:14px">
+                    <button class="btn btn-primary" onclick="loadAdMonitor()">🔄 刷新监控</button>
+                    <button class="btn btn-warning" onclick="resetAdMonitor()">♻️ 重置数据（升级监控版本）</button>
+                    <span style="font-size:12px;color:#909399">说明：解析测试 / mxjx 每次去广告都会记录指标；「误删」反馈的片段进入保护名单，后续自动还原，正确率持续优化</span>
+                </div>
+            </div>
+
+            <!-- ② 规则误报排行 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge warning">①</span><span>规则误报排行</span></span>
+                    <span class="section-caption">误报越多的规则越可能是误删根源，配合保护名单持续优化</span>
+                </div>
+                <div id="adMonitorRuleFp"><div style="padding:16px;color:#909399;font-size:13px">加载中...</div></div>
+            </div>
+
+            <!-- ③ 监控记录 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge info">②</span><span>监控记录</span></span>
+                    <span class="section-caption">可疑（零散删除/占比过高/守护触发）标黄/红，可反馈「误删」保护正片</span>
+                </div>
+                <div class="table-wrap" style="overflow:auto">
+                    <table class="data-table" style="width:100%;font-size:12px;min-width:860px">
+                        <thead><tr><th>时间</th><th>域名</th><th>片段/删除</th><th>广告占比</th><th>风险</th><th>标记</th><th>命中规则</th><th>操作</th></tr></thead>
+                        <tbody id="adMonitorRecords"><tr><td colspan="8" style="text-align:center;color:#909399;padding:24px">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ④ 保护名单 -->
+            <div class="card">
+                <div class="card-title"><span class="step-title"><span class="step-badge success">③</span><span>保护名单</span></span>
+                    <span class="section-caption">命中名单的片段视为正片，去广告时自动还原，防止误删</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                    <input type="text" id="adMonitorProtectInput" placeholder="手动添加片段地址（URI 或绝对地址）" style="flex:1;min-width:260px;padding:8px 10px;border:1px solid #dcdfe6;border-radius:8px;font-size:12px">
+                    <button class="btn btn-primary" onclick="addAdMonitorProtect()">➕ 加入保护</button>
+                </div>
+                <div id="adMonitorProtected"><div style="padding:16px;color:#909399;font-size:13px">加载中...</div></div>
+            </div>
+        </div>
+
     </div>
 
         </main>
@@ -7007,6 +7062,7 @@ if (!$_mxGXSecret) {
                 group: '接口工具',
                 items: [
                     { page: 'm3u8_test', icon: '🧪', text: 'M3U8解析测试', badge: 'NEW' },
+                    { page: 'ad_monitor', icon: '🛡️', text: '去广告监控', badge: 'NEW' },
                     { page: 'moxi_api', icon: '⚡', text: '沫兮API' },
                     { page: 'sniffer', icon: '🔍', text: '嗅探设置' },
 
@@ -10183,6 +10239,10 @@ if (!$_mxGXSecret) {
 
         function hideUpdateModal() {
             document.getElementById('updateModal').style.display = 'none';
+            // 记住已忽略的版本：同一版本不再反复自动弹窗提示更新（手动「检查更新」仍会展示）
+            if (latestUpdateData && latestUpdateData.latest_version) {
+                try { localStorage.setItem('mxadmin_ignored_update', latestUpdateData.latest_version); } catch (e) {}
+            }
         }
 
         function doUpdateFromModal() {
@@ -10253,7 +10313,16 @@ if (!$_mxGXSecret) {
                     }
                     if (updateBtn) updateBtn.disabled = false;
                     latestUpdateData = data;
-                    setTimeout(() => showUpdateModal(data), 300);
+                    // 自动弹窗场景：同一版本已忽略过（稍后再说/✕）则不再重复弹窗，避免多次提示版本更新
+                    let shouldAutoShow = true;
+                    if (autoShowModal) {
+                        try {
+                            shouldAutoShow = localStorage.getItem('mxadmin_ignored_update') !== data.latest_version;
+                        } catch (e) {}
+                    }
+                    if (shouldAutoShow) {
+                        setTimeout(() => showUpdateModal(data), 300);
+                    }
                 } else {
                     if (statusEl) {
                         statusEl.textContent = '已是最新';
@@ -14139,6 +14208,161 @@ if (!$_mxGXSecret) {
             }
         }
 
+        // ===== 去广告监控（防止误删正片） =====
+        async function loadAdMonitor() {
+            try {
+                const res = await fetch(API_BASE + '?action=monitor/list&_t=' + Date.now());
+                const data = await res.json();
+                if (!data.success) { showToast(data.message || '获取监控数据失败', 'error'); return; }
+                const verEl = document.getElementById('adMonitorVersion');
+                if (verEl) verEl.textContent = '监控版本 ' + (data.monitor_version || '-');
+                renderAdMonitorStats(data.stats || {});
+                renderAdMonitorRuleFp(data.rule_fp || {});
+                renderAdMonitorRecords(data.records || []);
+                renderAdMonitorProtected(data.stats && data.stats.protected);
+                loadAdMonitorProtected();
+            } catch (e) {
+                showToast('获取监控数据异常: ' + e.message, 'error');
+            }
+        }
+
+        function renderAdMonitorStats(s) {
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+            set('amTotal', s.total || 0);
+            set('amSuspicious', s.suspicious || 0);
+            set('amFalseDelete', s.false_delete || 0);
+            set('amAccuracy', s.accuracy !== null && s.accuracy !== undefined ? s.accuracy + '%' : '-');
+            set('amProtected', s.protected || 0);
+        }
+
+        function renderAdMonitorRuleFp(ruleFp) {
+            const el = document.getElementById('adMonitorRuleFp');
+            if (!el) return;
+            const entries = Object.entries(ruleFp || {}).sort((a, b) => b[1] - a[1]);
+            if (!entries.length) {
+                el.innerHTML = '<div style="padding:16px;color:#909399;font-size:13px">暂无误报记录——未被反馈过「误删」的规则不会出现在这里</div>';
+                return;
+            }
+            el.innerHTML = entries.map(([name, cnt]) => `
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px">
+                    <code style="font-size:12px;flex:1">${escapeHtml(name)}</code>
+                    <span class="badge badge-warn">误报 ${cnt} 次</span>
+                </div>`).join('');
+        }
+
+        function renderAdMonitorRecords(records) {
+            const tbody = document.getElementById('adMonitorRecords');
+            if (!tbody) return;
+            if (!records.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#909399;padding:24px">暂无监控记录——在「M3U8解析测试」解析一次或 mxjx 加 mon=1 后出现</td></tr>';
+                return;
+            }
+            const riskMap = { normal: ['#67c23a', '正常'], warning: ['#e6a23c', '可疑'], danger: ['#f56c6c', '高危'] };
+            const fbMap = { pending: ['-', ''], correct: ['✅ 正常', 'ok'], false_delete: ['⚠️ 误删', 'warn'] };
+            tbody.innerHTML = records.map(r => {
+                const risk = riskMap[r.risk] || riskMap.normal;
+                const fb = fbMap[r.feedback] || fbMap.pending;
+                const rules = Object.entries(r.matched_rules || {}).slice(0, 3).map(([k, v]) => escapeHtml(k) + '×' + v).join(', ') || '-';
+                const flags = (r.flags || []).map(f => '<span class="badge badge-warn" style="margin-right:4px">' + escapeHtml(f) + '</span>').join('') || '-';
+                const fbBtns = r.feedback === 'pending' ? `
+                    <button class="btn btn-danger btn-sm" style="margin-right:4px" onclick="adMonitorFeedback('${r.id}','false_delete')">误删</button>
+                    <button class="btn btn-success btn-sm" onclick="adMonitorFeedback('${r.id}','correct')">正常</button>` : `<span class="badge ${fb[1]}">${fb[0]}</span>`;
+                return `<tr>
+                    <td style="white-space:nowrap">${escapeHtml(r.time || '')}</td>
+                    <td>${escapeHtml(r.domain || '-')}</td>
+                    <td>${r.total} / ${r.removed}</td>
+                    <td>${r.ad_ratio}%</td>
+                    <td><span style="color:${risk[0]};font-weight:600">${risk[1]}</span></td>
+                    <td>${flags}</td>
+                    <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${rules}">${rules}</td>
+                    <td style="white-space:nowrap">${fbBtns}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function adMonitorFeedback(id, result) {
+            try {
+                const res = await fetch(API_BASE + '?action=monitor/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, result: result })
+                });
+                const data = await res.json();
+                showToast(data.message || (data.success ? '已反馈' : '反馈失败'), data.success ? 'success' : 'error');
+                loadAdMonitor();
+            } catch (e) {
+                showToast('反馈异常: ' + e.message, 'error');
+            }
+        }
+
+        async function loadAdMonitorProtected() {
+            try {
+                const res = await fetch(API_BASE + '?action=monitor/protected&_t=' + Date.now());
+                const data = await res.json();
+                if (!data.success) return;
+                const el = document.getElementById('adMonitorProtected');
+                if (!el) return;
+                const list = Object.entries(data.protected_uris || {});
+                if (!list.length) {
+                    el.innerHTML = '<div style="padding:16px;color:#909399;font-size:13px">保护名单为空——误删反馈或手动添加后，被保护片段将不再被删除</div>';
+                    return;
+                }
+                el.innerHTML = list.map(([md5, item]) => `
+                    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;flex-wrap:wrap">
+                        <code style="font-size:11px;flex:1;word-break:break-all">${escapeHtml(item.uri || item.abs_uri || md5)}</code>
+                        <span style="font-size:11px;color:#909399">${escapeHtml(item.ts || '')}</span>
+                        <button class="btn btn-warn" style="padding:4px 8px" onclick="adMonitorProtectedRemove('${md5}')">移除</button>
+                    </div>`).join('');
+            } catch (e) {}
+        }
+
+        async function addAdMonitorProtect() {
+            const input = document.getElementById('adMonitorProtectInput');
+            const uri = (input.value || '').trim();
+            if (!uri) { showToast('请输入片段地址', 'error'); return; }
+            try {
+                const res = await fetch(API_BASE + '?action=monitor/protected/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uri: uri })
+                });
+                const data = await res.json();
+                showToast(data.message || (data.success ? '已加入保护' : '添加失败'), data.success ? 'success' : 'error');
+                if (data.success) { input.value = ''; loadAdMonitorProtected(); loadAdMonitor(); }
+            } catch (e) {
+                showToast('添加异常: ' + e.message, 'error');
+            }
+        }
+
+        async function adMonitorProtectedRemove(md5) {
+            if (!confirm('确定将该片段移出保护名单？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=monitor/protected/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ md5: md5 })
+                });
+                const data = await res.json();
+                showToast(data.message || (data.success ? '已移除' : '移除失败'), data.success ? 'success' : 'error');
+                loadAdMonitorProtected();
+                loadAdMonitor();
+            } catch (e) {
+                showToast('移除异常: ' + e.message, 'error');
+            }
+        }
+
+        async function resetAdMonitor() {
+            if (!confirm('重置将清空全部监控记录与保护名单，并把监控版本升级到下一编号，确定继续？')) return;
+            try {
+                const res = await fetch(API_BASE + '?action=monitor/reset', { method: 'POST' });
+                const data = await res.json();
+                showToast(data.message || '已重置', data.success ? 'success' : 'error');
+                loadAdMonitor();
+            } catch (e) {
+                showToast('重置异常: ' + e.message, 'error');
+            }
+        }
+
         async function testMoxiApi() {
             const url = document.getElementById('moxiTestUrl').value.trim();
             if (!url) {
@@ -15476,6 +15700,7 @@ if (!$_mxGXSecret) {
             if (pageName === 'history') renderHistory();
             if (pageName === 'announcement') loadAnnouncementList();
             if (pageName === 'moxi_api') loadFallbackConfig();
+            if (pageName === 'ad_monitor') loadAdMonitor();
             if (pageName === 'dashboard') {
                 updateDashboardStats();
                 renderDashboardRecent();

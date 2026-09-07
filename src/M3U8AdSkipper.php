@@ -97,6 +97,12 @@ class M3U8AdSkipper {
         $filteredPlaylist = $this->filter->filter($playlist);
         $stats = $this->getStats($playlist, $filteredPlaylist);
 
+        // 保护还原：监控反馈的「误删正片」名单命中时，把被删片段还原回过滤结果（防止误删正片）
+        if (!empty($options['protectUris']) && is_array($options['protectUris'])) {
+            $filteredPlaylist = $this->restoreProtectedSegments($playlist, $filteredPlaylist, $options['protectUris']);
+            $stats = $this->getStats($playlist, $filteredPlaylist);
+        }
+
         $adPercentage = $stats['adPercentage'] ?? 0;
         $keptSegments = $stats['keptSegments'] ?? 0;
 
@@ -263,6 +269,57 @@ class M3U8AdSkipper {
 
     public function getOutputGenerator() {
         return $this->outputGenerator;
+    }
+
+    /**
+     * 保护还原：把命中保护名单的被删片段还原回过滤结果（防止误删正片）
+     * @param array $original 原始 playlist
+     * @param array $filtered 过滤后 playlist
+     * @param array $protectUris 保护名单 md5 => ['uri'=>..., 'abs_uri'=>..., 'ts'=>...]
+     */
+    private function restoreProtectedSegments($original, $filtered, $protectUris) {
+        $keptUris = [];
+        foreach (($filtered['segments'] ?? []) as $seg) {
+            $keptUris[$seg['uri'] ?? ''] = true;
+            if (!empty($seg['absoluteUri'])) {
+                $keptUris[$seg['absoluteUri']] = true;
+            }
+        }
+
+        $newSegments = [];
+        $restoredCount = 0;
+        foreach (($original['segments'] ?? []) as $seg) {
+            $uri = $seg['uri'] ?? '';
+            $abs = $seg['absoluteUri'] ?? '';
+            $inFiltered = isset($keptUris[$uri]) || ($abs !== '' && isset($keptUris[$abs]));
+            if ($inFiltered) {
+                $newSegments[] = $seg;
+            } elseif (self::uriIsProtected($uri, $abs, $protectUris)) {
+                // 监控反馈误删的正片：还原保留
+                $newSegments[] = $seg;
+                $restoredCount++;
+            }
+        }
+
+        if ($restoredCount > 0) {
+            $filtered['segments'] = $newSegments;
+            $filtered['_restoredProtected'] = $restoredCount;
+            $filtered['_restoredProtectedUris'] = array_slice(array_column($newSegments, 'uri'), 0, 10);
+        }
+        return $filtered;
+    }
+
+    private static function uriIsProtected($uri, $absUri, $protectUris) {
+        if (empty($protectUris) || (empty($uri) && empty($absUri))) {
+            return false;
+        }
+        if (!empty($uri) && isset($protectUris[md5($uri)])) {
+            return true;
+        }
+        if (!empty($absUri) && isset($protectUris[md5($absUri)])) {
+            return true;
+        }
+        return false;
     }
 
     private function resolveMediaUrl($baseUrl, $variantUri) {

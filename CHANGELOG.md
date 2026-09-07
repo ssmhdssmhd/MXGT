@@ -1,5 +1,44 @@
 # 更新日志
 
+## v5.15.2 (2026-09-07) — 去广告实时监控防误删 + 占位模式 + 更新提示修复
+
+### M3U8 去广告改用等时长黑屏占位不删段（解决卡顿/跳画面）；误删反馈进保护名单自动还原；新增实时监控与监控版本；版本更新提示同版本只弹一次
+
+> 本次重点解决三件事：① **去广告后卡顿/跳画面** —— 广告段不再物理删除，改为等时长黑屏静音占位，时间轴连续不断档；② **误删正片** —— 新增实时监控系统，解析记录留痕、风险识别、人工反馈「误删」后相关片段进入保护名单自动还原，正确率随反馈持续优化；③ **版本更新重复弹窗** —— 同版本「稍后再说」后不再反复提示。
+
+#### 1. 去广告实时监控 + 监控版本（[gz/AdMonitor.php](file:///workspace/gz/AdMonitor.php) + [mx.php](file:///workspace/mx.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+
+- **记录留痕**：`parse_test` 每次解析、`mxjx` 带 `mon=1` 时自动记录（总片段/删除数/广告占比/守护是否触发/命中规则/删除片段索引与 URI 快照），最多保留 200 条；
+- **风险识别**：自动标记可疑/高危 —— 广告占比≥50% 可疑、≥70% 高危、全部片段被删高危、删除零散（互不相邻散布全片）可疑、守护触发高危；
+- **人工反馈**：后台「去广告监控」页每条记录可反馈「误删 / 正常」：标记误删后，该记录被删片段的 URI 快照进入**保护名单**，命中规则计入误报计数（`rule_fp`，用于持续优化提示）；
+- **保护名单**：`parse_test` / `mxjx` 解析时自动加载保护名单，命中受保护 URI 的片段**自动还原保留**，不再重复误删；
+- **监控版本**：= 应用版本 + 三位数字计数（如 `v5.15.2.0001`），应用升级自动跟随新版本前缀；后台「重置监控数据」按钮递增计数（0001→0002…）并清空记录/保护名单；
+- **接口**：`monitor/status`、`monitor/list`、`monitor/feedback`、`monitor/protected`、`monitor/protected/add`、`monitor/protected/remove`、`monitor/reset` 共 7 个。
+
+#### 2. 占位模式：广告段等时长黑屏占位，不删段（[mx.php](file:///workspace/mx.php) + [player/index.php](file:///workspace/player/index.php)）
+
+- `mxjx` 新增 **`ph=1` 占位模式**：广告段不再从列表中删除，URI 替换为 `mx.php?action=placeholder_ts&d=时长` 的**等时长黑屏静音占位 TS**，片段总数与 EXTINF 时长完全不变；
+- `parse_test` 过滤后 M3U8 默认输出占位模式（`placeholder_mode: true`），播放过滤后不再出现删段导致的**卡顿/跳画面/进度回跳**；
+- 播放器页与解析测试的播放链接默认带 `ph=1`，无需手动开启；
+- 保护名单命中的片段即使被判广告也**跳过占位**（保留原片段）。
+
+#### 3. 防误删保护 + 缓存键修复（[src/M3U8AdSkipper.php](file:///workspace/src/M3U8AdSkipper.php)）
+
+- 新增 `restoreProtectedSegments()`：过滤后按原始顺序重建片段，命中保护名单的被删片段自动还原（返回 `_restoredProtected` 计数）；
+- **缓存键修复**：`mxjx` 缓存键加入 `ph`/`mon` 参数，占位/监控模式不命中旧缓存，`mon=1` 确保每次真实记录监控数据。
+
+#### 4. 版本更新提示修复（[mxadmin.php](file:///workspace/mxadmin.php)）
+
+- 更新弹窗「稍后再说」用 `localStorage` 记录已忽略版本（`mxadmin_ignored_update`）；
+- 自动弹窗检查时同版本不再弹窗，**新版本发布后自动恢复**。
+
+#### 5. 验证
+
+- `php -l` 全部通过：`mx.php` / `mxadmin.php` / `src/M3U8AdSkipper.php` / `gz/AdMonitor.php` / `player/index.php`；
+- AdMonitor 单元验证通过：高危识别（80% 占比→danger）、误删反馈入保护名单（+1）、规则误报计数（ad-uri-pattern×3）、`isProtected` 命中、`reset` 版本递增 0001→0002、统计正确率计算正常。
+
+---
+
 ## v5.15.1 (2026-09-07) — 公告正文携带 README 更新内容 + M3U8 对比折叠
 
 ### 公告自动读取 README.md 当前版本更新内容作为正文；解析测试原始/过滤后 M3U8 默认折叠

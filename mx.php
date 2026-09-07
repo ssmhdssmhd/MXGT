@@ -389,19 +389,19 @@ function parse_internal_moxi($url, $selfUrl, $officialReplaceMgr = null, $siteMa
         $result = $officialReplaceMgr->resolve($url);
         if ($result['success']) {
             $m3u8Url = $result['m3u8_url'] ?? '';
-            $playUrl = $selfUrl . '/mx.php?action=mxjx&deep=1&url=' . urlencode($m3u8Url);
+            $playUrl = $selfUrl . '/mx.php?action=mxjx&deep=1&ph=1&url=' . urlencode($m3u8Url);
             $juMing = $result['video_title'] ?? '';
             $jiShu = $result['target_episode'] ?? ($result['episode'] ?? '');
             if (empty($jiShu)) $jiShu = '正片';
         } else {
-            $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($url);
+            $playUrl = $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . urlencode($url);
             $juMing = $result['video_title'] ?? '';
             if (empty($juMing)) $juMing = $extractTitleFromUrl($url);
             $jiShu = $result['episode'] ?? '';
             if (empty($jiShu)) $jiShu = $extractEpisodeFromUrl($url);
         }
     } else {
-        $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($url);
+        $playUrl = $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . urlencode($url);
         $juMing = $extractTitleFromUrl($url);
         $jiShu = $extractEpisodeFromUrl($url);
 
@@ -811,6 +811,38 @@ function mxf_parse_official_fallback($url, $selfUrl, $siteManager) {
     ];
 }
 
+/**
+ * 生成「占位模式」M3U8：保留全部片段，广告段替换为等时长黑屏占位 TS（解决删除后卡顿/跳画面）
+ * @param array $origPl 原始 playlist
+ * @param array $filPl  过滤后 playlist（removedSegments 标记被删广告段）
+ * @param string $selfUrl 当前站点地址（动态推导，无硬编码）
+ * @return array ['text'=>m3u8文本, 'placeholder_count'=>int]
+ */
+function mxf_build_placeholder_output($origPl, $filPl, $selfUrl) {
+    $removedUris = [];
+    foreach (($filPl['removedSegments'] ?? []) as $rm) {
+        $removedUris[$rm['uri'] ?? ''] = true;
+    }
+    $phPl = $origPl;
+    $newSegs = [];
+    $placeholderCount = 0;
+    foreach (($origPl['segments'] ?? []) as $i => $seg) {
+        $uri = $seg['uri'] ?? '';
+        $abs = $seg['absoluteUri'] ?? '';
+        if (isset($removedUris[$uri]) && !AdMonitor::isProtectedSeg($uri, $abs)) {
+            $dur = max(0.1, (float)($seg['duration'] ?? 2));
+            $seg['uri'] = $selfUrl . '/mx.php?action=placeholder_ts&d=' . $dur . '&i=' . ($i + 1) . '&r=' . urlencode('ad-skip');
+            $seg['absoluteUri'] = $seg['uri'];
+            $placeholderCount++;
+        }
+        $newSegs[] = $seg;
+    }
+    $phPl['segments'] = $newSegs;
+    $gen = new OutputGenerator(['useAbsoluteUrls' => true, 'addSkipperComment' => false]);
+    $text = $gen->generate($phPl, ['filterSubtitles' => true, 'filterAdTags' => true]);
+    return ['text' => $text, 'placeholder_count' => $placeholderCount];
+}
+
 function parse_internal_unified($url, $selfUrl, $parseType = 'parse', $officialReplaceMgr = null, $siteManager = null) {
     $officialDomains = ['v.qq.com', 'iqiyi.com', 'youku.com', 'mgtv.com', 'bilibili.com', 'sohu.com', 'pptv.com'];
     $parsedUrl = parse_url($url);
@@ -878,7 +910,7 @@ function parse_internal_unified($url, $selfUrl, $parseType = 'parse', $officialR
         case 'mxjx':
         case 'adskip':
         case '去广告':
-            $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($url);
+            $playUrl = $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . urlencode($url);
             $msg = '去广告解析';
             $typeName = '去广告解析';
             break;
@@ -1021,6 +1053,7 @@ try {
         $rootDir . '/src/AuthValidator.php',
         $rootDir . '/src/CacheManager.php',
         $rootDir . '/gz/EnhancedAdRuleEngine.php',
+        $rootDir . '/gz/AdMonitor.php',
         $rootDir . '/gz/DomainRuleManager.php',
         $rootDir . '/gz/ResourceSiteManager.php',
         $rootDir . '/gz/OfficialSiteManager.php',
@@ -1193,7 +1226,7 @@ try {
                     $basePath = dirname($requestUri);
                     $basePath = $basePath === '/' ? '' : $basePath;
                     $selfUrl = $scheme . '://' . $host . $basePath;
-                    $mxjxUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($cached['media_url']);
+                    $mxjxUrl = $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . urlencode($cached['media_url']);
 
                     sendJsonResponse([
                         'success' => true,
@@ -1268,7 +1301,7 @@ try {
                 $basePath = dirname($requestUri);
                 $basePath = $basePath === '/' ? '' : $basePath;
                 $selfUrl = $scheme . '://' . $host . $basePath;
-                $mxjxUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($mediaUrl);
+                $mxjxUrl = $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . urlencode($mediaUrl);
 
                 if ($safeguardTriggered && $safeguardMethod === 'none') {
                     $fallbackToFull = true;
@@ -1852,7 +1885,7 @@ try {
             $basePath = dirname($requestUri);
             $basePath = $basePath === '/' ? '' : $basePath;
             $selfUrl = $scheme . '://' . $host . $basePath;
-            $mxjxUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($url);
+            $mxjxUrl = $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . urlencode($url);
 
             sendJsonResponse([
                 'success' => true,
@@ -1881,7 +1914,10 @@ try {
                 
                 // 添加时间戳避免相同URL缓存问题
                 $timestamp = $_GET['_t'] ?? '';
-                $cacheKey = 'mxjx_' . md5($url . '_' . $domain . '_' . $timestamp . '_' . $proxy);
+                // 缓存键加入 ph/mon 动态参数：占位/监控模式不命中旧缓存，确保 mon=1 每次真实记录监控
+                $phMode = ($_GET['ph'] ?? '0') === '1';
+                $monMode = ($_GET['mon'] ?? '0') === '1';
+                $cacheKey = 'mxjx_' . md5($url . '_' . $domain . '_' . $timestamp . '_' . $proxy . '_' . ($phMode ? 'ph1' : 'ph0') . '_' . ($monMode ? 'mon1' : 'mon0'));
                 $cachedContent = $cacheManager->get($cacheKey);
 
                 if ($cachedContent !== null && is_string($cachedContent) && empty($timestamp)) {
@@ -1950,7 +1986,14 @@ try {
                 $filterEngineProp->setValue($filter, $enhancedEngine);
 
                 $deepMode = ($_GET['deep'] ?? '0') === '1';
-                $result = $skipper->processWithSafeguard($url, ['filterSubtitles' => true, 'filterAdTags' => true]);
+                $phMode = ($_GET['ph'] ?? '0') === '1';   // 占位模式：广告段替换等时长黑屏占位，不删除（解决卡顿/跳画面）
+                $monMode = ($_GET['mon'] ?? '0') === '1'; // 实时监控：记录本次去广告处理，识别可疑误删
+                $result = $skipper->processWithSafeguard($url, [
+                    'filterSubtitles' => true,
+                    'filterAdTags' => true,
+                    // 监控保护名单：误删反馈的正片自动还原
+                    'protectUris' => AdMonitor::getProtectedUris()
+                ]);
                 $safeguardTriggered = !empty($result['safeguardTriggered']);
                 $safeguardReason = $result['safeguardReason'] ?? '';
                 $safeguardMethod = $result['safeguardMethod'] ?? '';
@@ -1967,10 +2010,48 @@ try {
 
                 $newM3U8Content = $result['output'];
 
-                // 深度去广告：TS片段MD5内容分析
+                // 占位模式：生成保留全部片段的 M3U8（广告段替换为等时长黑屏占位 TS），优先于深度删除
+                if ($phMode && !empty($result['original']) && !empty($result['filtered'])) {
+                    $scheme = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+                    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+                    $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+                    $basePath = dirname($requestUri) === '/' ? '' : dirname($requestUri);
+                    $selfUrl = $scheme . '://' . $host . $basePath;
+                    $phBuild = mxf_build_placeholder_output($result['original'], $result['filtered'], $selfUrl);
+                    $newM3U8Content = $phBuild['text'];
+                    $phModeCount = (int)$phBuild['placeholder_count'];
+                } else {
+                    $phModeCount = 0;
+                }
+
+                // 实时监控：记录本次去广告处理（mon=1 时）
+                $monitorInfo = null;
+                if ($monMode) {
+                    $monitorStats = $result['stats'] ?? [];
+                    $removedIndexes = [];
+                    $removedUrisSnap = [];
+                    foreach (($result['filtered']['removedSegments'] ?? []) as $rm) {
+                        $removedIndexes[] = count($removedIndexes) + 1;
+                        $removedUrisSnap[] = ['uri' => $rm['uri'] ?? '', 'abs_uri' => $rm['absoluteUri'] ?? ''];
+                    }
+                    $monitorInfo = AdMonitor::record([
+                        'domain' => $domain,
+                        'url' => $url,
+                        'total' => (int)($monitorStats['totalSegments'] ?? 0),
+                        'removed' => (int)($monitorStats['removedSegments'] ?? 0),
+                        'ad_ratio' => (float)($monitorStats['adPercentage'] ?? 0),
+                        'safeguard_triggered' => $safeguardTriggered,
+                        'safeguard_reason' => $safeguardReason,
+                        'removed_indexes' => $removedIndexes,
+                        'removed_uris' => $removedUrisSnap,
+                        'matched_rules' => [],
+                    ]);
+                }
+
+                // 深度去广告：TS片段MD5内容分析（占位模式与深度互斥，占位优先）
                 $deepAdSegments = [];
                 $deepAdRemoved = 0;
-                if ($deepMode && !$safeguardTriggered && strpos($url, 'http') === 0) {
+                if (!$phMode && $deepMode && !$safeguardTriggered && strpos($url, 'http') === 0) {
                     try {
                         if (!class_exists('TsMd5Analyzer')) {
                             require_once __DIR__ . '/src/TsMd5Analyzer.php';
@@ -2253,7 +2334,7 @@ try {
             $selfPath = dirname(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '');
             $selfPath = $selfPath === '.' ? '' : $selfPath;
             $selfBase = $protocol . '://' . $host . $selfPath;
-            $playUrl = $selfBase . '/mx.php?action=mxjx&url=' . urlencode($mediaUrl);
+            $playUrl = $selfBase . '/mx.php?action=mxjx&ph=1&url=' . urlencode($mediaUrl);
 
             $stats = $result['stats'] ?? [];
             $hasRules = $enhancedEngine->getCurrentDomainRules() !== null;
@@ -2544,7 +2625,7 @@ try {
                 $selfPath = dirname(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '');
                 $selfPath = $selfPath === '.' ? '' : $selfPath;
                 $selfBase = $protocol . '://' . $host . $selfPath;
-                $deepPlayUrl = $selfBase . '/mx.php?action=mxjx&deep=1&url=' . urlencode($mediaUrl);
+                $deepPlayUrl = $selfBase . '/mx.php?action=mxjx&deep=1&ph=1&url=' . urlencode($mediaUrl);
 
                 sendJsonResponse([
                     'code' => 200,
@@ -4296,6 +4377,82 @@ try {
             ], $ok ? 200 : 400);
             break;
 
+        // ============ 去广告实时监控（防止误删正片） ============
+        // 数据文件：gz/monitor_data.php（监控版本 = 当前版本 + 三位数字计数，起始 0001）
+        case 'monitor/status':
+            sendJsonResponse([
+                'success' => true,
+                'monitor_version' => AdMonitor::getVersion(),
+                'stats' => AdMonitor::getStats(),
+                'rule_fp' => AdMonitor::getRuleFp(),
+                'protected_count' => count(AdMonitor::getProtectedUris()),
+            ]);
+            break;
+
+        case 'monitor/list':
+            $limit = intval($_GET['limit'] ?? 50);
+            sendJsonResponse([
+                'success' => true,
+                'monitor_version' => AdMonitor::getVersion(),
+                'records' => AdMonitor::getRecords($limit),
+                'stats' => AdMonitor::getStats(),
+                'rule_fp' => AdMonitor::getRuleFp(),
+            ]);
+            break;
+
+        case 'monitor/feedback':
+            $input = getInputJson();
+            $id = (string)($input['id'] ?? '');
+            $result = (string)($input['result'] ?? 'correct');
+            if (empty($id)) {
+                sendJsonResponse(['success' => false, 'message' => '缺少记录 id'], 400);
+                break;
+            }
+            $res = AdMonitor::feedback($id, $result);
+            sendJsonResponse($res, $res['success'] ? 200 : 400);
+            break;
+
+        case 'monitor/protected':
+            sendJsonResponse([
+                'success' => true,
+                'monitor_version' => AdMonitor::getVersion(),
+                'protected_uris' => AdMonitor::getProtectedUris(),
+                'rule_fp' => AdMonitor::getRuleFp(),
+            ]);
+            break;
+
+        case 'monitor/protected/add':
+            $input = getInputJson();
+            $uri = (string)($input['uri'] ?? '');
+            $absUri = (string)($input['abs_uri'] ?? '');
+            $ok = AdMonitor::addProtectedUri($uri, $absUri);
+            sendJsonResponse([
+                'success' => $ok,
+                'message' => $ok ? '已加入保护名单' : '添加失败或已存在',
+                'protected_count' => count(AdMonitor::getProtectedUris()),
+            ], $ok ? 200 : 400);
+            break;
+
+        case 'monitor/protected/remove':
+            $input = getInputJson();
+            $md5 = (string)($input['md5'] ?? '');
+            $ok = $md5 !== '' && AdMonitor::removeProtectedUri($md5);
+            sendJsonResponse([
+                'success' => $ok,
+                'message' => $ok ? '已移出保护名单' : '未找到对应条目',
+                'protected_count' => count(AdMonitor::getProtectedUris()),
+            ], $ok ? 200 : 400);
+            break;
+
+        case 'monitor/reset':
+            $newVersion = AdMonitor::reset();
+            sendJsonResponse([
+                'success' => true,
+                'message' => '监控数据已重置，监控版本升级为 ' . $newVersion,
+                'monitor_version' => $newVersion,
+            ]);
+            break;
+
         case 'official_replace/config':
             $config = $officialReplaceMgr->getConfig();
             sendJsonResponse([
@@ -4643,7 +4800,7 @@ try {
                     $basePath = dirname($requestUri);
                     $basePath = $basePath === '/' ? '' : $basePath;
                     $selfUrl = $scheme . '://' . $host . $basePath;
-                    $adSkipUrl = $selfUrl . '/mx.php?action=mxjx&deep=1&url=' . urlencode($m3u8Url);
+                    $adSkipUrl = $selfUrl . '/mx.php?action=mxjx&deep=1&ph=1&url=' . urlencode($m3u8Url);
                 }
                 
                 sendJsonResponse([
@@ -5095,14 +5252,14 @@ try {
                     $result = $officialReplaceMgr->resolve($url);
                     if ($result['success']) {
                         $m3u8Url = $result['m3u8_url'] ?? '';
-                        $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($m3u8Url);
+                        $playUrl = $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . urlencode($m3u8Url);
                         $juMing = $result['video_title'] ?? '';
                         $jiShu = $result['target_episode'] ?? ($result['episode'] ?? '');
                         if (empty($jiShu)) {
                             $jiShu = '正片';
                         }
                     } else {
-                        $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($url);
+                        $playUrl = $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . urlencode($url);
                         $juMing = $result['video_title'] ?? '';
                         if (empty($juMing)) {
                             $juMing = $extractTitleFromUrl($url);
@@ -5116,7 +5273,7 @@ try {
                     }
                 }
             } else {
-                $playUrl = $selfUrl . '/mx.php?action=mxjx&url=' . urlencode($url);
+                $playUrl = $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . urlencode($url);
                 $juMing = $extractTitleFromUrl($url);
                 $jiShu = $extractEpisodeFromUrl($url);
                 
@@ -6767,13 +6924,16 @@ try {
                     'useAbsoluteUrls' => true,
                     'filterSubtitles' => true,
                     'filterAdTags' => true,
-                    'addSkipperComment' => false
+                    'addSkipperComment' => false,
+                    // 监控保护名单：误删反馈的正片自动还原，防止重复误删
+                    'protectUris' => AdMonitor::getProtectedUris()
                 ]);
 
                 $originalPl = $result['original'] ?? [];
                 $filteredPl = $result['filtered'] ?? [];
                 $stats = $result['stats'] ?? [];
                 $safeguardTriggered = !empty($result['safeguardTriggered']);
+                $restoredProtected = (int)($filteredPl['_restoredProtected'] ?? 0);
 
                 $allSegments = $originalPl['segments'] ?? [];
                 $removedSegs = $filteredPl['removedSegments'] ?? [];
@@ -6791,9 +6951,10 @@ try {
                 // 生成原始 M3U8 文本（绝对地址）
                 $origGen = new OutputGenerator(['useAbsoluteUrls' => true, 'addSkipperComment' => false]);
                 $origText = $origGen->generate($originalPl, ['filterSubtitles' => false, 'filterAdTags' => false]);
-                // 生成过滤后 M3U8 文本
-                $filGen = new OutputGenerator(['useAbsoluteUrls' => true, 'addSkipperComment' => false]);
-                $filText = $filGen->generate($filteredPl, ['filterSubtitles' => true, 'filterAdTags' => true]);
+                // 生成过滤后 M3U8 文本（占位模式：保留全部片段，广告段替换为等时长黑屏占位，避免删除后卡顿/跳画面）
+                $phResult = mxf_build_placeholder_output($originalPl, $filteredPl, $selfUrl);
+                $filText = $phResult['text'];
+                $placeholderCount = (int)$phResult['placeholder_count'];
 
                 // 片段列表：标注原始段号 + 是否广告
                 $segments = [];
@@ -6828,6 +6989,36 @@ try {
 
                 $elapsed = round((microtime(true) - $startT) * 1000);
 
+                // 实时监控：记录本次去广告解析，识别可疑误删（防止误删正片）
+                $matchedRules = [];
+                foreach ($segments as $s) {
+                    foreach (($s['matched'] ?? []) as $r) {
+                        if ($r !== '') {
+                            $matchedRules[$r] = (int)($matchedRules[$r] ?? 0) + 1;
+                        }
+                    }
+                }
+                $removedUrisSnap = [];
+                $removedIndexes = [];
+                foreach ($segments as $s) {
+                    if (!empty($s['isAd'])) {
+                        $removedUrisSnap[] = ['uri' => $s['uri'] ?? '', 'abs_uri' => $s['absUri'] ?? ''];
+                        $removedIndexes[] = $s['index'] ?? 0;
+                    }
+                }
+                $monitorInfo = AdMonitor::record([
+                    'domain' => $domain,
+                    'url' => $url,
+                    'total' => count($allSegments),
+                    'removed' => count($removedSegs),
+                    'ad_ratio' => (float)($stats['adPercentage'] ?? 0),
+                    'safeguard_triggered' => $safeguardTriggered,
+                    'safeguard_reason' => $result['safeguardReason'] ?? '',
+                    'removed_indexes' => $removedIndexes,
+                    'removed_uris' => $removedUrisSnap,
+                    'matched_rules' => $matchedRules,
+                ]);
+
                 sendJsonResponse([
                     'success' => true,
                     'url' => $url,
@@ -6836,14 +7027,19 @@ try {
                     'elapsed_ms' => $elapsed,
                     'proxy' => $proxy,
                     'safeguardTriggered' => $safeguardTriggered,
-                    'mxjxUrl' => $selfUrl . '/mx.php?action=mxjx&url=' . rawurlencode($mediaUrl2) . '&_t=' . time(),
-                    'parseUrl' => $selfUrl . '/mx.php?action=mxjx&url=' . rawurlencode($mediaUrl2) . '&_t=' . time(),
+                    'placeholder_mode' => true,
+                    'placeholder_count' => $placeholderCount,
+                    'restored_protected' => $restoredProtected,
+                    'monitor' => $monitorInfo,
+                    'mxjxUrl' => $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . rawurlencode($mediaUrl2) . '&_t=' . time(),
+                    'parseUrl' => $selfUrl . '/mx.php?action=mxjx&ph=1&url=' . rawurlencode($mediaUrl2) . '&_t=' . time(),
                     'stats' => [
                         'totalSegments' => count($allSegments),
                         'adSegments' => count($removedSegs),
-                        'keptSegments' => count($filteredPl['segments'] ?? []),
+                        'placeholderSegments' => $placeholderCount,
+                        'keptSegments' => count($allSegments),
                         'originalDuration' => round((float)($stats['originalDuration'] ?? 0), 2),
-                        'filteredDuration' => round((float)($stats['filteredDuration'] ?? 0), 2),
+                        'filteredDuration' => round((float)($stats['originalDuration'] ?? 0), 2),
                         'savedDuration' => round((float)($stats['savedDuration'] ?? 0), 2),
                         'adPercentage' => round((float)($stats['adPercentage'] ?? 0), 2)
                     ],
@@ -6905,6 +7101,13 @@ try {
                     'official_replace/config/save' => '保存官替配置',
                     'fallback/config' => '去插播兜底线路-获取配置',
                     'fallback/config/save' => '去插播兜底线路-保存配置',
+                    'monitor/status' => '去广告监控-状态统计',
+                    'monitor/list' => '去广告监控-记录列表',
+                    'monitor/feedback' => '去广告监控-误删/正常反馈',
+                    'monitor/protected' => '去广告监控-保护名单',
+                    'monitor/protected/add' => '去广告监控-添加保护片段',
+                    'monitor/protected/remove' => '去广告监控-移除保护片段',
+                    'monitor/reset' => '去广告监控-重置并升级监控版本',
                     'official_replace/platforms' => '官替平台列表',
                     'official_replace/platform/add' => '添加官替平台',
                     'official_replace/platform/update' => '更新官替平台',
