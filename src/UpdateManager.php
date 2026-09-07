@@ -7,7 +7,7 @@ class UpdateManager
     private $currentVersion = '2.29.4';
     private $backupDir;
     private $rootDir;
-    private $githubRepo = 'ssmhdssmhd/qcb';
+    private $githubRepo = 'ssmhdssmhd/MXGT';
     private $githubBranch = 'main';
     private $authValidator;
     // GitHub API 镜像列表（按优先级排序，直连 + 多个国内代理）

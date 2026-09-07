@@ -60,7 +60,7 @@ class ResourceSiteManager {
         }
 
         $startTime = microtime(true);
-        $result = $this->fetchVideos($apiUrl, 1, 1);
+        $result = $this->fetchVideos($apiUrl, 1, 1, $timeout);
         $responseTime = round((microtime(true) - $startTime) * 1000, 0);
 
         if ($result['success'] && !empty($result['videos'])) {
@@ -80,14 +80,21 @@ class ResourceSiteManager {
         ];
     }
 
-    public function batchCheckHealth($maxSites = null, $timeoutPerSite = 8) {
+    public function batchCheckHealth($maxSites = null, $timeoutPerSite = 8, $overallBudgetSec = 20) {
         $sites = $this->getAllSites(true);
         $results = [];
         $activeCount = 0;
         $failedCount = 0;
+        $skippedCount = 0;
+        $deadline = microtime(true) + $overallBudgetSec;
 
         foreach ($sites as $idx => $site) {
             if ($maxSites !== null && $idx >= $maxSites) break;
+            // 总时间预算保护：整体超时即中断，避免大量不可达采集源导致请求挂起过久
+            if (microtime(true) >= $deadline) {
+                $skippedCount = count($sites) - $idx;
+                break;
+            }
 
             $health = $this->checkSiteHealth($site, $timeoutPerSite);
             $results[] = [
@@ -111,6 +118,7 @@ class ResourceSiteManager {
             'total' => count($results),
             'healthy' => $activeCount,
             'failed' => $failedCount,
+            'skipped' => $skippedCount,
             'results' => $results
         ];
     }
@@ -238,7 +246,7 @@ class ResourceSiteManager {
         return false;
     }
 
-    public function fetchVideos($apiUrl, $page = 1, $limit = 20) {
+    public function fetchVideos($apiUrl, $page = 1, $limit = 20, $timeout = 30) {
         $urlsToTry = $this->generateApiUrlVariants($apiUrl);
         $fetchStrategies = [
             ['ac' => 'detail'],
@@ -256,7 +264,7 @@ class ResourceSiteManager {
                 ]);
                 $url = $this->buildApiUrl($tryUrl, $params);
 
-                $response = $this->httpGet($url);
+                $response = $this->httpGet($url, $timeout);
                 if ($response === false) {
                     $lastError = $this->lastHttpError ?? '未知错误';
                     if ($this->isDomainFailureError($lastError)) {

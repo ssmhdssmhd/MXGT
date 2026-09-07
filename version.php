@@ -1,13 +1,25 @@
 <?php
 return array (
-  'version' => 'v5.14.3',
+  'version' => 'v5.14.4',
   'branch' => 'main',
-  'build' => '20260907-v5-14-3-release',
-  'version_code' => 51403,
-  'commit' => 'v5.14.3-release',
+  'build' => '20260907-v5-14-4-release',
+  'version_code' => 51404,
+  'commit' => 'v5.14.4-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.14.4' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【在线更新源修复 + 健康检测卡死修复】UpdateManager 更新源由 qcb 更正为 MXGT；修复 sites/health_check 全量检测长时间挂起',
+      'changes' =>
+      array (
+        0 => '【修复-版本更新】src/UpdateManager.php 更新源由 ssmhdssmhd/qcb 更正为 ssmhdssmhd/MXGT，与 update.php 统一；修正在线更新检查/下载一直指向旧仓库而判定无更新的问题',
+        1 => '【修复-健康检测】gz/ResourceSiteManager.php 将 checkSiteHealth 的 $timeout 真正透传给 fetchVideos/httpGet（此前 8s 超时参数从未生效，默认 30s 兜底导致大量不可达采集源串行把请求拖到分钟级）；fetchVideos 新增 $timeout 参数',
+        2 => '【修复-健康检测】batchCheckHealth 新增总时间预算（默认 20s），整体超时即中断返回并带 skipped 统计，后台一键健康检测不再挂起',
+        3 => '【验证】php -l ResourceSiteManager.php / UpdateManager.php 全部通过',
+      ),
+    ),
     'v5.14.3' =>
     array (
       'date' => '2026-09-07',

@@ -9,11 +9,18 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.14.3（2026-09-07）
+## 当前版本 v5.14.4（2026-09-07）
 
-> 接口去重 + API 文档补全：删除后台私有重复别名 `notice/*` 与 `ad_signatures/*`，并补全 `api_doc.php` 完整接口索引。功能与 v5.14.2 一致。
+> 在线更新源修复 + 健康检测卡死修复：修正 `UpdateManager` 更新源（qcb→MXGT），并修复 `sites/health_check` 全量检测长时间挂起。
 
-### 🔧 接口去重与 API 文档补全
+### 🔧 在线更新源修复 + 健康检测修复
+
+- **在线更新源修复**：`src/UpdateManager.php` 更新源由 `ssmhdssmhd/qcb` 更正为 `ssmhdssmhd/MXGT`，与 `update.php` 统一。此前 `mx.php?action=update/check` 与 `update/download` 走 `UpdateManager`，仍指向旧仓库 `qcb`（最新仅 v5.13.8＜远程 v5.14.2），导致一直判定"无更新"、版本拉不上去。
+- **健康检测卡死修复**：`gz/ResourceSiteManager.php` 将 `checkSiteHealth` 的 `$timeout=8` 真正透传给 `fetchVideos`/`httpGet`（原 8s 超时参数从未生效，默认 30s 兜底 + 重试放大，大量不可达采集源串行把请求拖到分钟级）；`fetchVideos` 新增 `$timeout` 参数。
+- **总预算保护**：`batchCheckHealth` 默认 20s 总时间预算，超时即中断返回并带 `skipped` 统计，后台一键健康检测不再挂起。
+- 验证：`php -l` 全部通过。
+
+### 🔧 接口去重与 API 文档补全（上一版 v5.14.3）
 
 - **接口去重**：移除重复别名公告接口（`notice/*`，保留规范名 `announcement/*`）与特征码接口（`ad_signatures/*`，保留规范名 `signatures/*`）；保留公有解析别名 `jx / parse/parse / moxi/api` 以免破坏外部已引用链接。
 - **API 文档**：`api_doc.php`「完整接口索引」新增「资源站规则 / AI自动学习 / 公告管理 / 嗅探设置」四分类，并补充 `info/version`、`official/list`、`official/platforms`、`parse_test`、`placeholder_ts`，列全所有规范接口。
