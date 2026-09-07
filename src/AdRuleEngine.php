@@ -166,6 +166,12 @@ class AdRuleEngine {
                         return false;
                     }
 
+                    // 统一时长占比过高 → 是视频自身正常的切片节奏（内容码率切分），非广告。
+                    // 否则会把整片按统一时长全部误删并替换黑屏占位，导致"没画面"。
+                    if ($similarRatio >= 0.35) {
+                        return false;
+                    }
+
                     return ($isVeryShortCluster && $hasOtherDurationClusters)
                         || ($isShortConsecutiveAd && $hasOtherDurationClusters);
                 }

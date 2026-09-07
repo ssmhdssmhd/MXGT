@@ -1,13 +1,23 @@
 <?php
 return array (
-  'version' => 'v5.15.3',
+  'version' => 'v5.15.4',
   'branch' => 'main',
-  'build' => '20260907-v5-15-3-rule-auto-api-picker',
-  'version_code' => 51503,
-  'commit' => 'v5.15.3-release',
+  'build' => '20260907-v5-15-4-fix-repetitive-dur-false-positive',
+  'version_code' => 51504,
+  'commit' => 'v5.15.4-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.15.4' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【修复-去广告整片误删黑屏】统一时长占比过高视为内容节奏不再误判为广告，修复影片被整片占位替换导致"没画面"',
+      'changes' =>
+      array (
+        0 => '【修复-整片误删黑屏】根因：repetitive-duration 规则把影片「统一时长（约 4s 一档）的正常码率切片」全量误判为广告（权重 55≥阈值 50 单独命中即删），广告占比高达 58.5%，正片被整体替换为黑屏占位 TS，导致 mxjx 输出"进度条在走但没画面"。修复：src/AdRuleEngine.php 的 repetitive-duration 增加内容节奏保护——某时长桶占比 ≥35% 即为视频自身的统一切片刻度（内容），直接放行，不再判为广告。实测广告占比 58.5% → 10.2%，仅保留 DISCONTINUITY 边界与真正超短视频，正片完整保留',
+        1 => '【验证】对 v.lzcdn31.com 源（2217 段、37.8% 为 4.0s 统一切片）回归：修复前 AD 58.5%、修复后 10.2%；php -l src/AdRuleEngine.php 通过',
+      ),
+    ),
     'v5.15.3' =>
     array (
       'date' => '2026-09-07',
