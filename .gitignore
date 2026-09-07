@@ -68,6 +68,9 @@ htmlcov/
 # ===== Backups =====
 backups/
 
+# ===== IDE/Editor 生成的 HTML 预览缓存（自动生成，勿入库）=====
+.trae-html-share-packages/
+
 # ===== Cache =====
 cache/*
 !cache/.gitkeep
