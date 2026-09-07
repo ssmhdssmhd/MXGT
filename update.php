@@ -20,7 +20,7 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 set_time_limit(0);
 
-$githubRepo = 'ssmhdssmhd/qcb';
+$githubRepo = 'ssmhdssmhd/MXGT';
 $branch = 'main';
 $rootDir = __DIR__;
 
@@ -101,7 +101,7 @@ function getSystemInfo() {
         ];
     }
     
-    $githubTest = curlRequest('https://api.github.com/repos/ssmhdssmhd/qcb/commits/main', ['timeout' => 5]);
+    $githubTest = curlRequest('https://api.github.com/repos/' . $GLOBALS['githubRepo'] . '/commits/' . $GLOBALS['branch'], ['timeout' => 5]);
     $info['github'] = [
         'reachable' => $githubTest['success'],
         'error' => $githubTest['error'] ?? '',
@@ -230,7 +230,8 @@ function curlRequest($url, $options = []) {
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $error = curl_error($ch);
-            curl_close($ch);
+            // PHP 8.0+ curl 句柄自动释放，无需 curl_close()（8.5 已废弃）
+            if (PHP_VERSION_ID < 80000) curl_close($ch);
             
             if ($httpCode === 200 && $response !== false) {
                 return [
@@ -943,7 +944,7 @@ if ($action === 'do_update' && !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SE
             </div>
         </div>
         <div class="footer">
-            仓库地址：<a href="https://github.com/ssmhdssmhd/qcb" target="_blank" style="color:#409eff;text-decoration:none">ssmhdssmhd/qcb</a>
+            仓库地址：<a href="https://github.com/ssmhdssmhd/MXGT" target="_blank" style="color:#409eff;text-decoration:none">ssmhdssmhd/MXGT</a>
         </div>
     </div>
     

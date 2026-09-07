@@ -9,7 +9,13 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.13.8（2026-08-14）
+## 当前版本 v5.13.9（2026-09-07）
+
+### 🚀 在线更新源切换：qcb → MXGT
+
+- **更新源切换**：`update.php` 的在线更新源由 `ssmhdssmhd/qcb`（main）改为当前仓库 `ssmhdssmhd/MXGT`（main），后续版本更新从当前仓库拉取。
+- **PHP 8.5 兼容修复**：移除外层 `curl_close()`（PHP 8.0+ 自动释放句柄，8.5 已废弃），消除 `Deprecated` 警告，保证更新检查/下载逻辑无报错输出。
+- lint：`update.php` / `version.php` → 全部 `No syntax errors detected`。
 
 ### 🚑 Hotfix：虾米官解新地址 `https://jx.xmflv.cc/?url=&ref=` 接入 + HTML播放器类型支持 + {url}/{ref}占位符 + Cloudflare 403 兼容
 

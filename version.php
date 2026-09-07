@@ -1,13 +1,24 @@
 <?php
 return array (
-  'version' => 'v5.13.8',
+  'version' => 'v5.13.9',
   'branch' => 'main',
-  'build' => '20260814-v5-13-8-apk-playback-optimization',
-  'version_code' => 51308,
-  'commit' => 'v5.13.8-apk-m3u8-direct-link-replace-priority-plus-xmflv-html-player-fail-doc',
-  'updated_at' => '2026-08-14',
+  'build' => '20260907-v5-13-9-update-source-mxgt',
+  'version_code' => 51309,
+  'commit' => 'v5.13.9-update-source-point-to-mxgt',
+  'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.13.9' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【在线更新源切换：qcb → MXGT】update.php 更新源改为当前 MXGT 仓库 main 分支 + 修复 PHP 8.5 curl_close 弃用警告',
+      'changes' =>
+      array (
+        0 => '【update源切换】update.php 更新源由 ssmhdssmhd/qcb 改为 ssmhdssmhd/MXGT（main 分支），后续在线更新从当前仓库拉取',
+        1 => '【兼容性修复】移除外层 curl_close()（PHP 8.0+ 句柄自动释放，8.5 已废弃），消除 Deprecated 警告，保证更新检查/下载逻辑无报错输出',
+        2 => '【lint 通过】php -l update.php + version.php → 全部 No syntax errors detected',
+      ),
+    ),
     'v5.13.8' =>
     array (
       'date' => '2026-08-14',
