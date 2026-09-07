@@ -1,13 +1,24 @@
 <?php
 return array (
-  'version' => 'v5.14.4',
+  'version' => 'v5.14.5',
   'branch' => 'main',
-  'build' => '20260907-v5-14-4-release',
-  'version_code' => 51404,
-  'commit' => 'v5.14.4-release',
+  'build' => '20260907-v5-14-5-release',
+  'version_code' => 51405,
+  'commit' => 'v5.14.5-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.14.5' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【公告实时化】announcement/list 实时生成"最新版本公告"，不再依赖旧 gg.txt',
+      'changes' =>
+      array (
+        0 => '【公告-实时】announcement/list 基于 version.php 实时生成首条「最新版本 vX.Y.Z 发布：<变更标题>」公告（is_latest_version 标记），始终显示当前最新版本，不再受手工维护的 gg.txt 过期影响',
+        1 => '【公告-保留历史】本地 gg.txt 的历史公告仍正常叠加返回，仅新增实时最新版本条目，不改变回复结构',
+        2 => '【验证】php -l mx.php 通过',
+      ),
+    ),
     'v5.14.4' =>
     array (
       'date' => '2026-09-07',

@@ -4896,7 +4896,28 @@ try {
             $announcementFile = __DIR__ . '/gg.txt';
             $announcements = [];
             $lastModified = null;
-            
+
+            // ① 实时生成"最新版本公告"：始终基于 version.php，保证最新公告实时，不依赖手工维护的 gg.txt
+            $_vd = file_exists(__DIR__ . '/version.php') ? include __DIR__ . '/version.php' : [];
+            $_cv = is_array($_vd) ? ($_vd['version'] ?? '') : '';
+            $_cl = is_array($_vd) ? ($_vd['changelog'] ?? []) : [];
+            $_title = '';
+            if (!empty($_cl) && function_exists('array_key_first')) {
+                $_firstKey = array_key_first($_cl);
+                $_title = $_cl[$_firstKey]['title'] ?? '';
+            }
+            if ($_cv !== '') {
+                $now = date('Y-m-d');
+                $latestText = "最新版本 {$_cv} 发布：" . ($_title !== '' ? $_title : '');
+                $announcements[] = [
+                    'date' => $now,
+                    'text' => $latestText,
+                    'content' => "[{$now}] {$latestText}",
+                    'is_latest_version' => true
+                ];
+            }
+
+            // ② 本地历史公告
             if (file_exists($announcementFile)) {
                 $content = file_get_contents($announcementFile);
                 $lastModified = date('Y-m-d H:i:s', filemtime($announcementFile));

@@ -9,15 +9,20 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.14.4（2026-09-07）
+## 当前版本 v5.14.5（2026-09-07）
 
-> 在线更新源修复 + 健康检测卡死修复：修正 `UpdateManager` 更新源（qcb→MXGT），并修复 `sites/health_check` 全量检测长时间挂起。
+> 公告实时化：`announcement/list` 基于 `version.php` 实时生成「最新版本公告」，不再依赖过期的 `gg.txt`。
+
+### 🔍 最新公告实时化
+
+- **实时最新公告**：公告接口 `announcement/list` 自动基于 `version.php` 生成首条「最新版本 v5.14.5 发布：<变更标题>」，始终显示当前最新版本，不再受手工维护的 `gg.txt` 过期影响。
+- **历史公告保留**：`gg.txt` 里的历史公告正常叠加返回，回复结构不变。
 
 ## 📥 发布包下载
 
 | 项目 | 内容 |
 |---|---|
-| 版本 | **v5.14.4** |
+| 发布包版本 | **v5.14.4**（最近一次打包上传，源码当前版本为 v5.14.5） |
 | 构建时间 | 2026-09-08 03:03（北京时间） |
 | 发布包 | `release/MXGT_v5.14.4_202609080303.zip`（5.8M，155 个文件） |
 | 下载 | https://github.com/ssmhdssmhd/MXGT/releases/download/v5.14.4/MXGT_v5.14.4_202609080303.zip |
