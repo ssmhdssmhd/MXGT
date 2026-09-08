@@ -1,4 +1,4 @@
-// MXGT-Go v0.1.0 — M3U8 广告分析与去广告单文件服务
+// MXGT-Go v0.1.1 — M3U8 广告分析与去广告单文件服务
 //
 // 单文件、标准库零依赖：HTTP 服务接收 m3u8 链接，抓取-解析-保守广告检测-输出无广告 M3U8。
 //
@@ -13,7 +13,7 @@
 //   3. 超短视频（duration < 1.0s）
 //   4. opt=aggresive 时启用「同目录统一切片聚类」批量识别（可能误伤统一切片正片，默认关闭）
 //
-// 编译：go build -ldflags "-s -w" -o mxgt-go main.go
+// 编译：CGO_ENABLED=0 go build -ldflags "-s -w" -o mxgt-go main.go（静态编译，旧系统 glibc 也能运行）
 // 部署：./mxgt-go -addr :8080
 
 package main
@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.1.0"
+	AppVersion = "v0.1.1"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 

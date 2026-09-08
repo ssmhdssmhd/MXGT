@@ -19,8 +19,8 @@
 ### 快速开始
 
 ```bash
-# 本地编译（Linux amd64）
-go build -o mxgt-go main.go
+# 本地编译（Linux amd64，CGO_ENABLED=0 静态编译，旧系统 glibc 也能直接运行）
+CGO_ENABLED=0 go build -o mxgt-go main.go
 
 # 运行
 ./mxgt-go -addr :8080
@@ -68,6 +68,30 @@ chmod +x mxgt-go
 
 - 从 PHP 版核心去广告逻辑移植，聚焦「M3U8 解析 + 广告检测 + 无广告输出」核心链路；
 - 后续迭代方向（按需）：后台管理页、资源站抓取/搜索、规则自动学习、多平台二进制（macOS/Windows）等。
+
+### 部署注意事项（GLIBC 兼容）
+
+- GitHub Actions 在 `ubuntu-latest` 上**静态编译**（`CGO_ENABLED=0`），二进制不依赖宿主 glibc，旧系统（如 CentOS 7 / 低版本 glibc）也能直接运行；
+- 若在本地自编，请务必使用 `CGO_ENABLED=0`。否则默认 `go build` 会动态链接当前系统的 glibc，部署到更旧系统的服务器会报 `GLIBC_2.3x not found` 无法启动。
+
+---
+
+## Go 版更新日志（branch `go`）
+
+## v0.1.1 (2026-09-08) — 启动失败修复：静态编译消除 GLIBC 依赖
+
+> 服务器启动报错 `mxgt-go: /lib64/libc.so.6: version 'GLIBC_2.34/2.32' not found` 的根因与修复。
+
+### 根因
+
+- 云端编译（[.github/workflows/build-go.yml](file:///workspace/.github/workflows/build-go.yml)）在 `ubuntu-latest` 上执行 `go build`，默认启用 CGO，产物**动态链接** runner 的新版 glibc（要求 GLIBC_2.32/2.34+）；
+- 部署服务器 `/www/wwwroot/go/go1/mxgtgo/` 的 glibc 较旧，动态加载器找不到所需版本 → **启动即失败**，无法运行。
+
+### 修复
+
+- 编译命令改为 `CGO_ENABLED=0 go build -ldflags "-s -w" -o mxgt-go main.go`：**纯静态链接**，`ldd` 显示 `not a dynamic executable`，零依赖 glibc，任何 Linux（含 CentOS 7 等旧系统）开箱即用；
+- README 本地编译命令同步标注 `CGO_ENABLED=0`；
+- **验证**：本地动态版 `file/ldd` 显示 `dynamically linked → libc.so.6`（复现原报错条件）；静态版 `file/ldd` 显示 `statically linked / not a dynamic executable`（6.6MB）；静态版启动 `./mxgt-go -addr :8080` + `GET /healthz` 返回 `ok v0.1.1`，`go vet` 通过。
 
 ---
 

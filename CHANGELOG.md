@@ -1,5 +1,29 @@
 # 更新日志
 
+## Go 分支 v0.1.1 (2026-09-08) — 启动失败修复：静态编译消除 GLIBC 依赖
+
+### 服务器启动报错「GLIBC_2.34/2.32 not found」根因与修复
+
+> 部署报错：`/www/wwwroot/go/go1/mxgtgo/mxgt-go: /lib64/libc.so.6: version 'GLIBC_2.34' not found (required by .../mxgt-go)`，二进制无法启动。
+
+#### 1. 根因（[.github/workflows/build-go.yml](file:///workspace/.github/workflows/build-go.yml)）
+
+- 云端编译在 `ubuntu-latest` 上执行 `go build`，**默认启用 CGO** → 产物为**动态链接** ELF，依赖 runner 的新版 glibc（要求 `GLIBC_2.32` / `GLIBC_2.34`+）；
+- 部署服务器 glibc 较旧，动态加载器找不到所需版本，**一启动就失败**；本地自编若在较新系统上编译同样会踩坑。
+
+#### 2. 修复
+
+- 编译命令改为 `CGO_ENABLED=0 go build -ldflags "-s -w" -o mxgt-go main.go`：**纯静态链接**（`ldd` → `not a dynamic executable`），不依赖任何宿主 libc，CentOS 7 等旧系统开箱即用；
+- [main.go](file:///workspace/main.go) 版本升级 `v0.1.0 → v0.1.1`，头部编译注释同步标注静态编译；
+- [README.md](file:///workspace/README.md) Go 章节：本地编译命令补 `CGO_ENABLED=0`，新增「部署注意事项（GLIBC 兼容）」与 v0.1.1 更新日志。
+
+#### 3. 验证
+
+- 本地对照：默认 `go build` → `file` 显示 `dynamically linked, libc.so.6`（复现原报错条件）；`CGO_ENABLED=0` → `statically linked` + `ldd` 报 `not a dynamic executable`（~6.6MB）；
+- 静态版启动 `./mxgt-go -addr :8080` → 日志 `MXGT-Go v0.1.1 listening`，`GET /healthz` 返回 `ok v0.1.1`；`go vet` 通过，无任何报错。
+
+---
+
 ## Go 分支 v0.1.0 (2026-09-08) — Go 单文件 M3U8 去广告服务首发
 
 ### 单文件、标准库零依赖、GitHub Actions 云端编译单二进制

@@ -22,7 +22,8 @@ jobs:
       - name: 编译单文件二进制 + 打包（命名规则：文件名+版本号+时间）
         run: |
           VER=$(grep -oP 'AppVersion\s*=\s*"\K[^"]+' main.go)
-          go build -ldflags "-s -w" -o mxgt-go main.go
+          # CGO_ENABLED=0 静态编译：不依赖宿主 glibc，旧系统（CentOS 7 等）也能直接运行
+          CGO_ENABLED=0 go build -ldflags "-s -w" -o mxgt-go main.go
           # 单文件静态可执行（零依赖），并复制 README 说明
           TS=$(TZ=Asia/Shanghai date +%Y%m%d%H%M)
           mkdir -p release
