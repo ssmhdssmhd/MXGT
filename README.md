@@ -9,11 +9,18 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.15.8（2026-09-08）
+## 当前版本 v5.15.9（2026-09-08）
 
-> AI自动学习优化 + 数据库自动保存 + 去广告监控修复：默认全部资源站按速度排序学习、规则自动入库启用定时任务、播放器去广告监控 mon=1 生效。
+> 去广告监控数据异常修复：监控数据文件损坏自动自愈 + 原子写防并发写坏，后台不再报「获取监控数据异常」。
 
-### 🤖 AI自动学习优化 + 🗄️ 数据库自动保存 + 🎯 去广告监控修复（[AiAutoLearner.php](file:///workspace/gz/AiAutoLearner.php) + [gx.php](file:///workspace/gx.php) + [player/index.php](file:///workspace/player/index.php)）
+### 🛠️ 去广告监控数据异常修复（[AdMonitor.php](file:///workspace/gz/AdMonitor.php)）
+
+- **根因**：去广告监控数据落盘 `gz/monitor_data.php`，播放开启 `mon=1` 后多个请求并发写同一文件且无锁 → 文件被写坏（不完整 PHP 数组）→ 下次读取时 `@include` 抛 ParseError（`@` 无法抑制异常）→ `monitor/list` 等接口整体异常 → 后台提示「获取监控数据异常」；
+- **修复-自愈**：`load()` 捕获 ParseError/非数组，自动备份损坏文件（`monitor_data.php.bak-时间戳`）并重建默认数据，接口立即恢复；
+- **修复-防写坏**：`save()` 改为**原子写**（临时文件 + `flock` 排他锁 + `fflush` + `rename`），多请求并发不再写坏数据文件；
+- **验证**：损坏文件场景实测备份+重建+record 正常；`monitor/list`、`monitor/status` 返回正常 JSON。
+
+### 🤖 AI自动学习优化 + 🗄️ 数据库自动保存 + 🎯 去广告监控修复（上一版 v5.15.8）
 
 - **默认全部资源站**：AI 自动学习 `max_sites_per_run` 默认 `0`（不限制）、`target_mode` 默认 `all`，一次学习覆盖全部**启用（未暂停）**资源站，不再只测前 3 个；
 - **按速度/健康排序**：新增 `sort_by_speed`（`sortSitesBySpeed()`），按响应速度排序择优学习，复用 24 小时新鲜测速缓存、无缓存实时测速写回 `response_time`；

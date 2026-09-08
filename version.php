@@ -1,13 +1,25 @@
 <?php
 return array (
-  'version' => 'v5.15.8',
+  'version' => 'v5.15.9',
   'branch' => 'main',
-  'build' => '20260908-v5-15-8-ai-learn-db-monitor',
-  'version_code' => 51508,
-  'commit' => 'v5.15.8-release',
+  'build' => '20260908-v5-15-9-admonitor-fix',
+  'version_code' => 51509,
+  'commit' => 'v5.15.9-release',
   'updated_at' => '2026-09-08',
   'changelog' =>
   array (
+    'v5.15.9' =>
+    array (
+      'date' => '2026-09-08',
+      'title' => '【去广告监控数据异常修复】监控数据文件损坏自愈 + 原子写防并发写坏，接口不再报「获取监控数据异常」',
+      'changes' =>
+      array (
+        0 => '【根因】去广告监控数据落盘 gz/monitor_data.php 由多请求并发写且无锁：播放开启 mon=1 后并发 record() 同时写同一文件，产生截断/交错 → 文件变成不完整 PHP 数组 → 下次 @include 抛 ParseError（@ 无法抑制异常）→ monitor/list 等接口整体异常 → 后台提示「获取监控数据异常」',
+        1 => '【修复-自愈】AdMonitor::load() 捕获 ParseError/非数组，自动将损坏文件改名备份（monitor_data.php.bak-时间戳）并重建默认监控数据写回，接口立即恢复，不再持续报错',
+        2 => '【修复-防写坏】AdMonitor::save() 改为原子写：临时文件 + flock 排他锁 + fflush + rename 覆盖，多请求并发也不会再写坏数据文件；rename 失败时退化直接写入',
+        3 => '【验证】损坏文件场景实测：备份生成 + 数据重建 + record 正常；真实路径写读往返正常（版本 5.15.8.0001）；monitor/list、monitor/status 接口均返回正常 JSON；php -l gz/AdMonitor.php 通过',
+      ),
+    ),
     'v5.15.8' =>
     array (
       'date' => '2026-09-08',

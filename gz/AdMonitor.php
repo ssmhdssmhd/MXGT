@@ -47,12 +47,34 @@ class AdMonitor
     {
         $default = self::defaultData();
         if (file_exists(self::$dataFile)) {
-            $data = @include self::$dataFile;
+            $data = null;
+            try {
+                $data = @include self::$dataFile;
+            } catch (Throwable $e) {
+                // 数据文件损坏（截断/并发写坏导致语法错误）：@include 会抛 ParseError，@ 无法抑制
+                $data = null;
+            }
             if (is_array($data)) {
                 return array_merge($default, $data);
             }
+            // 文件损坏/内容非数组：备份后重建默认数据，避免接口持续报「监控数据异常」
+            self::repairCorruptedFile();
         }
         return $default;
+    }
+
+    /**
+     * 数据文件损坏自愈：将损坏文件改名备份，重建默认监控数据并写回
+     */
+    private static function repairCorruptedFile()
+    {
+        if (!file_exists(self::$dataFile)) {
+            return;
+        }
+        $bak = self::$dataFile . '.bak-' . date('YmdHis');
+        @rename(self::$dataFile, $bak);
+        self::$cache = self::defaultData();
+        self::save();
     }
 
     private static function defaultData()
@@ -98,7 +120,38 @@ class AdMonitor
             . " * 监控版本: " . (self::$cache['monitor_version'] ?? '') . "  更新时间: " . date('Y-m-d H:i:s') . "\n"
             . " */\n"
             . 'return ' . var_export(self::$cache, true) . ";\n";
-        return @file_put_contents(self::$dataFile, $content) !== false;
+
+        // 原子写：临时文件 + rename，避免多请求并发写坏数据文件（写一半/交错导致 ParseError）
+        $dir = dirname(self::$dataFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        $tmp = $dir . '/.' . basename(self::$dataFile) . '.tmp.' . getmypid();
+        $fp = @fopen($tmp, 'wb');
+        if (!$fp) {
+            return false;
+        }
+        if (!flock($fp, LOCK_EX)) {
+            @fclose($fp);
+            @unlink($tmp);
+            return false;
+        }
+        $ok = fwrite($fp, $content) !== false;
+        if ($ok) {
+            fflush($fp);
+        }
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        if (!$ok) {
+            @unlink($tmp);
+            return false;
+        }
+        if (!@rename($tmp, self::$dataFile)) {
+            // rename 失败（跨设备/权限受限）时退化为直接写入
+            @unlink($tmp);
+            return @file_put_contents(self::$dataFile, $content) !== false;
+        }
+        return true;
     }
 
     /**
