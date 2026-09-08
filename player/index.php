@@ -44,7 +44,7 @@ if (!empty($playerConfig['api_base_url'])) {
     $baseUrl = $scheme . '://' . $host . $basePath;
 }
 
-$apiUrl = $baseUrl . '/../mx.php?action=mxjx&ph=1&url=';
+$apiUrl = $baseUrl . '/../mx.php?action=mxjx&mon=1&ph=1&url=';
 $officialReplaceUrl = $baseUrl . '/../mx.php?action=official_replace/info&url=';
 
 if (!empty($playerType)) {
@@ -827,7 +827,7 @@ $commercialConfig = $playerConfig['commercial_players'] ?? [];
                         rawUrl = data.ad_skip_url;
                     } else if (data.m3u8_url) {
                         const apiBase = officialReplaceUrl.substring(0, officialReplaceUrl.indexOf('?action='));
-                        playUrl = apiBase + '?action=mxjx&deep=1&ph=1&url=' + encodeURIComponent(data.m3u8_url);
+                        playUrl = apiBase + '?action=mxjx&deep=1&mon=1&ph=1&url=' + encodeURIComponent(data.m3u8_url);
                         rawUrl = data.m3u8_url;
                     } else {
                         throw new Error('未获取到播放地址');

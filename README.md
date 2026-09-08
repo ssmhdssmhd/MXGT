@@ -9,11 +9,20 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.15.7（2026-09-07）
+## 当前版本 v5.15.8（2026-09-08）
 
-> 后台全功能体检修复：修复 AI自动去广告「MD5特征码分析」DOM id 失效与入口缺失。
+> AI自动学习优化 + 数据库自动保存 + 去广告监控修复：默认全部资源站按速度排序学习、规则自动入库启用定时任务、播放器去广告监控 mon=1 生效。
 
-### 🔧 后台全功能体检 + MD5特征码分析修复（[mxadmin.php](file:///workspace/mxadmin.php) + [mx.php](file:///workspace/mx.php)）
+### 🤖 AI自动学习优化 + 🗄️ 数据库自动保存 + 🎯 去广告监控修复（[AiAutoLearner.php](file:///workspace/gz/AiAutoLearner.php) + [gx.php](file:///workspace/gx.php) + [player/index.php](file:///workspace/player/index.php)）
+
+- **默认全部资源站**：AI 自动学习 `max_sites_per_run` 默认 `0`（不限制）、`target_mode` 默认 `all`，一次学习覆盖全部**启用（未暂停）**资源站，不再只测前 3 个；
+- **按速度/健康排序**：新增 `sort_by_speed`（`sortSitesBySpeed()`），按响应速度排序择优学习，复用 24 小时新鲜测速缓存、无缓存实时测速写回 `response_time`；
+- **规则自动保存到数据库**：新增 `auto_save_rules`（默认 `true`）——DB 模式写 `domain_rules` 表、文件模式写 `rules_*.php`；
+- **定时任务入库**：`gx.php` 新增 `buildAiLearner()`，开启数据库模式时 `task_ai_learn` / `task_ai_cleanup` 使用 DB 管理器直接入库；
+- **去广告监控生效修复**：根因是播放链接从不带 `mon=1`，实时去广告监控从未被记录；`player/index.php` 播放链接补齐 `mon=1`，播放即触发 `AdMonitor` 记录与可疑删除识别；
+- **资源站暂停不展示**：学习与展示仅取启用站点，暂停站不参与。
+
+### 🔧 后台全功能体检 + MD5特征码分析修复（上一版 v5.15.7）
 
 - **体检**：全部 PHP 文件 `php -l` 通过；后台调用 action 与 mx.php 一一对应；本地起服务实测只读/写回接口正常；浏览器逐页实测主要页面全部正常渲染、控制台 0 error；
 - **修复 MD5特征码分析**：AI自动去广告页 `aiMd5Analyze()` 引用的 `aiSkipSaveMd5`/`aiSkipFastMode` 两个 checkbox 页面缺失（触发会 TypeError），且无触发按钮。已在「快捷操作」卡补「🔬 MD5特征码分析」按钮与「⚡ 极速MD5 / 保存MD5特征码入库」两个开关，功能恢复；

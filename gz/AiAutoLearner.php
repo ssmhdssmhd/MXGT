@@ -58,7 +58,8 @@ class AiAutoLearner {
             'target_sites' => ['如意'],
             'play_from_patterns' => ['rym3u8'],
             'videos_per_site' => 50,
-            'max_sites_per_run' => 3,
+            // 0 = 不限制，覆盖全部目标资源站（默认全部）
+            'max_sites_per_run' => 0,
             'min_segments' => 50,
             'max_ad_percentage' => 90,
             'max_exec_time_per_video' => 30,
@@ -70,6 +71,10 @@ class AiAutoLearner {
             // 自动成长：部署即可自动运行（懒触发 + 失效规则清理）
             'auto_trigger_on_request' => true,
             'auto_cleanup_stale_rules' => true,
+            // 自动保存规则到数据库（DB 模式写 domain_rules 表 / 文件模式写 rules_*.php）
+            'auto_save_rules' => true,
+            // 学习前按响应速度排序资源站（快的优先；辅以健康检查结果）
+            'sort_by_speed' => true,
             // 规则超过该天数未更新视为候选清理对象
             'stale_rule_days' => 30,
             // 清理时对域名做健康检查的超时秒数
@@ -102,7 +107,8 @@ class AiAutoLearner {
             } elseif ($k === 'target_mode') {
                 $current[$k] = ($v === 'custom') ? 'custom' : 'all';
             } elseif ($k === 'enabled' || $k === 'prefer_hot_videos'
-                      || $k === 'auto_trigger_on_request' || $k === 'auto_cleanup_stale_rules') {
+                      || $k === 'auto_trigger_on_request' || $k === 'auto_cleanup_stale_rules'
+                      || $k === 'auto_save_rules' || $k === 'sort_by_speed') {
                 $current[$k] = (bool)$v;
             } elseif (in_array($k, ['interval_hours','videos_per_site','max_sites_per_run',
                                     'min_segments','max_ad_percentage','max_exec_time_per_video',
@@ -189,6 +195,86 @@ class AiAutoLearner {
             }
         }
         return $names;
+    }
+
+    /**
+     * 按响应速度排序资源站（速度快的优先）。
+     * - 24 小时内有新鲜测速缓存的直接复用，避免每次全量测速；
+     * - 无缓存时做一次健康检查（checkSiteHealth）并写回测速结果；
+     * - 失败/超时的站点排到最后，仍保留（由其 fetchVideos 自身兜底）。
+     */
+    public function sortSitesBySpeed(array $names) {
+        if (empty($names)) return $names;
+        $scored = [];
+        foreach ($names as $n) {
+            try {
+                $site = $this->siteManager->getSiteByName($n);
+            } catch (Throwable $e) {
+                $site = null;
+            }
+            if (empty($site)) {
+                $scored[] = ['name' => $n, 'healthy' => false, 'response_time' => PHP_INT_MAX];
+                continue;
+            }
+
+            $lastCheck = $site['last_check_time'] ?? $site['last_check'] ?? '';
+            $cachedRt = isset($site['response_time']) ? intval($site['response_time']) : null;
+            $fresh = false;
+            if ($lastCheck !== '' && $cachedRt !== null) {
+                $ts = strtotime((string)$lastCheck);
+                if ($ts !== false && (time() - $ts) < 86400) {
+                    $fresh = true;
+                }
+            }
+
+            if ($fresh) {
+                $scored[] = ['name' => $n, 'healthy' => true, 'response_time' => max(1, $cachedRt)];
+                continue;
+            }
+
+            // 无新鲜缓存：测速并写回
+            try {
+                $h = $this->siteManager->checkSiteHealth($site, 4);
+                $healthy = !empty($h['healthy']);
+                $rt = $healthy ? intval($h['response_time'] ?? 0) : PHP_INT_MAX;
+                $this->persistSiteSpeed($n, $h['response_time'] ?? 0);
+            } catch (Throwable $e) {
+                $healthy = false;
+                $rt = PHP_INT_MAX;
+            }
+            $scored[] = ['name' => $n, 'healthy' => $healthy, 'response_time' => $rt];
+        }
+
+        usort($scored, function ($a, $b) {
+            if ($a['healthy'] !== $b['healthy']) {
+                return $a['healthy'] ? -1 : 1;
+            }
+            $ra = $a['response_time'];
+            $rb = $b['response_time'];
+            if ($ra === PHP_INT_MAX && $rb === PHP_INT_MAX) return 0;
+            if ($ra === PHP_INT_MAX) return 1;
+            if ($rb === PHP_INT_MAX) return -1;
+            return $ra - $rb;
+        });
+
+        return array_map(function ($x) { return $x['name']; }, $scored);
+    }
+
+    /**
+     * 把测速结果写回资源站（DB 模式写 response_time/last_check_time，文件模式写 response_time/last_check）
+     */
+    private function persistSiteSpeed($name, $responseTime) {
+        try {
+            if (!method_exists($this->siteManager, 'updateSite')) return;
+            $now = date('Y-m-d H:i:s');
+            $this->siteManager->updateSite($name, [
+                'response_time' => intval($responseTime),
+                'last_check_time' => $now,
+                'last_check' => $now,
+            ]);
+        } catch (Throwable $e) {
+            // 测速结果写回失败不影响学习流程
+        }
     }
 
     /**
@@ -402,8 +488,12 @@ class AiAutoLearner {
             }
             unset($proResult);
 
-            // 学习并更新域名规则
-            $domainResult = $this->ruleManager->learnFromAnalysis($videoDomain, $analysis);
+            // 学习并更新域名规则（auto_save_rules 关闭时仅分析不落库）
+            if (empty($this->config['auto_save_rules'])) {
+                $domainResult = ['skipped' => true, 'reason' => 'auto_save_rules=off'];
+            } else {
+                $domainResult = $this->ruleManager->learnFromAnalysis($videoDomain, $analysis);
+            }
             unset($analysis);
 
             $elapsed = microtime(true) - $startTime;
@@ -450,13 +540,20 @@ class AiAutoLearner {
 
             $playFromPatterns = $this->config['play_from_patterns'] ?? ['rym3u8'];
             $videosPerSite = min(100, max(1, intval($options['videos_per_site'] ?? $this->config['videos_per_site'] ?? 50)));
-            $maxSites = min(50, max(1, intval($options['max_sites'] ?? $this->config['max_sites_per_run'] ?? 3)));
+            $maxSites = intval($options['max_sites'] ?? $this->config['max_sites_per_run'] ?? 0);
             $minSegments = $this->config['min_segments'] ?? 50;
             $maxAdPct = $this->config['max_ad_percentage'] ?? 90;
             $maxExecPerVideo = $this->config['max_exec_time_per_video'] ?? 30;
 
-            // 限定本次执行的站点数（避免单次执行时间过长）
-            $targetSites = array_slice($targetSites, 0, $maxSites);
+            // 学习前按响应速度排序资源站（速度快的优先学习；失败/超时的排最后）
+            if (!empty($this->config['sort_by_speed'])) {
+                $targetSites = $this->sortSitesBySpeed($targetSites);
+            }
+
+            // 限定本次执行的站点数：max_sites_per_run<=0 表示不限制（默认覆盖全部目标资源站）
+            if ($maxSites > 0) {
+                $targetSites = array_slice($targetSites, 0, $maxSites);
+            }
 
             $dedup = $this->loadDedup();
             $dedupUpdated = false;

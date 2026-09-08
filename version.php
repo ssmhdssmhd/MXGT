@@ -1,13 +1,28 @@
 <?php
 return array (
-  'version' => 'v5.15.7',
+  'version' => 'v5.15.8',
   'branch' => 'main',
-  'build' => '20260907-v5-15-7-admin-md5-fix',
-  'version_code' => 51507,
-  'commit' => 'v5.15.7-release',
-  'updated_at' => '2026-09-07',
+  'build' => '20260908-v5-15-8-ai-learn-db-monitor',
+  'version_code' => 51508,
+  'commit' => 'v5.15.8-release',
+  'updated_at' => '2026-09-08',
   'changelog' =>
   array (
+    'v5.15.8' =>
+    array (
+      'date' => '2026-09-08',
+      'title' => '【AI自动学习优化 + 数据库自动保存 + 去广告监控修复】默认全部资源站按速度排序学习，规则自动入库启用定时任务，播放器去广告监控 mon=1 生效',
+      'changes' =>
+      array (
+        0 => '【AI自动学习-默认全部资源站】AiAutoLearner 的 max_sites_per_run 默认改为 0（不限制站点数），target_mode 默认 all，一次学习自动覆盖全部启用（未暂停）资源站，不再只测前 3 个',
+        1 => '【AI自动学习-按速度/健康排序】新增 sort_by_speed 配置（默认 true）：学习前按资源站响应速度排序，快的优先学；复用 24 小时新鲜测速缓存，无缓存时实时测速并写回 response_time/last_check，健康站点优先、失败/超时排最后兜底',
+        2 => '【自动保存规则-数据库】新增 auto_save_rules 配置（默认 true）：DB 模式学习结果自动写入 domain_rules 表、文件模式写 rules_*.php；关闭时仅分析不落库',
+        3 => '【定时任务-DB模式适配】gx.php 新增 buildAiLearner()：检测到 db_config 时使用 DbResourceSiteManager + DbDomainRuleManager，task_ai_learn / task_ai_cleanup 规则正确入库；清理逻辑按 updated_at 折算 _filemtime 兼容 DB 模式',
+        4 => '【去广告监控不生效修复】root cause：播放器入口生成的 mxjx 播放链接只带 ph=1 从不带 mon=1，实时去广告监控从未在真实播放中记录。player/index.php 播放链接补充 mon=1（普通 mxjx 入口 + 官替 fallback 深度入口），播放即触发 AdMonitor 记录与可疑删除识别',
+        5 => '【资源站暂停不展示】AI 自动学习 resolveTargetSites 与 getAllSites(false) 只取启用站点，暂停资源站不参与学习与展示',
+        6 => '【验证】php -l gx.php/gz/AiAutoLearner.php/gz/ai_auto_learn_config.php/player/index.php/db/DbResourceSiteManager.php/db/DbDomainRuleManager.php 全部通过；DB 管理器的 getSiteByName/updateSite/getAllRules/learnFromAnalysis/deleteRules 等与 AiAutoLearner 调用逐一对应',
+      ),
+    ),
     'v5.15.7' =>
     array (
       'date' => '2026-09-07',

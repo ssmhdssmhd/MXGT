@@ -530,7 +530,7 @@ class GxRunner {
             return ['success'=>false,'message'=>'AiAutoLearner 类未加载'];
         }
         try {
-            $learner = new AiAutoLearner();
+            $learner = $this->buildAiLearner();
             $opts = $force ? ['force' => true, 'ignore_interval' => true] : [];
             $res = $learner->run($opts);
             if (!is_array($res)) $res = ['raw' => $res];
@@ -547,7 +547,7 @@ class GxRunner {
             return ['success'=>false,'message'=>'AiAutoLearner 类未加载'];
         }
         try {
-            $learner = new AiAutoLearner();
+            $learner = $this->buildAiLearner();
             if (!method_exists($learner, 'cleanupStaleRules')) {
                 return ['success'=>false,'message'=>'AiAutoLearner 无 cleanupStaleRules 方法'];
             }
@@ -555,6 +555,33 @@ class GxRunner {
             return is_array($res) ? $res : ['success'=>true,'result'=>$res];
         } catch (Throwable $e) {
             return ['success'=>false,'message'=>'AI清理异常: '.$e->getMessage()];
+        }
+    }
+
+    /**
+     * 构造 AiAutoLearner：开启数据库模式时使用 DB 版资源站/规则管理器（规则自动保存到数据库），否则用文件版
+     */
+    private function buildAiLearner() {
+        if (!file_exists(GX_ROOT . '/db/db_config.php')) {
+            return new AiAutoLearner();
+        }
+        try {
+            if (!class_exists('Database')) {
+                gx_includeSafe(GX_ROOT . '/db/autoload.php');
+            }
+            if (!class_exists('DbResourceSiteManager')) {
+                gx_includeSafe(GX_ROOT . '/db/DbResourceSiteManager.php');
+            }
+            if (!class_exists('DbDomainRuleManager')) {
+                gx_includeSafe(GX_ROOT . '/db/DbDomainRuleManager.php');
+            }
+            $db = Database::getInstance();
+            if (!$db || !method_exists($db, 'query')) {
+                return new AiAutoLearner();
+            }
+            return new AiAutoLearner(new DbResourceSiteManager(), new DbDomainRuleManager());
+        } catch (Throwable $e) {
+            return new AiAutoLearner();
         }
     }
 

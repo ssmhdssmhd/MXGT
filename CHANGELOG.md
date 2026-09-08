@@ -1,5 +1,29 @@
 # 更新日志
 
+## v5.15.8 (2026-09-08) — AI自动学习优化 + 数据库自动保存 + 去广告监控修复
+
+### 默认全部资源站按速度排序学习、规则自动入库启用定时任务、播放器去广告监控 mon=1 生效
+
+> 本轮聚焦三条主线：① **AI 自动学习**默认覆盖全部启用资源站、按响应速度/健康排序择优学习；② **规则自动保存到数据库**并接入 gx.php 定时任务（task_ai_learn / task_ai_cleanup），DB 模式下直接写 `domain_rules` 表；③ 修复 **去广告监控长期不生效**——根因是播放器生成的播放链接从不带 `mon=1`，实时监控从未在真实播放中被记录。
+
+#### 1. AI 自动学习优化（[AiAutoLearner.php](file:///workspace/gz/AiAutoLearner.php) + [ai_auto_learn_config.php](file:///workspace/gz/ai_auto_learn_config.php)）
+
+- **默认全部资源站**：`max_sites_per_run` 默认 `0`（不限制），`target_mode` 默认 `all`，一次学习自动覆盖全部**启用（未暂停）**资源站，不再只测前 3 个；
+- **按速度/健康排序**：新增 `sort_by_speed`（默认 `true`）——学习前按响应速度排序，快的优先学；复用 **24 小时新鲜测速缓存**，无缓存时实时 `checkSiteHealth` 并写回 `response_time/last_check`；健康优先、失败/超时排最后兜底；
+- **自有测速写回**：`sortSitesBySpeed()` + `persistSiteSpeed()` 兼容 DB（`last_check_time`）与文件（`last_check`）两种管理器。
+
+#### 2. 自动保存规则 + 定时任务（[AiAutoLearner.php](file:///workspace/gz/AiAutoLearner.php) + [gx.php](file:///workspace/gx.php)）
+
+- **auto_save_rules**（默认 `true`）：DB 模式学习结果写 `domain_rules` 表、文件模式写 `rules_*.php`；关闭时仅分析不落库；
+- **gx.php `buildAiLearner()`**：检测到 `db/db_config.php` 时使用 `DbResourceSiteManager` + `DbDomainRuleManager`，`task_ai_learn` / `task_ai_cleanup` 规则正确**入库**，异常自动回退文件版；
+- **清理兼容 DB**：`cleanupStaleRules` 依赖的 `_filemtime` 在 DB 版由 `updated_at` 折算，DB 模式下失效规则清理同样生效。
+
+#### 3. 去广告监控不生效修复（[player/index.php](file:///workspace/player/index.php)）
+
+- **根因**：播放器入口生成的 `mxjx` 播放链接只带 `ph=1`、从不带 `mon=1`，`mxjx` 的实时去广告监控（`AdMonitor::record`）因此在真实播放中从未被触发；
+- **修复**：播放链接补充 `mon=1`（普通 `mxjx` 入口 + 官替 fallback 深度入口），播放即记录去广告处理、自动识别高危/可疑删除；
+- **验证**：`php -l` 六个文件全部通过。
+
 ## v5.15.7 (2026-09-07) — 后台全功能体检修复
 
 ### 全量语法 + 接口 + 页面实测，修复 AI自动去广告「MD5特征码分析」DOM id 引用失效与入口缺失
