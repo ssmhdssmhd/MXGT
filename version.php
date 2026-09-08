@@ -1,13 +1,26 @@
 <?php
 return array (
-  'version' => 'v5.15.9',
+  'version' => 'v5.15.10',
   'branch' => 'main',
-  'build' => '20260908-v5-15-9-admonitor-fix',
-  'version_code' => 51509,
-  'commit' => 'v5.15.9-release',
+  'build' => '20260908-v5-15-10-ai-autolearn-trigger-fix',
+  'version_code' => 51510,
+  'commit' => 'v5.15.10-release',
   'updated_at' => '2026-09-08',
   'changelog' =>
   array (
+    'v5.15.10' =>
+    array (
+      'date' => '2026-09-08',
+      'title' => '【AI自动学习长时间不动修复】懒触发 exec 禁用时不再静默失败，定时脚本 DB 模式适配，触发失败可自动重试',
+      'changes' =>
+      array (
+        0 => '【根因】AI 自动学习的懒触发 autoTriggerIfNeeded() 内部只调用 exec 后台执行 cron_ai_autolearn.php，服务器禁用 exec() 时 @exec 静默失败且无回退 → last_run_time 永远不更新，配置页显示「长时间不动」',
+        1 => '【修复-懒触发】autoTriggerIfNeeded() 改用带三级回退的 triggerBackgroundRunAsync()（exec → fsockopen 非阻塞 HTTP → curl 短超时），exec 禁用环境也能真正触发；失效规则清理触发同步增加 exec 禁用回退',
+        2 => '【修复-可重试】mx.php ai_autolearn/run 不再预先更新 last_run_time（改为 cron 脚本实际执行 run() 成功后更新），触发失败不会把 last_run_time 顶到未来导致数小时不再重试',
+        3 => '【修复-定时脚本DB适配】cron_ai_autolearn.php 检测到 db_config.php 时使用 DbResourceSiteManager + DbDomainRuleManager（与 gx.php 一致），DB 模式下定时学习正确写入 domain_rules 表',
+        4 => '【验证】exec 禁用（php -d disable_functions=exec）下 autoTriggerIfNeeded 返回 triggered=true（走回退通道）不再静默失败；php -l gz/AiAutoLearner.php / cron_ai_autolearn.php / mx.php 全部通过',
+      ),
+    ),
     'v5.15.9' =>
     array (
       'date' => '2026-09-08',

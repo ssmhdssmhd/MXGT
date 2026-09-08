@@ -1,5 +1,28 @@
 # 更新日志
 
+## v5.15.10 (2026-09-08) — AI自动学习长时间不动修复
+
+### 懒触发 exec 禁用时不再静默失败、定时脚本 DB 模式适配、触发失败可自动重试
+
+> AI 自动学习「配置长时间不动」（`last_run_time` 长期不更新）的根因：懒触发 `autoTriggerIfNeeded()` 内部只调用 `exec` 后台执行 `cron_ai_autolearn.php`，服务器禁用 `exec()` 时 `@exec` 静默失败、无任何回退 → 学习从未真正执行，状态页显示的时间永远不变。
+
+#### 1. 根因（[AiAutoLearner.php](file:///workspace/gz/AiAutoLearner.php)）
+
+- 懒触发（挂在 `info/version`，后台打开即检查）调用 private `triggerBackgroundRun()`，**只走 `exec`**；
+- 生产服务器常禁用 `exec()`（`disable_functions`），`@exec` 静默失败且无回退，也不抛异常 → 懒触发"看似触发、实际从不执行"；
+- `last_run_time` 永远停在旧值 → 后台「AI自动学习」显示长时间不动。
+
+#### 2. 修复
+
+- **懒触发回退**：`autoTriggerIfNeeded()` 改用带三级回退的 `triggerBackgroundRunAsync()`（exec → fsockopen 非阻塞 HTTP → curl 短超时），exec 禁用环境也能真正触发学习；失效规则清理触发同步增加 exec 禁用回退；
+- **触发失败可重试**：`mx.php ai_autolearn/run` 不再预先更新 `last_run_time`（改由 cron 脚本实际执行 `run()` 成功后更新）——触发失败不会把 `last_run_time` 顶到未来导致数小时不再重试；
+- **定时脚本 DB 适配**：`cron_ai_autolearn.php` 检测到 `db/db_config.php` 时使用 `DbResourceSiteManager` + `DbDomainRuleManager`（与 gx.php 的 `buildAiLearner()` 一致），DB 模式下定时学习正确写入 `domain_rules` 表。
+
+#### 3. 验证
+
+- `php -d disable_functions=exec` 实测：`autoTriggerIfNeeded()` 返回 `{"triggered":true,"reasons":["learn","cleanup"]}`（走回退通道），不再静默失败；
+- `php -l gz/AiAutoLearner.php / cron_ai_autolearn.php / mx.php` 全部通过。
+
 ## v5.15.9 (2026-09-08) — 去广告监控数据异常修复
 
 ### 监控数据文件损坏自动自愈 + 原子写防并发写坏，接口不再报「获取监控数据异常」

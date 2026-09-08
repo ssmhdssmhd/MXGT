@@ -877,9 +877,10 @@ class AiAutoLearner {
         $triggered = false;
         $reasons = [];
 
-        // 1. 学习任务触发
+        // 1. 学习任务触发（使用带多级回退的异步触发：exec → fsockopen → curl，
+        //    避免服务器禁用 exec() 时懒触发静默失败导致 last_run_time 长期不更新）
         if ($this->shouldRun()) {
-            $this->triggerBackgroundRun();
+            $this->triggerBackgroundRunAsync();
             $triggered = true;
             $reasons[] = 'learn';
         }
@@ -1051,22 +1052,28 @@ class AiAutoLearner {
     }
 
     /**
-     * 后台非阻塞触发一次清理任务
+     * 后台非阻塞触发一次清理任务（exec 不可用时回退异步 HTTP，避免静默失败）
      */
     private function triggerBackgroundCleanup() {
         $script = __DIR__ . '/../cron_ai_autolearn.php';
-        $phpBin = PHP_BINARY ?: 'php';
         if (!file_exists($script)) {
             $this->asyncHttpTrigger('ai_autolearn/cleanup', ['force' => 1]);
             return;
         }
-        $cmd = escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' cleanup > /dev/null 2>&1 &';
-        if (PHP_OS_FAMILY === 'Windows') {
-            $cmd = 'start /B "aicleanup" ' . escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' cleanup > NUL 2>&1';
-            pclose(popen($cmd, 'r'));
-        } else {
+        $phpBin = PHP_BINARY ?: 'php';
+        $execEnabled = function_exists('exec') && !in_array('exec', array_map('trim', explode(',', ini_get('disable_functions') ?: '')));
+        if ($execEnabled) {
+            if (PHP_OS_FAMILY === 'Windows') {
+                $cmd = 'start /B "aicleanup" ' . escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' cleanup > NUL 2>&1';
+                @pclose(@popen($cmd, 'r'));
+                return;
+            }
+            $cmd = escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' cleanup > /dev/null 2>&1 &';
             @exec($cmd);
+            return;
         }
+        // exec 禁用：回退异步 HTTP 触发本机 cron_ai_autolearn.php
+        $this->asyncHttpTrigger('ai_autolearn/cleanup', ['force' => 1]);
     }
 
     /**

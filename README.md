@@ -9,11 +9,19 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.15.9（2026-09-08）
+## 当前版本 v5.15.10（2026-09-08）
 
-> 去广告监控数据异常修复：监控数据文件损坏自动自愈 + 原子写防并发写坏，后台不再报「获取监控数据异常」。
+> AI自动学习长时间不动修复：懒触发在 exec 禁用时不再静默失败、定时脚本 DB 模式适配、触发失败可自动重试。
 
-### 🛠️ 去广告监控数据异常修复（[AdMonitor.php](file:///workspace/gz/AdMonitor.php)）
+### ⏱️ AI自动学习「长时间不动」修复（[AiAutoLearner.php](file:///workspace/gz/AiAutoLearner.php) + [cron_ai_autolearn.php](file:///workspace/cron_ai_autolearn.php) + [mx.php](file:///workspace/mx.php)）
+
+- **根因**：懒触发 `autoTriggerIfNeeded()` 内部只走 `exec` 后台执行 cron 脚本；服务器**禁用 exec()** 时 `@exec` 静默失败、无任何回退 → `last_run_time` 永远不更新 → 后台「AI自动学习」显示长时间不动；
+- **修复-懒触发**：改用带三级回退的 `triggerBackgroundRunAsync()`（exec → fsockopen 非阻塞 HTTP → curl 短超时），exec 禁用环境也能真正触发学习；失效规则清理触发同步加回退；
+- **修复-可重试**：`ai_autolearn/run` 不再预先更新 `last_run_time`（由 cron 实际执行 `run()` 成功后更新），触发失败不会把时间顶到未来导致数小时不再重试；
+- **修复-定时脚本 DB 适配**：`cron_ai_autolearn.php` 检测到数据库配置时使用 `DbResourceSiteManager` + `DbDomainRuleManager`，DB 模式下定时学习正确写入 `domain_rules` 表（与 gx.php 一致）；
+- **验证**：`php -d disable_functions=exec` 实测懒触发返回 `triggered=true`（走回退通道）；三文件 `php -l` 通过。
+
+### 🛠️ 去广告监控数据异常修复（上一版 v5.15.9）
 
 - **根因**：去广告监控数据落盘 `gz/monitor_data.php`，播放开启 `mon=1` 后多个请求并发写同一文件且无锁 → 文件被写坏（不完整 PHP 数组）→ 下次读取时 `@include` 抛 ParseError（`@` 无法抑制异常）→ `monitor/list` 等接口整体异常 → 后台提示「获取监控数据异常」；
 - **修复-自愈**：`load()` 捕获 ParseError/非数组，自动备份损坏文件（`monitor_data.php.bak-时间戳`）并重建默认数据，接口立即恢复；

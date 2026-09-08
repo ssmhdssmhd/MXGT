@@ -4485,10 +4485,9 @@ try {
             if (isset($input['max_sites'])) $options['max_sites'] = intval($input['max_sites']);
             if (isset($input['videos_per_site'])) $options['videos_per_site'] = intval($input['videos_per_site']);
 
-            // 预先更新 last_run_time，避免重复触发
-            $aiLearner->updateLastRunTime();
-
-            // 后台异步触发（exec + & 非阻塞，或 HTTP 异步）
+            // 后台异步触发（exec + & 非阻塞，或 HTTP 异步）。
+            // 注意：不在此预更新 last_run_time —— last_run_time 由 cron_ai_autolearn.php 实际执行 run() 成功后更新，
+            // 避免触发失败（exec 被禁且 HTTP 回环不通）时 last_run_time 被顶到未来导致长时间不再触发
             $triggered = $aiLearner->triggerBackgroundRunAsync($options);
 
             sendJsonResponse([

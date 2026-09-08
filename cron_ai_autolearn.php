@@ -88,7 +88,30 @@ function releaseAiLock() {
 try {
     require_once __DIR__ . '/gz/AiAutoLearner.php';
 
-    $learner = new AiAutoLearner();
+    // DB 模式下使用数据库版资源站/规则管理器（学习结果写入 domain_rules 表），否则用文件版
+    $learner = null;
+    if (file_exists(__DIR__ . '/db/db_config.php')) {
+        try {
+            if (!class_exists('Database')) {
+                require_once __DIR__ . '/db/autoload.php';
+            }
+            if (!class_exists('DbResourceSiteManager')) {
+                require_once __DIR__ . '/db/DbResourceSiteManager.php';
+            }
+            if (!class_exists('DbDomainRuleManager')) {
+                require_once __DIR__ . '/db/DbDomainRuleManager.php';
+            }
+            $db = Database::getInstance();
+            if ($db && method_exists($db, 'query')) {
+                $learner = new AiAutoLearner(new DbResourceSiteManager(), new DbDomainRuleManager());
+            }
+        } catch (Throwable $e) {
+            $learner = null;
+        }
+    }
+    if ($learner === null) {
+        $learner = new AiAutoLearner();
+    }
     $config = $learner->getConfig();
 
     // 访问密钥校验
