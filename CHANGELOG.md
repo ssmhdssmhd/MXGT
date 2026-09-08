@@ -1,5 +1,19 @@
 # 更新日志
 
+## Go 分支 v0.1.0 (2026-09-08) — Go 单文件 M3U8 去广告服务首发
+
+### 单文件、标准库零依赖、GitHub Actions 云端编译单二进制
+
+- **Go 单文件服务**（[main.go](file:///workspace/main.go)）：HTTP 服务接收 m3u8 链接，抓取 → 解析（自动跟随 master playlist）→ 保守广告检测 → 输出无广告 M3U8（绝对地址、保留 EXT-X-KEY/MAP/不连续标签）；
+- **接口**：`/api/clean?url=`（返回 M3U8 文本）、`/api/clean/json?url=`（JSON 统计+明细）、`/healthz`；同时支持命令行模式 `go run main.go <url>`；
+- **广告检测（保守防误删）**：① URL 关键词（ad/ads/ad0/gdt/tvc/promo/300x250 等）② 广告标签区间（DATERANGE/CUE-OUT/EXT-X-AD）③ 超短视频(<1.0s，片头保护) ④ `opt=aggresive` 聚合聚类（默认关，防误伤统一切片正片）；
+- **云端编译**（[.github/workflows/build-go.yml](file:///workspace/.github/workflows/build-go.yml)）：push 到 `go` 分支自动编译 Linux amd64 单文件二进制（~6.6MB），按规则打包 `MXGT_go_<版本>_<北京时间yyyyMMddHHmm>.zip` 上传 GitHub Release；
+- **验证**：本地实测 12 段（含 3 段关键词广告 + 1 段超短占位）→ 识别 4 段广告、保留 8 段、输出绝对地址、TARGETDURATION 按实际时长计算；`go build`/`go vet` 通过。
+
+---
+
+# PHP 版更新日志（branch `main`）
+
 ## v5.15.11 (2026-09-08) — 学习 502 修复 + 后台全结果折叠
 
 ### HTTP 异步执行立即返回避免 nginx 502；后台所有结果区域可折叠、滚动条拖动查看

@@ -8,6 +8,70 @@
 - **`jiami` 分支**：核心解析逻辑加密版本（Base64+乱码+自解码），防止被特征扫描，适合线上公开部署
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
+- **`go` 分支**：**Go 单文件版**（`main.go`），标准库零依赖，编译成单一静态可执行文件部署，无需 PHP/nginx；GitHub Actions 云端编译发布，详见下方「Go 单文件版说明」。
+
+---
+
+## Go 单文件版说明（branch `go`）
+
+> M3U8 广告分析与去广告服务，用 Go 编写、**单文件**、**标准库零依赖**，编译后是一个可执行文件，下载即用。
+
+### 快速开始
+
+```bash
+# 本地编译（Linux amd64）
+go build -o mxgt-go main.go
+
+# 运行
+./mxgt-go -addr :8080
+
+# 或命令行模式（不进 HTTP，直接输出去广告结果）
+go run main.go "https://示例.com/playlist.m3u8"
+```
+
+### HTTP 接口
+
+| 接口 | 说明 |
+|---|---|
+| `GET /api/clean?url=<m3u8>` | 返回过滤后的无广告 M3U8 纯文本（绝对地址，保留 KEY/MAP/不连续标签） |
+| `GET /api/clean/json?url=<m3u8>` | 返回 JSON：统计 + 过滤后文本 + 每个片段的广告标记/原因 |
+| `GET /api/clean?url=...&opt=aggresive` | 开启聚合聚类识别（同目录统一切片批量判广告，可能误伤统一节奏正片，默认关） |
+| `GET /healthz` | 健康检查 |
+
+### 广告检测规则（保守防误删）
+
+1. **URL 关键词**：`/ad/`、`_ad`、`ad0`、`ads`、`gdt`、`tvc`、`promo`、`300x250`、`600x90` 等；
+2. **广告标签区间**：`EXT-X-DATERANGE` / `EXT-X-CUE-OUT` / `EXT-X-AD` 声明；
+3. **超短视频**：`duration < 1.0s`（前 2 段为片头保护）；
+4. **聚合聚类**（需 `opt=aggresive`）：同目录同短时长桶占比 ≥35% 批量判广告，默认关闭。
+
+> 设计原则：与 PHP 版 v5.15.4 一致，**保守优先**——默认只用高置信规则（关键词/标签/超短 3 类），避免把统一切片的正片误删导致黑屏。
+
+### 云端编译（GitHub Actions）
+
+`.github/workflows/build-go.yml`：push 到 `go` 分支触发，Go 1.22 编译单文件二进制，打包为
+`MXGT_go_<版本>_<北京时间yyyyMMddHHmm>.zip` 上传到 **GitHub Release**（tag `go-v<版本>`）。
+
+产物：`mxgt-go`（~6.6MB，Linux amd64，静态，零依赖）+ `README-go.md`。
+
+### 部署
+
+```bash
+# 下载 Release 里的 zip → 解压
+unzip MXGT_go_*.zip
+chmod +x mxgt-go
+# 直接用，无需安装任何依赖
+./mxgt-go -addr :8080
+```
+
+### Go 版来源与差异
+
+- 从 PHP 版核心去广告逻辑移植，聚焦「M3U8 解析 + 广告检测 + 无广告输出」核心链路；
+- 后续迭代方向（按需）：后台管理页、资源站抓取/搜索、规则自动学习、多平台二进制（macOS/Windows）等。
+
+---
+
+## PHP 版更新日志（branch `main`）
 
 ## 当前版本 v5.15.11（2026-09-08）
 

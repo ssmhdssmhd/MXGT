@@ -1,0 +1,52 @@
+name: build-go
+
+on:
+  push:
+    branches: [ go ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: 编译单文件二进制 + 打包（命名规则：文件名+版本号+时间）
+        run: |
+          VER=$(grep -oP 'AppVersion\s*=\s*"\K[^"]+' main.go)
+          go build -ldflags "-s -w" -o mxgt-go main.go
+          # 单文件静态可执行（零依赖），并复制 README 说明
+          TS=$(TZ=Asia/Shanghai date +%Y%m%d%H%M)
+          mkdir -p release
+          cp README.md README-go.md
+          zip -j "release/MXGT_go_${VER}_${TS}.zip" mxgt-go README-go.md
+          echo "VER=${VER}" >> "$GITHUB_ENV"
+          echo "ZIP=MXGT_go_${VER}_${TS}.zip" >> "$GITHUB_ENV"
+          ls -la mxgt-go release/
+
+      - name: 创建/更新 GitHub Release 并上传资产
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: go-v${{ env.VER }}
+          name: MXGT-Go ${{ env.VER }}
+          body: |
+            MXGT-Go ${{ env.VER }} — 单文件 M3U8 广告分析与去广告服务（Go 分支）
+
+            - 单一静态可执行文件，标准库零依赖，下载即用（无需 PHP/nginx）
+            - 接口：
+              - GET /api/clean?url=<m3u8>  → 过滤后无广告 M3U8（绝对地址）
+              - GET /api/clean/json?url=   → JSON 统计 + 过滤后文本
+              - GET /healthz               → 健康检查
+            - 用法：./mxgt-go -addr :8080
+            - 部署：见 README-go.md
+          files: release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

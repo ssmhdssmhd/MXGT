@@ -120,3 +120,8 @@ _build*
 _run_orm*
 _setup*
 !index.php
+
+# ===== Go 分支编译产物（自动生成，勿入库）=====
+mxgt-go
+release/*.zip
+*.exe
