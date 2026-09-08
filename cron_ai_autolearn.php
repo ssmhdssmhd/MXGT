@@ -85,6 +85,47 @@ function releaseAiLock() {
     @unlink($lockFile);
 }
 
+/**
+ * HTTP 模式下立即返回 200 并断开连接，任务继续在后台执行。
+ * 避免长耗时学习（遍历全部资源站 + 深度解析）超过 nginx/PHP-FPM 超时被掐断返回 502 Bad Gateway。
+ * CLI 模式不处理。
+ */
+function aiHttpDetach($message) {
+    global $isCli;
+    if ($isCli) return;
+    @ignore_user_abort(true);
+    @set_time_limit(0);
+    $body = json_encode([
+        'success' => true,
+        'async' => true,
+        'message' => $message,
+        'code' => 200,
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+    if (function_exists('fastcgi_finish_request')) {
+        // PHP-FPM：直接输出并告知 FPM 立即 flush 响应，nginx 不再等待
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        echo $body;
+        @fastcgi_finish_request();
+        return;
+    }
+
+    // 非 FPM（mod_php/其他）：输出 Content-Length 后关闭连接，继续执行
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Access-Control-Allow-Origin: *');
+        header('Connection: close');
+        header('Content-Length: ' . strlen($body));
+    }
+    echo $body;
+    while (ob_get_level() > 0) {
+        ob_end_flush();
+    }
+    @flush();
+}
+
 try {
     require_once __DIR__ . '/gz/AiAutoLearner.php';
 
@@ -146,6 +187,8 @@ try {
     // ============ 清理模式 ============
     if ($mode === 'cleanup') {
         $learner->writeLog('AI 自动学习-规则清理任务开始执行', 'info');
+        // HTTP 模式立即返回，避免长耗时被 nginx 掐断 502
+        aiHttpDetach('规则清理任务已提交后台执行');
         $result = $learner->cleanupStaleRules(true); // force=true 忽略时间间隔
         releaseAiLock();
         $result['code'] = $result['success'] ? 200 : 500;
@@ -183,6 +226,9 @@ try {
     }
 
     $learner->writeLog('AI 自动学习任务开始执行', 'info');
+
+    // HTTP 模式立即返回 200 并断连，学习任务继续后台执行，避免 nginx 超时 502
+    aiHttpDetach('AI 自动学习已提交后台执行');
 
     $options = [];
     if (!$isCli) {

@@ -7158,6 +7158,63 @@ if (!$_mxGXSecret) {
             justify-content: flex-end;
             gap: 12px;
         }
+
+        /* ===== 通用结果折叠卡片（所有后台结果区域可折叠 + 滚动条拖动查看） ===== */
+        .fold-card {
+            margin-top: 14px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 12px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, .05);
+            backdrop-filter: blur(8px);
+        }
+        .fold-card + .fold-card { margin-top: 10px; }
+        .fold-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: #e5e7eb;
+            user-select: none;
+            border-bottom: 1px solid rgba(255, 255, 255, .08);
+            background: rgba(255, 255, 255, .04);
+            transition: background .2s;
+        }
+        .fold-header:hover { background: rgba(255, 255, 255, .09); }
+        .fold-arrow {
+            display: inline-block;
+            width: 14px;
+            color: #c026d3;
+            font-weight: 700;
+        }
+        .fold-hint {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, .4);
+        }
+        .fold-body {
+            max-height: 420px;
+            overflow: auto;
+            padding: 12px 14px;
+            transition: max-height .25s ease, padding .25s ease;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(192, 38, 211, .55) rgba(255, 255, 255, .06);
+        }
+        .fold-body::-webkit-scrollbar { width: 8px; height: 8px; }
+        .fold-body::-webkit-scrollbar-thumb { background: rgba(192, 38, 211, .55); border-radius: 4px; }
+        .fold-body::-webkit-scrollbar-track { background: rgba(255, 255, 255, .06); }
+        .fold-card.collapsed .fold-body {
+            max-height: 0 !important;
+            overflow: hidden !important;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        .fold-card.collapsed .fold-header { border-bottom: none; }
+        .fold-card.expand-full .fold-body { max-height: none; }
     </style>
 
     <script>
@@ -7168,6 +7225,100 @@ if (!$_mxGXSecret) {
             const baseDir = path.substring(0, path.lastIndexOf('/'));
             return protocol + '//' + host + baseDir + '/mx.php';
         })();
+
+        /* ============================================================
+         *   通用结果折叠组件：所有后台结果区域可折叠 + 滚动条拖动查看
+         *   makeFold(id, title) 自动给结果容器包一层折叠卡片：
+         *    - 点击标题栏折叠/展开（状态 localStorage 持久化）
+         *    - 展开时内容区限高 + 滚动条拖动查看
+         *    - 标题栏右侧可点「全部展开/收起」切换不限高
+         * ============================================================ */
+        function makeFold(id, title, opts) {
+            opts = opts || {};
+            const el = document.getElementById(id);
+            if (!el || el.dataset.foldReady) return;
+            el.dataset.foldReady = '1';
+
+            const wrap = document.createElement('div');
+            wrap.className = 'fold-card';
+            el.parentNode.insertBefore(wrap, el);
+            wrap.appendChild(el);
+
+            const hdr = document.createElement('div');
+            hdr.className = 'fold-header';
+            hdr.innerHTML = '<span class="fold-arrow">▾</span><span class="fold-title"></span><span class="fold-hint">点击折叠 · 内容可滚动</span>';
+            hdr.querySelector('.fold-title').textContent = title || id;
+            hdr.title = '点击折叠/展开；展开后内容区可拖动滚动条查看';
+            wrap.insertBefore(hdr, el);
+
+            el.classList.add('fold-body');
+            // 保留容器原有的 margin（如 margin-top:16px）避免布局跳变
+            el.style.marginTop = '0';
+
+            const key = 'fold_' + id;
+            let collapsed = false;
+            let full = false;
+            try { collapsed = localStorage.getItem(key) === '1'; } catch (e) {}
+
+            function apply() {
+                wrap.classList.toggle('collapsed', collapsed);
+                wrap.classList.toggle('expand-full', full);
+                hdr.querySelector('.fold-arrow').textContent = collapsed ? '▸' : (full ? '⤢' : '▾');
+                hdr.querySelector('.fold-hint').textContent = collapsed ? '已折叠 · 点击展开' : (full ? '已展开全部 · 点击收起' : '点击折叠 · 内容可滚动');
+                el.style.maxHeight = '';
+                el.style.overflow = '';
+            }
+
+            hdr.addEventListener('click', function(e) {
+                if (e.target.closest('a,button')) return;
+                collapsed = !collapsed;
+                full = false;
+                try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch (err) {}
+                apply();
+            });
+
+            // 双击标题栏：不限高/恢复限高切换（长结果快速看全貌）
+            hdr.addEventListener('dblclick', function(e) {
+                if (e.target.closest('a,button')) return;
+                full = !full;
+                collapsed = false;
+                try { localStorage.setItem(key, '0'); } catch (err) {}
+                apply();
+            });
+
+            apply();
+        }
+
+        const FOLD_RESULTS = {
+            'analyzeResult': '🔍 视频广告分析结果',
+            'searchResults': '🔎 资源站搜索结果',
+            'batchResult': '📦 批量解析结果',
+            'batchResultList': '📦 批量解析结果列表',
+            'autoLearnResult': '🤖 自动学习结果',
+            'srAutoResult': '🗂️ 资源站规则自动获取结果',
+            'aiAutoLearnResult': '🧠 AI 自动学习结果',
+            'aiAutoLearnLogs': '📋 AI 自动学习日志',
+            'officialTestResult': '🎯 官替解析测试结果',
+            'snifferTestResult': '🕵️ 嗅探测试结果',
+            'moxiTestResult': '🔌 沫兮接口测试结果',
+            'migrateResult': '🗄️ 数据库迁移结果',
+            'integrityResult': '✅ 完整性检查结果',
+            'cacheClearResult': '🧹 缓存清理结果',
+            'updateResult': '🔄 在线更新结果',
+            'aiSkipResult': '🤖 AI 自动去广告结果',
+            'proDetectResult': '🧪 专业广告检测结果',
+            'aiInsertResult': '📺 AI 插播识别结果',
+            'aiInsertOutput': '📺 插播识别输出',
+            'aiSubtitleResult': '📝 AI 滚动字幕分析结果',
+            'aiWatermarkResult': '💧 AI 水印处理结果',
+            'apiPickerRunResult': '🎛️ 接口选择器调用结果',
+        };
+
+        function initResultFolds() {
+            Object.keys(FOLD_RESULTS).forEach(function(id) {
+                makeFold(id, FOLD_RESULTS[id]);
+            });
+        }
 
         const MENU_CONFIG = [
             {
@@ -16230,6 +16381,7 @@ if (!$_mxGXSecret) {
             updateDashboardStats();
             renderDashboardRecent();
             renderTopDomains();
+            initResultFolds();
             
             const batchTextarea = document.getElementById('batchUrls');
             if (batchTextarea) {

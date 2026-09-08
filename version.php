@@ -1,13 +1,24 @@
 <?php
 return array (
-  'version' => 'v5.15.10',
+  'version' => 'v5.15.11',
   'branch' => 'main',
-  'build' => '20260908-v5-15-10-ai-autolearn-trigger-fix',
-  'version_code' => 51510,
-  'commit' => 'v5.15.10-release',
+  'build' => '20260908-v5-15-11-502-fold-results',
+  'version_code' => 51511,
+  'commit' => 'v5.15.11-release',
   'updated_at' => '2026-09-08',
   'changelog' =>
   array (
+    'v5.15.11' =>
+    array (
+      'date' => '2026-09-08',
+      'title' => '【学习 502 修复 + 后台全结果折叠】HTTP 异步执行立即返回避免 nginx 502，后台所有结果区域可折叠/滚动查看',
+      'changes' =>
+      array (
+        0 => '【修复-学习 502】cron_ai_autolearn.php HTTP 模式在学习/清理前调用 aiHttpDetach()：PHP-FPM 用 fastcgi_finish_request()、其他环境用 Content-Length+Connection:close 立即返回 200 并断开连接，任务继续后台执行——避免遍历全部资源站+深度解析超过 nginx/PHP-FPM 超时被掐断返回「502 Bad Gateway / 服务器返回非JSON响应」',
+        1 => '【新增-结果折叠】后台 mxadmin.php 新增通用折叠组件 makeFold()/initResultFolds()，覆盖 22 个结果容器（视频分析/批量解析/资源站搜索/自动学习/AI自动学习+日志/官替测试/嗅探测试/沫兮测试/数据库迁移/完整性/缓存清理/在线更新/AI去广告/专业检测/插播/字幕/水印/接口选择）：点击标题栏折叠/展开、展开内容区限高 420px + 自定义滚动条拖动查看、双击标题不限高看全貌、折叠状态 localStorage 持久化；纯前端渐进增强，不改原渲染逻辑',
+        3 => '【验证】HTTP 模式实测仅 0ms 即返回 {"success":true,"async":true} 不再 502；php -l cron_ai_autolearn.php / mxadmin.php / 主脚本块 node --check 均通过；浏览器实测 analyze/batch/ai_autolearn/api_picker/ai_skip 5 页折叠卡片渲染与折叠/展开交互全部正常、控制台 0 错误',
+      ),
+    ),
     'v5.15.10' =>
     array (
       'date' => '2026-09-08',

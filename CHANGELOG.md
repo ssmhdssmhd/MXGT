@@ -1,5 +1,30 @@
 # 更新日志
 
+## v5.15.11 (2026-09-08) — 学习 502 修复 + 后台全结果折叠
+
+### HTTP 异步执行立即返回避免 nginx 502；后台所有结果区域可折叠、滚动条拖动查看
+
+> 学习失败报「服务器返回非JSON响应: 502 Bad Gateway」的根因：AI 自动学习经 HTTP 回环触发时，学习任务（遍历全部资源站 + 深度 M3U8 解析）超过 nginx/PHP-FPM 超时被掐断，触发方收到 502 HTML。
+
+#### 1. 学习 502 修复（[cron_ai_autolearn.php](file:///workspace/cron_ai_autolearn.php)）
+
+- HTTP 模式（`cron_ai_autolearn.php?force=1` 等）在执行学习/清理前调用新增的 `aiHttpDetach()`；
+- PHP-FPM 环境：输出 JSON 后 `fastcgi_finish_request()` 立即 flush 响应，nginx 不再等待；
+- 其他环境：`Content-Length + Connection: close` 后 `flush()` 关闭连接；
+- 触发方**立即收到 200**，任务在后台继续执行（`ignore_user_abort(true)` + `set_time_limit(0)`），不再 502。
+
+#### 2. 后台全结果折叠（[mxadmin.php](file:///workspace/mxadmin.php)）
+
+- 新增通用折叠组件 `makeFold()` / `initResultFolds()`，覆盖 **22 个结果容器**：视频分析 / 批量解析 / 资源站搜索 / 自动学习 / AI自动学习+日志 / 官替测试 / 嗅探测试 / 沫兮测试 / 数据库迁移 / 完整性检查 / 缓存清理 / 在线更新 / AI去广告 / 专业检测 / 插播识别 / 字幕分析 / 水印处理 / 接口选择；
+- 点击标题栏折叠/展开；展开内容区**限高 420px + 自定义滚动条拖动查看**；双击标题栏**不限高**看全貌；折叠状态 `localStorage` 持久化；
+- 纯前端渐进增强，不改任何后端渲染逻辑。
+
+#### 3. 验证
+
+- HTTP 模式实测 0ms 返回 `{"success":true,"async":true,"message":"AI 自动学习已提交后台执行"}`，不再 502；
+- `php -l cron_ai_autolearn.php / mxadmin.php / version.php` 通过；主脚本块 `node --check` 通过；
+- 浏览器实测 analyze / batch / ai_autolearn / api_picker / ai_skip 5 页：22 个折叠卡片全部渲染、点击折叠/展开往返正常、控制台 0 错误。
+
 ## v5.15.10 (2026-09-08) — AI自动学习长时间不动修复
 
 ### 懒触发 exec 禁用时不再静默失败、定时脚本 DB 模式适配、触发失败可自动重试

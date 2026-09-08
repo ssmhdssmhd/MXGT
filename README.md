@@ -9,11 +9,20 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.15.10（2026-09-08）
+## 当前版本 v5.15.11（2026-09-08）
 
-> AI自动学习长时间不动修复：懒触发在 exec 禁用时不再静默失败、定时脚本 DB 模式适配、触发失败可自动重试。
+> 学习 502 修复 + 后台全结果折叠：HTTP 异步执行立即返回避免 nginx 502；后台所有结果区域可折叠、滚动条拖动查看。
 
-### ⏱️ AI自动学习「长时间不动」修复（[AiAutoLearner.php](file:///workspace/gz/AiAutoLearner.php) + [cron_ai_autolearn.php](file:///workspace/cron_ai_autolearn.php) + [mx.php](file:///workspace/mx.php)）
+### 🔥 学习 502 修复 + 🗂️ 后台全结果折叠（[cron_ai_autolearn.php](file:///workspace/cron_ai_autolearn.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+
+- **学习 502 修复**：AI 自动学习经 HTTP 回环触发时，学习（遍历全部资源站 + 深度解析）超过 nginx/PHP-FPM 超时会被掐断返回「502 Bad Gateway / 服务器返回非JSON响应」。`cron_ai_autolearn.php` 新增 `aiHttpDetach()`：PHP-FPM 下 `fastcgi_finish_request()`、其他环境 `Content-Length + Connection: close`，**立即返回 200 并断连，任务继续后台执行**——触发方不再等长任务，永不 502；
+- **后台全结果折叠**：新增通用折叠组件 `makeFold()`，覆盖 **22 个结果容器**（视频分析 / 批量解析 / 资源站搜索 / 自动学习 / AI自动学习+日志 / 官替测试 / 嗅探测试 / 沫兮测试 / 数据库迁移 / 完整性检查 / 缓存清理 / 在线更新 / AI去广告 / 专业检测 / 插播识别 / 字幕分析 / 水印处理 / 接口选择）：
+  - 点击标题栏折叠/展开，展开内容区**限高 420px + 自定义滚动条拖动查看**；
+  - 双击标题栏**不限高**看全貌；
+  - 折叠状态 `localStorage` 持久化；
+- **验证**：HTTP 模式实测 0ms 返回 `{"success":true,"async":true}`；`php -l` + 主脚本 `node --check` 通过；浏览器实测 5 页折叠渲染与交互正常、控制台 0 错误。
+
+### ⏱️ AI自动学习「长时间不动」修复（上一版 v5.15.10）
 
 - **根因**：懒触发 `autoTriggerIfNeeded()` 内部只走 `exec` 后台执行 cron 脚本；服务器**禁用 exec()** 时 `@exec` 静默失败、无任何回退 → `last_run_time` 永远不更新 → 后台「AI自动学习」显示长时间不动；
 - **修复-懒触发**：改用带三级回退的 `triggerBackgroundRunAsync()`（exec → fsockopen 非阻塞 HTTP → curl 短超时），exec 禁用环境也能真正触发学习；失效规则清理触发同步加回退；
