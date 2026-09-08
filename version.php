@@ -1,13 +1,25 @@
 <?php
 return array (
-  'version' => 'v5.15.5',
+  'version' => 'v5.15.6',
   'branch' => 'main',
-  'build' => '20260907-v5-15-5-site-priority-100-auto-block',
-  'version_code' => 51505,
-  'commit' => 'v5.15.5-release',
+  'build' => '20260907-v5-15-6-search-block-useless-sites',
+  'version_code' => 51506,
+  'commit' => 'v5.15.6-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.15.6' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【精简资源站·一键屏蔽不可搜索】全量检测所有启用资源站的搜索可用性，无法搜索或搜索返回不到结果的站点一键自动屏蔽，只保留可用站',
+      'changes' =>
+      array (
+        0 => '【新增-搜索可用性检测】两个资源站管理器（文件/DB）新增 verifySearchCapability()：遍历全部启用资源站，用探测关键词逐个真实搜索，无法搜索（接口失败/连不上）或搜索返回不到任何结果的站点自动置为暂停（屏蔽）并记录原因，退出活跃列表，只保留可用资源站',
+        1 => '【接口】mx.php 新增 sites/search_check 接口：支持 keyword（探测词，默认高频词「爱情」）与 max（限制检测数量）参数，返回 checked/usable/blocked/blocked_sites 与逐站明细；全量检测后返回统计并自动刷新列表',
+        2 => '【后台按钮】资源站列表页工具栏新增「🚫 检测并屏蔽不可搜索」按钮：确认后逐个探测全部启用资源站，弹窗提示可用数/被屏蔽数，被屏蔽站点在列表显示暂停并可在「显示已暂停」中查看/恢复',
+        3 => '【验证】php -l mx.php / mxadmin.php / gz/ResourceSiteManager.php / db/DbResourceSiteManager.php 全部通过；verifySearchCapability 方法在文件与 DB 管理器均存在；站点写入时同时更新 status 与屏蔽原因备注',
+      ),
+    ),
     'v5.15.5' =>
     array (
       'date' => '2026-09-07',

@@ -3378,6 +3378,16 @@ try {
             sendJsonResponse(['success' => true] + $result);
             break;
 
+        case 'sites/search_check':
+            // 全量检测并自动屏蔽不可搜索的资源站：无法搜索 / 搜索返回不到结果的站自动置为暂停
+            $input = getInputJson();
+            $keyword = (string)($input['keyword'] ?? ($_GET['keyword'] ?? ''));
+            $maxSites = isset($input['max']) ? intval($input['max']) : (isset($_GET['max']) ? intval($_GET['max']) : null);
+            if ($maxSites <= 0) $maxSites = null;
+            $result = $siteManager->verifySearchCapability($keyword, $maxSites);
+            sendJsonResponse($result);
+            break;
+
         case 'sites/update_status':
             $input = getInputJson();
             $name = $input['name'] ?? '';

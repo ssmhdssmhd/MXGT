@@ -9,11 +9,17 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.15.5（2026-09-07）
+## 当前版本 v5.15.6（2026-09-07）
 
-> 资源站列表全部优先级统一为 100（默认 100，越小越优先按优先级排序）；搜索时自动屏蔽不能搜索的资源站。
+> 全量检测所有启用资源站的搜索可用性，无法搜索或搜索返回不到结果的站点一键自动屏蔽，只保留可用站。
 
-### 🗂️ 资源站优先级统一100 + 🚫 自动屏蔽不可搜索（[ResourceSiteManager.php](file:///workspace/gz/ResourceSiteManager.php) + [DbResourceSiteManager.php](file:///workspace/db/DbResourceSiteManager.php) + [sites_config.php](file:///workspace/gz/sites_config.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+### 🚫 一键检测并屏蔽不可搜索资源站（[ResourceSiteManager.php](file:///workspace/gz/ResourceSiteManager.php) + [DbResourceSiteManager.php](file:///workspace/db/DbResourceSiteManager.php) + [mx.php](file:///workspace/mx.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+
+- **全量检测**：两个管理器新增 `verifySearchCapability()`，遍历全部启用资源站，用探测关键词逐个真实搜索；无法搜索（接口失败/连不上/失效）**或**搜索返回不到任何结果的站点自动置为**暂停（屏蔽）**并记录原因，退出活跃列表，只保留可用站；
+- **接口**：`sites/search_check`（参数 `keyword` 默认高频词「爱情」、`max` 限制数量），返回 `checked/usable/blocked/blocked_sites` 与逐站明细；
+- **后台按钮**：资源站列表工具栏新增「🚫 检测并屏蔽不可搜索」，确认后逐个探测、提示可用/屏蔽数、自动刷新列表，被屏蔽站可在「显示已暂停」中查看/恢复。
+
+### 🗂️ 资源站优先级统一100（上一版 v5.15.5）
 
 - **优先级统一 100**：资源站列表全部 **122 个站点 priority 统一改为 100**；新增/编辑默认值 **100**（addSite、后台表单默认 `value=100`、编辑回填/提交兜底 `||100`），排序兜底 **99→100**；后台列表与搜索均按 priority **升序自动排序**（数字越小越优先），支持手动调低某站数值让其靠前匹配；
 - **自动屏蔽不可搜索**：`searchAllSites` 搜索某站失败时自动置为**暂停（屏蔽）**，备注记录「自动屏蔽·不可搜索: 原因」，退出活跃列表不再反复请求无效站点；返回新增 `auto_blocked`（本次屏蔽数）与 `blocked_sites`（被屏蔽站点名）。

@@ -3760,6 +3760,7 @@ if (!$_mxGXSecret) {
                 <div style="margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap">
                     <button class="btn btn-primary" onclick="showAddSite()">+ 新增资源站</button>
                     <button class="btn btn-secondary" onclick="checkSitesHealth()" id="healthCheckBtn">🔍 健康检测</button>
+                    <button class="btn btn-danger" onclick="searchCheckSites()" id="searchCheckBtn" title="逐个探测搜索可用性，无法搜索/搜索返回不到结果的站点自动置为暂停（屏蔽）">🚫 检测并屏蔽不可搜索</button>
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                         <input type="checkbox" id="showPaused" onchange="refreshSites()"> 显示已暂停
                     </label>
@@ -11678,6 +11679,27 @@ if (!$_mxGXSecret) {
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🔍 健康检测';
+            }
+        }
+
+        async function searchCheckSites() {
+            const btn = document.getElementById('searchCheckBtn');
+            if (!confirm('将逐个探测全部启用资源站的搜索可用性，无法搜索/搜索返回不到结果的站点会自动置为暂停（屏蔽），耗时较长，确定继续？')) return;
+            btn.disabled = true;
+            btn.textContent = '检测中（逐个搜索探测）...';
+            try {
+                const res = await fetch(API_BASE + '?action=sites/search_check&_t=' + Date.now(), { cache: 'no-store' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                showToast('检测完成：可用 ' + (data.usable ?? 0) + ' / 检测 ' + (data.checked ?? 0) + '，已屏蔽 ' + (data.blocked ?? 0) + ' 个不可搜索资源站', 'success');
+                const bl = (data.blocked_sites || []);
+                if (bl.length) console.log('[自动屏蔽] 资源站：', bl.join(', '));
+                refreshSites();
+            } catch (e) {
+                showToast('检测失败: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚫 检测并屏蔽不可搜索';
             }
         }
 

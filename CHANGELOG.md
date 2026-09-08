@@ -1,5 +1,29 @@
 # 更新日志
 
+## v5.15.6 (2026-09-07) — 精简资源站·一键屏蔽不可搜索
+
+### 全量检测所有启用资源站的搜索可用性，无法搜索或搜索返回不到结果的站点一键自动屏蔽，只保留可用站
+
+> 针对资源站过多的问题，新增「检测并屏蔽不可搜索」：遍历**全部启用资源站**，用探测关键词逐个真实搜索，凡是无法搜索（接口失败/连不上/失效）或**搜索返回不到任何结果**的站点，自动置为暂停（屏蔽）并记录原因，退出活跃列表，只保留真正可用的资源站，列表随之精简。
+
+#### 1. 全量搜索可用性检测（[ResourceSiteManager.php](file:///workspace/gz/ResourceSiteManager.php) + [DbResourceSiteManager.php](file:///workspace/db/DbResourceSiteManager.php)）
+
+- 两个管理器各新增 `verifySearchCapability($probeKeyword, $maxSites, $limitPerSite)`：遍历全部启用站，逐个调用 `searchVideos` 真实搜索探测；
+- **屏蔽条件**：搜索失败（接口不可用/连不上/解析失败）**或**搜索成功但返回 0 条结果——都自动调 `updateSiteStatus(..., 'paused', '自动屏蔽·不可搜索: 原因')`；
+- 返回汇总：`checked` / `usable` / `blocked` / `blocked_sites`（被屏蔽站点名）与逐站明细（`usable`、`error`、`auto_blocked`）。
+
+#### 2. 接口 + 后台入口（[mx.php](file:///workspace/mx.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+
+- 新接口 **`sites/search_check`**：支持 `keyword`（探测词，默认高频词「爱情」，绝大多数资源站都有该题材）、`max`（限制检测数量，默认全部）；
+- 资源站列表页工具栏新增「**🚫 检测并屏蔽不可搜索**」按钮：确认后逐个探测全部启用资源站，完成后弹窗提示 可用数/检测数/被屏蔽数，并自动刷新列表；被屏蔽站点显示「暂停」，勾选「显示已暂停」可查看并在后台恢复。
+
+#### 3. 验证
+
+- `php -l` 通过：`mx.php` / `mxadmin.php` / `gz/ResourceSiteManager.php` / `db/DbResourceSiteManager.php`；
+- `verifySearchCapability` 方法在文件与 DB 管理器均存在；屏蔽时同时写状态与备注原因。
+
+---
+
 ## v5.15.5 (2026-09-07) — 资源站优先级统一100 + 自动屏蔽不可搜索
 
 ### 资源站列表全部优先级统一为 100（默认 100，越小越优先按优先级排序）；搜索时自动屏蔽不能搜索的资源站

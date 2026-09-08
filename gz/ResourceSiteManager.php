@@ -924,6 +924,56 @@ class ResourceSiteManager {
         ];
     }
 
+    /**
+     * 全量检测搜索可用性：对每个活跃资源站执行一次搜索探测，
+     * 无法搜索 / 搜索返回不到任何结果的站点自动置为暂停（屏蔽），退出活跃列表。
+     * 用于精简资源站列表，只保留可用站点。
+     * @param string $probeKeyword 探测关键词（留空默认用高频词，覆盖绝大多数站点）
+     * @param int|null $maxSites 最多检测站点数（默认全部活跃站）
+     * @param int $limitPerSite 每站结果数量
+     * @return array
+     */
+    public function verifySearchCapability($probeKeyword = '', $maxSites = null, $limitPerSite = 5) {
+        $keyword = trim((string)$probeKeyword) !== '' ? trim((string)$probeKeyword) : '爱情';
+        $sites = $this->getAllSites(false);
+        if ($maxSites !== null) {
+            $sites = array_slice($sites, 0, (int)$maxSites);
+        }
+
+        $results = [];
+        $usable = 0;
+        $blocked = 0;
+        $blockedSites = [];
+        $sitesChecked = 0;
+
+        foreach ($sites as $site) {
+            $sitesChecked++;
+            $res = $this->searchVideos($site, $keyword, 1, $limitPerSite, 12);
+            $ok = !empty($res['success']) && !empty($res['videos']);
+            if ($ok) {
+                $usable++;
+                $results[] = ['name' => $site['name'], 'site_url' => $site['site_url'] ?? '', 'usable' => true, 'error' => ''];
+            } else {
+                $reason = trim((string)($res['message'] ?? '搜索失败'));
+                $reason = mb_substr($reason, 0, 80);
+                $this->updateSiteStatus($site['name'], 'paused', '自动屏蔽·不可搜索: ' . $reason);
+                $blocked++;
+                $blockedSites[] = $site['name'];
+                $results[] = ['name' => $site['name'], 'site_url' => $site['site_url'] ?? '', 'usable' => false, 'error' => $reason, 'auto_blocked' => true];
+            }
+        }
+
+        return [
+            'success' => true,
+            'probe_keyword' => $keyword,
+            'checked' => $sitesChecked,
+            'usable' => $usable,
+            'blocked' => $blocked,
+            'blocked_sites' => $blockedSites,
+            'results' => $results
+        ];
+    }
+
     private function extractM3u8Url($playUrl) {
         if (empty($playUrl)) return null;
 
