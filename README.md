@@ -9,11 +9,17 @@
   - 加密范围：`callOfficialReplaceDirect` / `findUrlInArray` / `isSafeVideoUrl` / `extractVideoUrl` 等 Bug 修复 + 官替优先核心逻辑
   - 功能与 main 完全一致，运行时自动解密，零性能感知差异
 
-## 当前版本 v5.15.6（2026-09-07）
+## 当前版本 v5.15.7（2026-09-07）
 
-> 全量检测所有启用资源站的搜索可用性，无法搜索或搜索返回不到结果的站点一键自动屏蔽，只保留可用站。
+> 后台全功能体检修复：修复 AI自动去广告「MD5特征码分析」DOM id 失效与入口缺失。
 
-### 🚫 一键检测并屏蔽不可搜索资源站（[ResourceSiteManager.php](file:///workspace/gz/ResourceSiteManager.php) + [DbResourceSiteManager.php](file:///workspace/db/DbResourceSiteManager.php) + [mx.php](file:///workspace/mx.php) + [mxadmin.php](file:///workspace/mxadmin.php)）
+### 🔧 后台全功能体检 + MD5特征码分析修复（[mxadmin.php](file:///workspace/mxadmin.php) + [mx.php](file:///workspace/mx.php)）
+
+- **体检**：全部 PHP 文件 `php -l` 通过；后台调用 action 与 mx.php 一一对应；本地起服务实测只读/写回接口正常；浏览器逐页实测主要页面全部正常渲染、控制台 0 error；
+- **修复 MD5特征码分析**：AI自动去广告页 `aiMd5Analyze()` 引用的 `aiSkipSaveMd5`/`aiSkipFastMode` 两个 checkbox 页面缺失（触发会 TypeError），且无触发按钮。已在「快捷操作」卡补「🔬 MD5特征码分析」按钮与「⚡ 极速MD5 / 保存MD5特征码入库」两个开关，功能恢复；
+- **说明**：`resource_rules/*` 为数据库模式专属功能，文件模式返回「数据库不可用」属预期设计，启用 DB 后可用。
+
+### 🚫 一键检测并屏蔽不可搜索资源站（上一版 v5.15.6）
 
 - **全量检测**：两个管理器新增 `verifySearchCapability()`，遍历全部启用资源站，用探测关键词逐个真实搜索；无法搜索（接口失败/连不上/失效）**或**搜索返回不到任何结果的站点自动置为**暂停（屏蔽）**并记录原因，退出活跃列表，只保留可用站；
 - **接口**：`sites/search_check`（参数 `keyword` 默认高频词「爱情」、`max` 限制数量），返回 `checked/usable/blocked/blocked_sites` 与逐站明细；

@@ -1,13 +1,24 @@
 <?php
 return array (
-  'version' => 'v5.15.6',
+  'version' => 'v5.15.7',
   'branch' => 'main',
-  'build' => '20260907-v5-15-6-search-block-useless-sites',
-  'version_code' => 51506,
-  'commit' => 'v5.15.6-release',
+  'build' => '20260907-v5-15-7-admin-md5-fix',
+  'version_code' => 51507,
+  'commit' => 'v5.15.7-release',
   'updated_at' => '2026-09-07',
   'changelog' =>
   array (
+    'v5.15.7' =>
+    array (
+      'date' => '2026-09-07',
+      'title' => '【后台全功能体检修复】全量语法+接口+页面实测，修复 AI自动去广告「MD5特征码分析」入口缺失与 DOM id 引用失效',
+      'changes' =>
+      array (
+        0 => '【后台体检】对 mxadmin 全部 25 个页面、mx.php 约166个 case 做全量校验：全部 PHP 文件 php -l 通过；后台调用的 action 与 mx.php 一一对应（无未实现接口）；启动本地服务实测只读/写回接口（列表/配置/保存）均正常',
+        1 => '【修复-MD5特征码分析失效】AI自动去广告页 aiMd5Analyze() 引用了不存在于页面的 aiSkipSaveMd5 / aiSkipFastMode 两个 checkbox id（运行时会 getElementById(...) 为 null 报 TypeError），且该功能无触发按钮。修复：快捷操作卡新增「🔬 MD5特征码分析」按钮与「⚡ 极速MD5 / 保存MD5特征码入库」两个开关，MD5 分析功能恢复可用',
+        2 => '【验证】浏览器实测 mxadmin 主要页面（概览/历史/批量/分析/规则/资源站/资源站规则/AI去广告/M3U8测试/接口选择/去广告监控）全部正常渲染、控制台 0 error；ai_skip 页 aiSkipFastMode/aiSkipSaveMd5 均可正常读取；player/config/save 经前端实际载荷验证正常',
+      ),
+    ),
     'v5.15.6' =>
     array (
       'date' => '2026-09-07',

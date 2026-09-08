@@ -1,5 +1,31 @@
 # 更新日志
 
+## v5.15.7 (2026-09-07) — 后台全功能体检修复
+
+### 全量语法 + 接口 + 页面实测，修复 AI自动去广告「MD5特征码分析」DOM id 引用失效与入口缺失
+
+> 对后台做了系统性体检：全部 PHP 文件 `php -l` 通过；后台调用的所有 action 与 mx.php 的 case 一一对应（无未实现接口）；本地起服务实测列表/配置/保存接口均正常；浏览器逐页打开主要页面确认无 JS 报错。发现并修复 **1 个确定性缺陷**：AI自动去广告页的 MD5 特征码分析功能引用了两个页面不存在的 checkbox id，一旦触发会 `TypeError` 直接中断，且该功能没有任何触发按钮。
+
+#### 1. 体检范围与结论（[mxadmin.php](file:///workspace/mxadmin.php) + [mx.php](file:///workspace/mx.php)）
+
+- **语法**：所有 `.php` 文件 `php -l` 全部通过；
+- **接口一致性**：子任务全量交叉比对，后台以 `?action=XXX` 引用的全部 action 在 mx.php 均有对应 `case`，无未实现接口；
+- **运行时**：本地起服务冒烟，只读接口（info/version、sites/list、rules/list、announcement/list、official_sites/list、sniffer/player/fallback/api_picker/official_replace 等 config、monitor、db/status、proxies/list…）全部 ok；写回接口（ai_autolearn/fallback/api_picker/official_replace/sniffer config/save）原值写回均 success；
+- **页面**：浏览器实测 概览/历史/批量/视频分析/规则/资源站/资源站规则/AI去广告/M3U8测试/接口选择/去广告监控 全部正常渲染、控制台 0 error。
+
+#### 2. 修复：MD5 特征码分析（[mxadmin.php](file:///workspace/mxadmin.php)）
+
+- **根因**：`aiMd5Analyze()` 读取 `aiSkipSaveMd5`、`aiSkipFastMode` 两个 checkbox 的 `.checked`，但页面根本没有这两个 id（`getElementById(...)` 为 `null` → `TypeError`），而且没有一个按钮能触发该分析；
+- **修复**：AI自动去广告页「快捷操作」卡新增「**🔬 MD5特征码分析**」按钮，并补上「**⚡ 极速MD5（采样更少更快）** / **保存MD5特征码入库**」两个开关，MD5 分析功能恢复；配套 `renderMd5Stats()` 等已存在，直接可用；
+- **验证**：修复后浏览器打开 ai_skip 页，`aiSkipFastMode`/`aiSkipSaveMd5` 均能正常读取，控制台无 "null" / "is null" 报错。
+
+#### 3. 说明
+
+- `resource_rules/*`（资源站规则）为**数据库模式专属**功能；无 DB（文件模式）时返回「数据库不可用」，属预期设计，需启用 DB 后使用；
+- `player/config/save` 前端按顶层字段提交、后端正常，体检时误报为测试载荷问题，已用真实载荷复核为正常。
+
+---
+
 ## v5.15.6 (2026-09-07) — 精简资源站·一键屏蔽不可搜索
 
 ### 全量检测所有启用资源站的搜索可用性，无法搜索或搜索返回不到结果的站点一键自动屏蔽，只保留可用站

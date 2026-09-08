@@ -5843,6 +5843,15 @@ if (!$_mxGXSecret) {
                         <button class="btn btn-success" onclick="goToRules()">🔧 规则管理</button>
                         <button class="btn btn-secondary" onclick="aiSkipToInsert()">📺 检测插播</button>
                         <button class="btn btn-secondary" onclick="aiSkipToWatermark()">💧 水印处理</button>
+                        <button class="btn btn-warning" onclick="aiMd5Analyze()">🔬 MD5特征码分析</button>
+                    </div>
+                    <div style="display:flex;gap:18px;margin-top:12px;flex-wrap:wrap;font-size:13px;color:#606266">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                            <input type="checkbox" id="aiSkipFastMode" checked> ⚡ 极速MD5（采样更少更快）
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                            <input type="checkbox" id="aiSkipSaveMd5"> 保存MD5特征码入库
+                        </label>
                     </div>
                 </div>
             </div>
