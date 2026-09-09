@@ -96,6 +96,22 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.3.3 (2026-09-09) — 更新面板显示当前/最新版本 + 修复 Failed to fetch
+
+> 更新面板默认即显示「当前版本 → 最新版本」（服务端渲染，不依赖客户端 fetch）；修复检查更新因远程连通慢导致前端 `Failed to fetch` 的问题。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **服务端渲染版本**：后台「远程在线更新」面板打开即显示「当前版本 → 最新版本 + 是否有新版」，由服务端 `renderUpdateBlock()` 直接渲染，网络差/离线也能看到版本；
+- **修复 Failed to fetch**：清单拉取改用独立 **8 秒短超时**客户端（原 60s），避免连通性差时长时间阻塞 HTTP 请求导致浏览器报 `Failed to fetch`；前端 `checkUpdate()` 失败时不再覆盖已显示版本。
+- 版本升级 `v0.3.2 → v0.3.3`。
+
+### 验证
+
+- 实测 `/mxadmin` 直接渲染「当前版本 … → 最新版本 …」；`/api/update/check` 0.1s 返回；`go vet`/静态编译通过。
+
+---
+
 ## v0.3.2 (2026-09-09) — 后台入口改为 /mxadmin + 页头标注开发者
 
 > 后台不再通过 `/` 直达，改为 `http://<IP>:8080/mxadmin`；后台页头显眼标注「开发者 · ssmhdssmhd」。

@@ -1,5 +1,28 @@
 # 更新日志
 
+## Go 分支 v0.3.3 (2026-09-09) — 更新面板显示当前/最新版本 + 修复 Failed to fetch
+
+### 更新面板直接显示版本；修复检查更新远程连通慢导致的 Failed to fetch
+
+> 用户诉求：更新时要显示当前版本和最新版本；检查失败提示 `Failed to fetch`。
+
+#### 1. 服务端渲染版本（[main.go](file:///workspace/main.go) `renderUpdateBlock`）
+
+- 后台「远程在线更新」面板打开即显示「**当前版本 → 最新版本** + 是否有新版」，由服务端 `handleAdmin()` 用 `renderUpdateBlock()` 直接注入 HTML，**不依赖客户端 fetch**——网络差/离线也能看到版本；
+- 前端 `checkUpdate()` 仅做状态刷新，失败时不再覆盖已显示的版本信息。
+
+#### 2. 修复 Failed to fetch（[main.go](file:///workspace/main.go)）
+
+- 根因：`/api/update/check` 在请求内同步访问 `raw.githubusercontent.com`（国内常慢/被墙），原 `updateHTTP` 超时 60s，连通差时长时间阻塞导致浏览器等不到响应报 `Failed to fetch`；
+- 修复：清单拉取改用独立 `manifestHTTP` 客户端，**超时 8 秒**；`/api/update/check` 实测约 0.1s 返回。
+
+#### 3. 版本与验证
+
+- 版本升级 `v0.3.2 → v0.3.3`；[README.md](file:///workspace/README.md) 同步 v0.3.3 更新日志。
+- 验证：`/mxadmin` 直接渲染「当前版本 v0.3.3 → 最新版本 v0.3.2」；`/api/update/check` 0.1s 返回；`go vet`/静态编译通过。
+
+---
+
 ## Go 分支 v0.3.2 (2026-09-09) — 后台入口改为 /mxadmin + 页头标注开发者
 
 ### 后台不再 / 直达，改为域名/mxadmin；后台显眼标注开发者

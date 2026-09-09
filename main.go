@@ -1,4 +1,4 @@
-// MXGT-Go v0.3.2 — M3U8 广告分析与去广告单文件服务
+// MXGT-Go v0.3.3 — M3U8 广告分析与去广告单文件服务
 //
 // 单文件、标准库零依赖：HTTP 服务接收 m3u8 链接，抓取-解析-保守广告检测-输出无广告 M3U8。
 //
@@ -45,7 +45,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.3.2"
+	AppVersion = "v0.3.3"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -617,7 +617,7 @@ const adminPageHTML = `<!DOCTYPE html>
   <div class="panel">
     <h2>🔄 远程在线更新</h2>
     <div class="row">
-      <div class="stat-line" id="updInfo" style="display:block"></div>
+      <div class="stat-line" id="updInfo" style="display:block"><!--UPD_BLOCK--></div>
     </div>
     <div class="row">
       <button class="btn" onclick="checkUpdate()">🔍 检查更新</button>
@@ -677,12 +677,14 @@ async function runClean(){
   }catch(e){el('resOut').textContent='解析失败: '+e.message}
 }
 function checkUpdate(){
-  el('updInfo').textContent='正在检查更新…';
+  // 版本（当前/最新）已由服务端渲染；这里仅刷新状态备注，失败不覆盖版本信息
+  el('updInfo').innerHTML='正在检查更新… <span class="upd-note"></span>';
   fetch('/api/update/check').then(function(r){return r.json()}).then(function(d){
-    let s='当前 '+d.current+' → 最新 '+d.latest;
-    if(d.has_update){ s+='　⚠️ 存在新版本'; }
-    if(d.message){ s+='　('+d.message+')'; }
-    el('updInfo').textContent=s;
+    let s='当前版本 '+d.current+' → 最新版本 '+d.latest;
+    if(d.has_update){ s+='　<span style="color:#dc2626;font-weight:700">⚠️ 存在新版本</span>'; }
+    else { s+='　<span style="color:#16a34a">已是最新</span>'; }
+    if(d.message){ s+='　<span class="upd-note" style="color:#9ca3af">('+d.message+')</span>'; }
+    el('updInfo').innerHTML=s;
   }).catch(function(e){el('updInfo').textContent='检查失败: '+e.message});
 }
 function applyUpdate(){
@@ -742,10 +744,25 @@ function playClean(){
 </html>
 `
 
+// renderUpdateBlock 服务端渲染「当前/最新版本」区块，避免依赖客户端 fetch（离线/慢时仍可显示版本）
+func renderUpdateBlock() string {
+	info := updateInfo()
+	cur, latest := info["current"].(string), info["latest"].(string)
+	s := `当前版本 ` + cur + ` &nbsp;→&nbsp; 最新版本 ` + latest
+	if has, _ := info["has_update"].(bool); has {
+		s += `　<span style="color:#dc2626;font-weight:700">⚠️ 存在新版本</span>`
+	} else {
+		s += `　<span style="color:#16a34a">已是最新</span>`
+	}
+	s += `　<span style="color:#9ca3af" class="upd-note"></span>`
+	return s
+}
+
 // handleAdmin 渲染后台页面
 func handleAdmin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	io.WriteString(w, adminPageHTML)
+	page := strings.Replace(adminPageHTML, `<!--UPD_BLOCK-->`, renderUpdateBlock(), 1)
+	io.WriteString(w, page)
 }
 
 // withCORS 全局跨域中间件：所有响应补 CORS 头（含播放分片所需的 Range 头放行），并处理 OPTIONS 预检
@@ -832,8 +849,11 @@ func compareVersion(a, b []int) int {
 }
 
 // fetchManifest 拉取线上版本清单（raw.githubusercontent，无 GitHub API 限流）
+// 用短超时的独立客户端，避免连通性差时长时间阻塞 HTTP 请求导致前端 Failed to fetch
+var manifestHTTP = &http.Client{Timeout: 8 * time.Second}
+
 func fetchManifest() (*UpdateManifest, error) {
-	resp, err := updateHTTP.Get(manifestRawURL)
+	resp, err := manifestHTTP.Get(manifestRawURL)
 	if err != nil {
 		return nil, err
 	}
