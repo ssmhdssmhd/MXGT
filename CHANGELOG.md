@@ -1,5 +1,32 @@
 # 更新日志
 
+## Go 分支 v0.4.8 (2026-09-09) — 全局多并发 + 批量检测进度条
+
+### 全局并发加速 + 检测进度条
+
+> 用户诉求：全局支持增加多并发，增加进度条。
+
+#### 1. 全局多并发（[main.go](file:///workspace/main.go)）
+
+- 新增启动参数 `-sites-conc N`（默认 8，建议 4~16）：资源站批量搜索与检测的全局并发数；
+- `searchSites`（官替链路多站搜索）改为并发 worker 池（信号量限流），命中收集加锁；
+- 批量检测同步并发化：所有待检站点并行执行，全局并发数受 `siteConcurrency` 控制。
+
+#### 2. 批量检测异步任务 + 进度条
+
+- `POST/GET /api/sites/check?kw=` 改为**异步启动**：立即返回 `{task, total}`，后台 goroutine 并发检测；
+- `GET /api/sites/check/progress?task=<id>` 轮询进度：返回 `total/done/usable/blocked/finished/results`，结果随检测逐步追加（快照拷贝避免并发写）；
+- 检测完成统一落盘：成功→`active`（清除自动屏蔽备注），失败→`paused` + 「自动屏蔽·不可搜索: 原因」；
+- 任务存储内存管理：完成超 10 分钟的旧任务自动清理；
+- 后台 UI「🧹 检测并屏蔽失效站」：真实百分比进度条（`.prog-fill` width=done/total*100%）+ 计数文本「检测 X/N（Y%）· 可用 N · 失效 M」+ 实时结果列表（最新 60 条倒序），完成后自动刷新站点列表并隐藏失效站。
+
+#### 3. 版本与验证
+
+- 版本升级 `v0.4.7 → v0.4.8`；[README.md](file:///workspace/README.md) 同步 v0.4.8 更新日志；
+- 验证：`go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过；接口实测：`/check` 启动返回 task、`/check/progress` 返回 done/total/usable/blocked/finished/results，失效站自动 paused 落盘；浏览器实测：进度条 0%→20%→100%（真实百分比，非循环动画）、计数文本逐帧更新（0/5→1/5→5/5 完成）、结果逐条追加（西瓜✓可用→慢站✗失效）、完成后 600ms 自动刷新列表并隐藏失效站，布局无错位。
+
+---
+
 ## Go 分支 v0.4.7 (2026-09-09) — 资源站管理：添加/删除/批量检测屏蔽失效站 + 西瓜 XML 接口
 
 ### 添加资源站、删除、过滤（不显示失败的），参考 PHP

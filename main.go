@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.4.7"
+	AppVersion = "v0.4.8"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -835,6 +835,8 @@ const adminPageHTML = `<!DOCTYPE html>
   .prog-wrap{height:6px;background:#eee;border-radius:4px;overflow:hidden;margin:10px 0;position:relative}
   .prog-bar{height:100%;width:40%;background:linear-gradient(90deg,#7e22ce,#c026d3);border-radius:4px;animation:prog 1s ease-in-out infinite}
   @keyframes prog{0%{margin-left:-40%}100%{margin-left:100%}}
+  .prog-track{height:10px;background:#eee;border-radius:6px;overflow:hidden;margin:8px 0 4px}
+  .prog-fill{height:100%;width:0;background:linear-gradient(90deg,#7e22ce,#c026d3);border-radius:6px;transition:width .35s ease}
   details.site{margin:6px 0;border:1px solid #eee;border-radius:10px;background:#fff}
   details.site summary{cursor:pointer;padding:8px 12px;font-size:13.5px;font-weight:600;color:#581c87;list-style:none}
   details.site summary::before{content:"▸ ";color:#c026d3}
@@ -947,7 +949,8 @@ const adminPageHTML = `<!DOCTYPE html>
       <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;&amp;opt=aggresive</code></td><td>开启聚合聚类识别（可能误伤统一切片正片）</td></tr>
       <tr><td><code>GET /api/replace?url=&lt;官方视频页&gt;</code></td><td>官替链路：资源站匹配后返回无广告直链 ad_skip_url</td></tr>
       <tr><td><code>GET /api/sites</code> / <code>/toggle</code> / <code>/test</code></td><td>资源站列表（默认隐藏失效）/ 启停 / 搜索测试</td></tr>
-      <tr><td><code>POST /api/sites/add</code> / <code>/delete</code> / <code>/check</code></td><td>添加 / 删除资源站 / 批量检测并屏蔽失效站</td></tr>
+      <tr><td><code>POST /api/sites/add</code> / <code>/delete</code> / <code>/check</code></td><td>添加 / 删除资源站 / 异步批量检测（并发）并屏蔽失效站</td></tr>
+      <tr><td><code>GET /api/sites/check/progress?task=</code></td><td>查询批量检测任务进度（供进度条轮询）</td></tr>
       <tr><td><code>GET /api/stats</code></td><td>运行统计（JSON）</td></tr>
       <tr><td><code>GET /healthz</code></td><td>健康检查</td></tr>
     </table>
@@ -1161,25 +1164,40 @@ async function deleteSite(name){
 }
 async function checkSites(){
   const kw=el('siteKw')?el('siteKw').value:'爱情';
-  if(!confirm('将对可用资源站逐站搜索「'+kw+'」探测，失败站点将自动标记为失效并隐藏。确定执行？'))return;
+  if(!confirm('将对可用资源站并发检测（并发 '+((window.siteConc)||8)+'，失败站点自动标记失效并隐藏）。确定执行？'))return;
   showProg(true);
-  el('siteList').innerHTML='<span class="muted">正在逐站检测，请稍候（每个站点最多约 12 秒）…</span>';
   try{
-    const r=await fetch('/api/sites/check?kw='+encodeURIComponent(kw));
+    const r=await fetch('/api/sites/check?kw='+encodeURIComponent(kw),{method:'POST'});
     if(r.status===401){location.href='/mxadmin/login';return;}
     const j=await r.json();
-    let html='<div>检测完成：共 '+j.checked+' 个 · ✅ 可用 '+j.usable+' · ⛔ 屏蔽失效 '+j.blocked+'</div>';
-    if(j.results){
-      html+='<div style="margin-top:8px">'+j.results.map(function(x){
-        return '<div class="siterow"><b>'+esc(x.name)+'</b>'+
-          '<span style="'+(x.usable?'color:#16a34a':'color:#dc2626')+';font-weight:700">'+(x.usable?'✓ 可用':'✗ 失效')+'</span>'+
-          '<span class="muted" style="flex:1">'+esc(x.message)+' · '+x.response_ms+'ms</span></div>';
-      }).join('')+'</div>';
-    }
-    el('siteList').innerHTML=html;
-    await loadSites();
-  }catch(e){el('siteList').innerHTML='<span class="muted">检测失败: '+esc(e.message)+'</span>';}
-  showProg(false);
+    if(!j.success){el('siteList').innerHTML='<span class="muted">启动失败: '+esc(j.message)+'</span>';showProg(false);return;}
+    const task=j.task;
+    // 真实百分比进度条 + 计数
+    const prog=el('siteProg');
+    prog.style.display='block';
+    prog.innerHTML='<div class="prog-track"><div class="prog-fill" id="chkFill"></div></div>'+
+      '<div class="muted" id="chkInfo" style="font-size:12px">准备中…</div>';
+    el('siteList').innerHTML='<span class="muted">正在并发检测…</span>';
+    (function poll(){
+      fetch('/api/sites/check/progress?task='+encodeURIComponent(task)).then(function(r){return r.json()}).then(function(d){
+        if(!d.success){el('chkInfo').textContent=d.message;showProg(false);return;}
+        const pct=d.total>0?Math.round(d.done/d.total*100):0;
+        const fill=document.getElementById('chkFill');
+        if(fill)fill.style.width=pct+'%';
+        el('chkInfo').textContent='检测 '+d.done+'/'+d.total+'（'+pct+'%）· ✅ 可用 '+d.usable+' · ⛔ 失效 '+d.blocked+(d.finished?'　— 完成':'…');
+        const rs=d.results||[];
+        const tail=rs.slice(-60).reverse();
+        el('siteList').innerHTML='<div class="muted" style="margin-bottom:6px">已完成 '+d.done+' / 共 '+d.total+' 个站点：</div>'+
+          tail.map(function(x){
+            return '<div class="siterow"><b>'+esc(x.name)+'</b>'+
+              '<span style="'+(x.usable?'color:#16a34a':'color:#dc2626')+';font-weight:700">'+(x.usable?'✓ 可用':'✗ 失效')+'</span>'+
+              '<span class="muted" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.message)+' · '+x.response_ms+'ms</span></div>';
+          }).join('')||'<span class="muted">等待结果…</span>';
+        if(d.finished){showProg(false);setTimeout(function(){loadSites();},600);return;}
+        setTimeout(poll,600);
+      }).catch(function(e){el('chkInfo').textContent='进度获取失败: '+esc(e.message);showProg(false);});
+    })();
+  }catch(e){el('siteList').innerHTML='<span class="muted">检测失败: '+esc(e.message)+'</span>';showProg(false);}
 }
 async function toggleSite(name,onValue){
   showProg(true);
@@ -2052,6 +2070,9 @@ var siteHTTP = &http.Client{Timeout: 12 * time.Second, Transport: &http.Transpor
 	Proxy:           http.ProxyFromEnvironment,
 }}
 
+// siteConcurrency 资源站批量操作（搜索/检测）全局并发数，-sites-conc 可调，默认 8
+var siteConcurrency = 8
+
 func httpGetBody(u string) ([]byte, error) {
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
@@ -2299,22 +2320,34 @@ func searchSiteOne(s Site, kw string) ([]ResourceVideo, error) {
 	return vs, nil
 }
 
-// searchSites 在所有已启用站点搜索关键词，汇总返回
+// searchSites 在所有已启用站点搜索关键词，汇总返回（多站点并发，并发数 siteConcurrency）
 func searchSites(cfg *SitesConfig, kw string, maxSites int) searchOut {
 	sites := enabledSites(cfg)
 	if maxSites > 0 && len(sites) > maxSites {
 		sites = sites[:maxSites]
 	}
 	out := searchOut{Searched: len(sites)}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, siteConcurrency)
 	for _, s := range sites {
-		vs, err := searchSiteOne(s, kw)
-		if err != nil {
-			out.SiteFail = append(out.SiteFail, s.Name)
-			continue
-		}
-		out.Videos = append(out.Videos, vs...)
-		out.SiteOK = append(out.SiteOK, s.Name)
+		wg.Add(1)
+		go func(s Site) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			vs, err := searchSiteOne(s, kw)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				out.SiteFail = append(out.SiteFail, s.Name)
+				return
+			}
+			out.Videos = append(out.Videos, vs...)
+			out.SiteOK = append(out.SiteOK, s.Name)
+		}(s)
 	}
+	wg.Wait()
 	return out
 }
 
@@ -2750,67 +2783,187 @@ func handleSiteDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"success": true, "message": "删除成功"})
 }
 
-// handleSiteCheck 批量检测已启用站点可用性（参考 PHP verifySearchCapability）：
-// 探测词搜索失败/无结果 → 自动标记 status=paused（屏蔽）+ note 记录原因；成功 → status=active
+// ============ 资源站批量检测（并发 + 异步任务 + 进度条） ============
+
+// checkResultItem 单个站点检测结果
+type checkResultItem struct {
+	Name       string `json:"name"`
+	SiteURL    string `json:"site_url"`
+	Usable     bool   `json:"usable"`
+	Blocked    bool   `json:"blocked"`
+	Message    string `json:"message"`
+	ResponseMS int64  `json:"response_ms"`
+}
+
+// siteCheckTask 一次批量检测任务的进度状态
+type siteCheckTask struct {
+	ID        string            `json:"task"`
+	Keyword   string            `json:"probe_keyword"`
+	Total     int               `json:"total"`
+	Done      int               `json:"done"`
+	Usable    int               `json:"usable"`
+	Blocked   int               `json:"blocked"`
+	Finished  bool              `json:"finished"`
+	StartTime time.Time         `json:"-"`
+	Results   []checkResultItem `json:"results"`
+	statusMap map[string]bool   `json:"-"` // siteName -> usable
+	failMsg   map[string]string `json:"-"`
+}
+
+var (
+	checkTaskMu    sync.Mutex
+	checkTasks     = map[string]*siteCheckTask{}
+	checkTaskOrder = []string{} // 用于简单清理过期任务
+)
+
+func newTaskID() string {
+	buf := make([]byte, 6)
+	_, _ = rand.Read(buf)
+	return hex.EncodeToString(buf)
+}
+
+// startSiteCheck 启动一次异步批量检测（并发执行，失败站点自动置 paused 屏蔽）
+func startSiteCheck(kw string) *siteCheckTask {
+	task := &siteCheckTask{ID: newTaskID(), Keyword: kw, StartTime: time.Now(), statusMap: map[string]bool{}, failMsg: map[string]string{}}
+	checkTaskMu.Lock()
+	checkTasks[task.ID] = task
+	checkTaskOrder = append(checkTaskOrder, task.ID)
+	// 清理已完成且超过 10 分钟的旧任务，避免无限增长
+	cut := time.Now().Add(-10 * time.Minute)
+	for _, id := range checkTaskOrder {
+		t, ok := checkTasks[id]
+		if !ok {
+			continue
+		}
+		if t.Finished && t.StartTime.Before(cut) {
+			delete(checkTasks, id)
+		}
+	}
+	checkTaskMu.Unlock()
+	go runSiteCheck(task, kw)
+	return task
+}
+
+// runSiteCheck 并发执行检测：探测词搜索失败/无结果 → 标记 paused（屏蔽）+ 记录原因；成功 → active
+func runSiteCheck(task *siteCheckTask, kw string) {
+	cfg := loadSites()
+	var targets []Site
+	for _, s := range cfg.Sites {
+		if s.Enabled || s.Status == "active" {
+			targets = append(targets, s)
+		}
+	}
+	task.Total = len(targets)
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, siteConcurrency)
+	for _, s := range targets {
+		wg.Add(1)
+		go func(s Site) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			t0 := time.Now()
+			vs, err := searchSiteOne(s, kw)
+			ms := time.Since(t0).Milliseconds()
+			ok := err == nil && len(vs) > 0
+			item := checkResultItem{Name: s.Name, SiteURL: s.SiteURL, ResponseMS: ms}
+			if ok {
+				item.Usable = true
+				item.Message = "正常"
+			} else {
+				item.Blocked = true
+				msg := err.Error()
+				if len(msg) > 60 {
+					msg = msg[:60]
+				}
+				item.Message = msg
+			}
+			checkTaskMu.Lock()
+			task.Done++
+			if ok {
+				task.Usable++
+				task.statusMap[s.Name] = true
+			} else {
+				task.Blocked++
+				task.statusMap[s.Name] = false
+				task.failMsg[s.Name] = err.Error()
+			}
+			task.Results = append(task.Results, item)
+			checkTaskMu.Unlock()
+		}(s)
+	}
+	wg.Wait()
+
+	// 统一落盘状态（成功→active；失败→paused + 自动屏蔽原因）
+	sitesMu.Lock()
+	cfg2 := loadSites()
+	changed := false
+	for i := range cfg2.Sites {
+		usable, ok := task.statusMap[cfg2.Sites[i].Name]
+		if !ok {
+			continue
+		}
+		if usable {
+			if cfg2.Sites[i].Status != "active" {
+				cfg2.Sites[i].Status = "active"
+				if strings.Contains(cfg2.Sites[i].Note, "自动屏蔽") {
+					cfg2.Sites[i].Note = ""
+				}
+				changed = true
+			}
+		} else {
+			reason := "自动屏蔽·不可搜索: " + task.failMsg[cfg2.Sites[i].Name]
+			if len(reason) > 80 {
+				reason = reason[:80]
+			}
+			if cfg2.Sites[i].Status != "paused" || cfg2.Sites[i].Note != reason {
+				cfg2.Sites[i].Status = "paused"
+				cfg2.Sites[i].Note = reason
+				changed = true
+			}
+		}
+	}
+	if changed {
+		_ = saveSites(cfg2)
+	}
+	sitesMu.Unlock()
+
+	checkTaskMu.Lock()
+	task.Finished = true
+	checkTaskMu.Unlock()
+	recordCall("/api/sites/check", "wd="+kw, task.Usable > 0, 0, fmt.Sprintf("检测 %d 个：可用 %d / 屏蔽 %d", task.Total, task.Usable, task.Blocked))
+}
+
+// handleSiteCheck POST/GET /api/sites/check 启动批量检测任务（异步，配合 /check/progress 轮询进度）
 func handleSiteCheck(w http.ResponseWriter, r *http.Request) {
 	kw := strings.TrimSpace(r.URL.Query().Get("kw"))
 	if kw == "" {
 		kw = "爱情"
 	}
-	sitesMu.Lock()
-	defer sitesMu.Unlock()
-	cfg := loadSites()
-	type chkResult struct {
-		Name      string `json:"name"`
-		SiteURL   string `json:"site_url"`
-		Usable    bool   `json:"usable"`
-		Message   string `json:"message"`
-		Response  int64  `json:"response_ms"`
-		Blocked   bool   `json:"blocked"`
+	task := startSiteCheck(kw)
+	writeJSON(w, map[string]interface{}{
+		"success": true, "task": task.ID, "probe_keyword": kw, "total": task.Total,
+	})
+}
+
+// handleSiteCheckProgress GET /api/sites/check/progress?task=<id> 查询检测任务进度
+func handleSiteCheckProgress(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.URL.Query().Get("task"))
+	checkTaskMu.Lock()
+	task := checkTasks[id]
+	if task != nil {
+		task.Results = append([]checkResultItem(nil), task.Results...) // 拷贝快照，避免轮询期间并发写
 	}
-	results := []chkResult{}
-	usable, blocked, checked := 0, 0, 0
-	for i := range cfg.Sites {
-		s := &cfg.Sites[i]
-		if !s.Enabled && s.Status != "active" {
-			continue
-		}
-		checked++
-		t0 := time.Now()
-		vs, err := searchSiteOne(*s, kw)
-		ms := time.Since(t0).Milliseconds()
-		ok := err == nil && len(vs) > 0
-		if ok {
-			usable++
-			if s.Status != "active" {
-				s.Status = "active"
-				if !strings.Contains(s.Note, "自动屏蔽") {
-					s.Note = strings.TrimSpace(s.Note)
-				} else {
-					s.Note = ""
-				}
-			}
-			results = append(results, chkResult{Name: s.Name, SiteURL: s.SiteURL, Usable: true, Message: "正常", Response: ms})
-		} else {
-			blocked++
-			reason := "自动屏蔽·不可搜索: " + err.Error()
-			if len(reason) > 80 {
-				reason = reason[:80]
-			}
-			s.Status = "paused"
-			s.Note = reason
-			results = append(results, chkResult{Name: s.Name, SiteURL: s.SiteURL, Usable: false, Message: err.Error(), Response: ms, Blocked: true})
-		}
-	}
-	if err := saveSites(cfg); err != nil {
-		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+	checkTaskMu.Unlock()
+	if task == nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "任务不存在或已过期"})
 		return
 	}
-	recordCall("/api/sites/check", "wd="+kw, usable > 0, 0, fmt.Sprintf("检测 %d 个：可用 %d / 屏蔽 %d", checked, usable, blocked))
 	writeJSON(w, map[string]interface{}{
-		"success": true, "probe_keyword": kw,
-		"checked": checked, "usable": usable, "blocked": blocked,
-		"results": results,
+		"success": true, "task": task.ID, "probe_keyword": task.Keyword,
+		"total": task.Total, "done": task.Done, "usable": task.Usable, "blocked": task.Blocked,
+		"finished": task.Finished, "results": task.Results,
 	})
 }
 
@@ -3107,7 +3260,12 @@ func handleAIConfig(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	addr := flag.String("addr", ":8080", "监听地址")
+	sitesConc := flag.Int("sites-conc", 8, "资源站批量操作（搜索/检测）并发数，建议 4~16")
 	flag.Parse()
+	siteConcurrency = *sitesConc
+	if siteConcurrency < 1 {
+		siteConcurrency = 1
+	}
 	if flag.NArg() > 0 {
 		// CLI 模式：go run main.go <m3u8_url>
 		res := cleanOne(flag.Arg(0), false, "")
@@ -3190,6 +3348,7 @@ func main() {
 	http.HandleFunc("/api/sites/add", guard(handleSiteAdd))
 	http.HandleFunc("/api/sites/delete", guard(handleSiteDelete))
 	http.HandleFunc("/api/sites/check", guard(handleSiteCheck))
+	http.HandleFunc("/api/sites/check/progress", guard(handleSiteCheckProgress))
 	log.Printf("MXGT-Go %s listening on %s (M3U8 去广告 + 官替链路服务)", AppVersion, *addr)
 	// 使用全局 httpServer 句柄：更新重启时可优雅关闭释放端口（修复更新后不自动重启）
 	httpServer = &http.Server{Addr: *addr, Handler: withCORS(http.DefaultServeMux)}
