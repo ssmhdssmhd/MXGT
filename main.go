@@ -25,6 +25,7 @@ package main
 
 import (
 	"archive/zip"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"flag"
@@ -32,6 +33,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -42,11 +44,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
 const (
-	AppVersion = "v0.4.0"
+	AppVersion = "v0.4.1"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1045,7 +1048,26 @@ func extractBinary(zipPath, want string) (string, error) {
 	return "", fmt.Errorf("zip 中未找到可执行文件 %s", want)
 }
 
-// replaceAndRestart 用新二进制替换当前文件并重启进程
+// httpServer 全局 HTTP 服务句柄（更新重启时可优雅关闭并释放端口）
+var httpServer *http.Server
+
+// waitPortFree 阻塞轮询直到 addr 上无法建立连接（即端口已释放），最久 timeout
+func waitPortFree(addr string, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+		if err != nil {
+			return // 连接拒绝 = 端口已释放
+		}
+		conn.Close()
+		time.Sleep(150 * time.Millisecond)
+	}
+}
+
+// replaceAndRestart 用新二进制替换当前文件并重启进程。
+// 修复「更新后不自动重启」：
+//   1) 先关闭当前 HTTP 服务释放端口，再启动新进程，避免新进程绑定失败(Address already in use)直接退出；
+//   2) 新进程用 Setsid 脱离当前会话，避免老进程退出时 SIGHUP 把新进程一起带走（nohup/setsid 部署场景）。
 func replaceAndRestart(newBin string) error {
 	exe, err := os.Executable()
 	if err != nil {
@@ -1061,18 +1083,30 @@ func replaceAndRestart(newBin string) error {
 	if err := os.Rename(newBin, exe); err != nil {
 		return err
 	}
-	// 启动新进程（继承参数与工作目录）
+	// 1) 停当前服务，释放监听端口（异步 Shutdown，避免阻塞正在处理本请求的连接）
+	listenAddr := ""
+	if httpServer != nil {
+		listenAddr = httpServer.Addr
+		if listenAddr != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+			go httpServer.Shutdown(ctx) // 关闭 listener 并等待活跃连接结束
+			waitPortFree(listenAddr, 8*time.Second)
+			_ = cancel
+		}
+	}
+	// 2) 启动新进程（继承参数与工作目录；Setsid 脱离会话防 SIGHUP）
 	args := os.Args[1:]
 	cmd := exec.Command(exe, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	cmd.Env = os.Environ()
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 	log.Printf("已启动新进程 pid=%d，本进程即将退出", cmd.Process.Pid)
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	os.Exit(0)
 	return nil
 }
@@ -1888,7 +1922,9 @@ func main() {
 	http.HandleFunc("/api/sites/toggle", handleSiteToggle)
 	http.HandleFunc("/api/sites/test", handleSiteTest)
 	log.Printf("MXGT-Go %s listening on %s (M3U8 去广告 + 官替链路服务)", AppVersion, *addr)
-	if err := http.ListenAndServe(*addr, withCORS(http.DefaultServeMux)); err != nil {
+	// 使用全局 httpServer 句柄：更新重启时可优雅关闭释放端口（修复更新后不自动重启）
+	httpServer = &http.Server{Addr: *addr, Handler: withCORS(http.DefaultServeMux)}
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

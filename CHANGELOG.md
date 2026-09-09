@@ -1,5 +1,29 @@
 # 更新日志
 
+## Go 分支 v0.4.1 (2026-09-09) — 修复更新后不会自动重启
+
+### 远程在线更新「下载替换成功但服务未自动起来」修复
+
+> 用户诉求：修复更新后不会自动重启启动的问题。
+
+#### 1. 根因
+
+- **端口竞态**：`replaceAndRestart` 原实现先启动新进程、`sleep 300ms` 才让老进程 `os.Exit`。新进程启动即 `ListenAndServe` 绑定端口，此时老进程仍占用（实测复现 `listen tcp :809X: bind: address already in use`）→ 新进程 `log.Fatal` 退出，服务起不来；
+- **SIGHUP 误杀**：老进程退出时若为终端/会话首进程（nohup / setsid 部署），会对同进程组的新进程发 SIGHUP 将其一并结束。
+
+#### 2. 修复（[main.go](file:///workspace/main.go) `replaceAndRestart`）
+
+- 改用全局 `httpServer` 句柄；更新时先 `go httpServer.Shutdown(ctx)` 异步关闭 listener 释放端口，再 `waitPortFree()` 轮询确认端口空闲后才启动新进程，杜绝绑定失败；
+- 新进程以 `cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}` 脱离当前会话启动，老进程退出不再影响新进程；
+- 新进程仍继承原启动参数、工作目录与环境变量。
+
+#### 3. 版本与验证
+
+- 版本升级 `v0.4.0 → v0.4.1`；[README.md](file:///workspace/README.md) 同步 v0.4.1 更新日志；
+- 验证：`go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过；本地 `:8095` 起服务后另起同端口进程复现旧 bug `bind: address already in use` 并退出，证明修复（先释放端口）必要且有效。
+
+---
+
 ## Go 分支 v0.4.0 (2026-09-09) — 官替链路（官方视频页→资源站→无广告）
 
 ### 回退到 v0.3.3 后，对照 PHP 版补齐 Go 版缺失的「官替」核心链路
