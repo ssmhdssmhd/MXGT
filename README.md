@@ -44,6 +44,11 @@ go run main.go "https://示例.com/playlist.m3u8"
 | `POST /api/maps/add` | 添加映射 `{from, to, platform?, note?}`（自动去重） |
 | `POST /api/maps/delete?from=&to=` | 删除映射 |
 | `GET /api/maps/fetch?url=<官方视频页>` | **从真实链接抓取官方平台/剧名/集数**，供一键填入映射表单 |
+| `GET /api/platforms` | **官方平台自动更新配置列表**（`official_platforms.json`：顺序/平台/域名/URL正则/标题选择器/优先级，内置 7 平台默认） |
+| `POST /api/platforms/add` | 添加官方平台配置 `{platform, domain, url_re?, title_selector?, priority, enabled, note?}` |
+| `POST /api/platforms/update` | 编辑官方平台配置（按 `old_platform`+`old_domain` 定位，正则合法性校验） |
+| `POST /api/platforms/delete?platform=&domain=` | 删除官方平台配置 |
+| `GET /api/platforms/fetch?url=<真实官方链接>` | **自动更新官方**：按优先级匹配平台 → 标题选择器提取 → 解析「影视剧名+剧集集数」返回，供自动映射到映射表 |
 | `GET /api/jx?url=<m3u8/官方页/直链>&engine=basic/auto/ai` | **JSON 通用兼容接口**（供影视 / TVBox / 盒子等调用）：返回 `{code,success,msg,url(去广告可播),full,play,name,pic,header,format}`，已带跨域、URL 基于请求 Host 动态拼接不硬编码 |
 | `GET/POST /api/ai/config` | 查看(仅GET,key打码)/更新(POST需登录) AI 去广告配置，返回 `ai_version`（见 `ai/` 独立目录） |
 | `GET /api/sites` | 资源站列表（`resource_sites.json`，默认全部禁用，后台按需启用） |
@@ -73,6 +78,14 @@ go run main.go "https://示例.com/playlist.m3u8"
 - 后台「🗺️ 官替映射专区」：粘贴**真实官方视频页链接** →「🔍 从链接抓取」自动识别平台并抓取官方剧名/集数 →「📥 填入表单」→ 填**资源站标准剧名** →「➕ 添加映射」；
 - 映射持久化到可执行文件旁 `title_maps.json`，支持列表查看与逐条删除；
 - 官替搜索关键词自动含「剧名+第N集 / 剧名+N / 剧名」三档；集数解析兼容「第01集 / EP01 / E1 / 01 / 独剑九天01 / 1」等多种表述，超过 9 集的多位数集数也能正确解析匹配。
+
+### 自动更新官方（Official Platform Auto-Update）
+
+- 后台「🛰️ 自动更新官方」面板：**顺序（优先级）/平台名称/域名/URL 匹配正则/标题选择器/优先级/启用/备注** 的配置列表，支持添加、编辑、删除、启停；
+- 配置持久化到可执行文件旁 `official_platforms.json`，内置 7 平台默认配置（腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP）；
+- `matchOfficialPlatform` 按**优先级顺序**匹配 URL（域名包含 + URL 正则可选），`detectPlatform` 优先使用用户配置，未配置回退内置平台提示；
+- **标题选择器**：自定义正则（第 1 捕获组）从真实页面提取标题，空则回退默认 `og:title`/`<title>`；
+- **自动映射**：粘贴真实官方链接 →「🔍 从链接自动获取」→ 自动解析「影视剧名 + 剧集集数」并**自动映射到「官替映射专区」表单**（from=影视剧名、平台自动填入），可直接「➕ 添加映射」落入映射表。
 
 ### JSON 兼容接口（影视 / TVBox / 盒子）
 
@@ -155,6 +168,24 @@ chmod +x mxgt-go
 ---
 
 ## Go 版更新日志（branch `go`）
+
+## v0.5.3 (2026-09-09) — 资源站检测去误判 + 官替「自动更新官方」平台配置
+
+> 修复资源站批量检测误判（单探针词导致 119 个站点被误判失效）；官替映射专区新增「🛰️ 自动更新官方」——平台配置（顺序/平台/域名/URL 正则/标题选择器/优先级）持久化到 `official_platforms.json`，从真实链接自动解析「影视剧名 + 剧集集数」并自动映射到映射表对应区域。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **资源站检测去误判**：新增 `probeSiteOne` 综合探测——多探针词（「爱情/庆余年/电视剧」）任一命中即判可用；搜索均无结果时探测列表接口连通性（`?ac=videolist&limit=5`），仅 HTTP 错误/超时/解析失败才置失效；
+- **官方平台配置**：`OfficialPlatform` 数据结构 + `official_platforms.json` 持久化，内置 7 平台默认配置（腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP）；`matchOfficialPlatform` 按优先级顺序匹配（域名包含 + URL 正则）；`detectPlatform` 优先用户配置，未匹配回退内置提示；
+- **标题选择器**：`fetchVideoTitleWithSelector` 用自定义正则（第 1 捕获组）从真实页面提取标题，空则回退默认 `og:title`/`<title>`；
+- **自动映射**：`GET /api/platforms/fetch?url=<真实官方链接>` 按优先级匹配平台 → 提取标题 → 解析「影视剧名 + 剧集集数」；后台「自动更新官方」面板支持添加/编辑（平台名称、域名、URL 匹配正则、标题选择器、优先级）/删除/启停，获取成功后自动填入「官替映射专区」表单并可一键添加映射；
+- 版本升级 `v0.5.2 → v0.5.3`。
+
+### 验证
+
+- `CGO_ENABLED=0 go build -o mxgt-go .` 通过；API 冒烟测试（platforms 列表/添加/更新/删除/fetch 未匹配提示）全部通过。
+
+---
 
 ## v0.5.2 (2026-09-09) — 修复剧名/集数拆分 + 内置 7 种官方平台字段提取
 

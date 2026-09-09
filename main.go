@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.5.2"
+	AppVersion = "v0.5.3"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -927,6 +927,34 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
+    <h2>🛰️ 自动更新官方 <span class="muted">（平台匹配规则：按优先级顺序 → 域名 + URL正则 → 标题选择器提取 → 自动映射剧名/集数到映射表）</span></h2>
+    <div class="row" style="flex-wrap:wrap">
+      <input id="pfUrl" placeholder="粘贴真实官方链接，自动匹配平台并提取「影视剧名 + 剧集集数」" style="flex:1;min-width:280px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="pfFetch()">🔍 从链接自动获取</button>
+      <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="loadPlatforms()">⟳ 刷新</button>
+      <span class="muted" id="pfInfo" style="width:100%"></span>
+    </div>
+    <div class="row" style="flex-wrap:wrap">
+      <span class="muted">平台名称</span>
+      <input id="pfPlatform" placeholder="如：腾讯视频" style="width:110px;padding:7px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <span class="muted">域名</span>
+      <input id="pfDomain" placeholder="如：v.qq.com" style="width:130px;padding:7px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <span class="muted">URL匹配正则</span>
+      <input id="pfUrlRe" placeholder="可选，如 (?i)play\?cid=([0-9]+)" style="flex:1;min-width:200px;padding:7px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <span class="muted">标题选择器</span>
+      <input id="pfTitleSel" placeholder="可选，HTML提取标题正则（第1捕获组）" style="flex:1;min-width:200px;padding:7px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <span class="muted">优先级</span>
+      <input id="pfPriority" type="number" value="10" style="width:64px;padding:7px 8px;border-radius:10px;border:1px solid #d1d5db">
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="pfSave()">💾 保存配置</button>
+      <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="pfResetForm()">清空</button>
+    </div>
+    <table>
+      <thead><tr><th>顺序</th><th>平台</th><th>域名</th><th>URL匹配正则</th><th>标题选择器</th><th>优先级</th><th>启用</th><th>备注</th><th>操作</th></tr></thead>
+      <tbody id="pfList"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
     <h2>🏢 资源站管理 <span class="muted">（默认全部禁用，按需启用；失效站自动隐藏）</span></h2>
     <div class="row" style="flex-wrap:wrap">
       <input id="nsName" placeholder="名称（必填）" style="width:150px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
@@ -1037,7 +1065,7 @@ function applyUpdate(){
     setTimeout(function(){location.reload();},4000);
   }).catch(function(e){el('updInfo').textContent='发起失败: '+e.message});
 }
-refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps();
+refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms();
 
 function buildCleanURL(url, aggr){
   const eng=el('engOpt')?el('engOpt').value:'';
@@ -1227,7 +1255,7 @@ async function deleteSite(name){
 }
 async function checkSites(){
   const kw=el('siteKw')?el('siteKw').value:'爱情';
-  if(!confirm('将对可用资源站并发检测（并发 '+((window.siteConc)||8)+'，失败站点自动标记失效并隐藏）。确定执行？'))return;
+  if(!confirm('将对可用资源站并发检测（多探针词「爱情/庆余年/电视剧」任一命中即可用，搜索无命中时自动探测接口连通性，仅真失效才屏蔽）。确定执行？'))return;
   showProg(true);
   try{
     const r=await fetch('/api/sites/check?kw='+encodeURIComponent(kw),{method:'POST'});
@@ -1331,6 +1359,115 @@ async function delMap(from,to){
   }catch(e){alert('网络错误: '+e.message);}
   showProg(false);
 }
+// —— 自动更新官方：官方平台配置（顺序/平台/域名/URL正则/标题选择器/优先级）——
+let pfEditKey=null; // 编辑状态：{platform,domain}
+async function loadPlatforms(){
+  try{
+    const r=await fetch('/api/platforms');
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    const ps=((j&&j.platforms)||[]).slice().sort(function(a,b){
+      return (a.priority-b.priority)||(a.platform>b.platform?1:-1);
+    });
+    window._pfData=ps;
+    el('pfList').innerHTML=ps.length?ps.map(function(p,i){
+      return '<tr>'+
+        '<td class="muted">'+(i+1)+'</td>'+
+        '<td><b>'+esc(p.platform)+'</b></td>'+
+        '<td><code>'+esc(p.domain)+'</code></td>'+
+        '<td class="muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(p.url_re||'')+'">'+esc(p.url_re||'—')+'</td>'+
+        '<td class="muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(p.title_selector||'')+'">'+esc(p.title_selector||'—')+'</td>'+
+        '<td>'+p.priority+'</td>'+
+        '<td><label style="cursor:pointer"><input type="checkbox" '+(p.enabled?'checked':'')+' onclick="pfToggle(\''+esc(p.platform).replace(/'/g,"\\'")+'\',\''+esc(p.domain).replace(/'/g,"\\'")+'\',this.checked)"> '+(p.enabled?'启用':'停用')+'</label></td>'+
+        '<td class="muted">'+esc(p.note||'')+'</td>'+
+        '<td><button class="btn gh" style="padding:3px 10px;font-size:12px" onclick="pfEdit(\''+esc(p.platform).replace(/'/g,"\\'")+'\',\''+esc(p.domain).replace(/'/g,"\\'")+'\')">✏️ 编辑</button> '+
+        '<button class="btn gh" style="color:#dc2626;padding:3px 10px;font-size:12px" onclick="pfDelete(\''+esc(p.platform).replace(/'/g,"\\'")+'\',\''+esc(p.domain).replace(/'/g,"\\'")+'\')">🗑 删除</button></td></tr>';
+    }).join(''):'<tr><td colspan="9" class="muted">暂无配置，可在上方填写后「保存配置」添加</td></tr>';
+  }catch(e){el('pfList').innerHTML='<tr><td colspan="9" class="muted">加载失败: '+esc(e.message)+'</td></tr>';}
+}
+function pfResetForm(){
+  pfEditKey=null;
+  ['pfPlatform','pfDomain','pfUrlRe','pfTitleSel'].forEach(function(id){el(id).value='';});
+  el('pfPriority').value='10';
+  el('pfInfo').textContent='';
+}
+function pfEdit(platform,domain){
+  const ps=window._pfData||[];
+  const p=ps.filter(function(x){return x.platform===platform&&x.domain===domain;})[0];
+  if(!p){return;}
+  pfEditKey={platform:platform,domain:domain};
+  el('pfPlatform').value=p.platform;
+  el('pfDomain').value=p.domain;
+  el('pfUrlRe').value=p.url_re||'';
+  el('pfTitleSel').value=p.title_selector||'';
+  el('pfPriority').value=p.priority||10;
+  el('pfInfo').innerHTML='正在编辑：<b>'+esc(platform)+' @ '+esc(domain)+'</b>（保存将更新该条配置）';
+  el('pfPlatform').focus();
+}
+async function pfSave(){
+  const platform=(el('pfPlatform').value||'').trim();
+  const domain=(el('pfDomain').value||'').trim();
+  const url_re=(el('pfUrlRe').value||'').trim();
+  const title_selector=(el('pfTitleSel').value||'').trim();
+  const priority=parseInt(el('pfPriority').value||'10',10)||10;
+  if(!platform||!domain){alert('平台名称和域名不能为空');return;}
+  showProg(true);
+  try{
+    const body=pfEditKey?{old_platform:pfEditKey.platform,old_domain:pfEditKey.domain,platform:platform,domain:domain,url_re:url_re,title_selector:title_selector,priority:priority,enabled:true,note:'后台配置'}:{platform:platform,domain:domain,url_re:url_re,title_selector:title_selector,priority:priority,enabled:true,note:'后台配置'};
+    const r=await fetch(pfEditKey?'/api/platforms/update':'/api/platforms/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    alert(j.message||(j.success?(pfEditKey?'更新成功':'添加成功'):'保存失败'));
+    if(j.success){pfResetForm();await loadPlatforms();}
+  }catch(e){alert('网络错误: '+e.message);}
+  showProg(false);
+}
+async function pfToggle(platform,domain,enabled){
+  const p=(window._pfData||[]).filter(function(x){return x.platform===platform&&x.domain===domain;})[0];
+  const body={old_platform:platform,old_domain:domain,platform:platform,domain:domain,
+    url_re:(p&&p.url_re)||'',title_selector:(p&&p.title_selector)||'',priority:(p&&p.priority)||10,enabled:enabled,note:(p&&p.note)||''};
+  try{
+    const r=await fetch('/api/platforms/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    await loadPlatforms();
+  }catch(e){await loadPlatforms();}
+}
+async function pfDelete(platform,domain){
+  if(!confirm('确定删除官方平台配置「'+platform+' @ '+domain+'」吗？'))return;
+  showProg(true);
+  try{
+    const r=await fetch('/api/platforms/delete?platform='+encodeURIComponent(platform)+'&domain='+encodeURIComponent(domain),{method:'POST'});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    alert(j.message||(j.success?'删除成功':'删除失败'));
+    if(j.success)await loadPlatforms();
+  }catch(e){alert('网络错误: '+e.message);}
+  showProg(false);
+}
+async function pfFetch(){
+  const url=(el('pfUrl').value||'').trim();
+  if(!url){alert('请先粘贴真实官方链接');return;}
+  el('pfInfo').textContent='匹配平台并提取剧名/集数中…';
+  try{
+    const r=await fetch('/api/platforms/fetch?url='+encodeURIComponent(url));
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    if(!j.success){el('pfInfo').innerHTML='<span style="color:#dc2626">获取失败: '+esc(j.message||'')+'</span>';return;}
+    // 自动映射到对应区域：把「影视剧名/剧集集数」填入官替映射表单（映射表区域）
+    window._fetchedBase=j.base_title||'';
+    window._fetchedPlat=j.platform||'';
+    el('mFrom').value=j.base_title||'';
+    el('mPlat').value=j.platform||'';
+    el('mTo').value='';
+    const epRaw=j.episode_raw||'';
+    const epTxt=j.episode_num>0?('剧集字段「<b>'+esc(epRaw||('第'+j.episode_num+'集'))+'</b>('+j.episode_num+')'):'单集/未识别集数';
+    el('pfInfo').innerHTML='自动获取成功：平台 <b>'+esc(j.platform)+'</b> @ <code>'+esc(j.domain)+'</code> ｜ 影视剧名「<b>'+esc(j.base_title)+'</b>」 ｜ '+epTxt+
+      '　（已自动填入上方「官替映射专区」表单）'+
+      '　<button class="btn" style="padding:3px 10px;font-size:12px" onclick="addMap()">➕ 直接添加映射</button>'+
+      '　<button class="btn" style="padding:3px 10px;font-size:12px" onclick="el(\'mTo\').focus()">✏️ 填资源站剧名(to)</button>';
+  }catch(e){el('pfInfo').textContent='获取失败: '+esc(e.message);}
+}
+
 async function toggleSite(name,onValue){
   showProg(true);
   try{
@@ -2125,7 +2262,11 @@ var platformHints = []platformHint{
 	{"搜狐视频", "sohu.com"}, {"PP视频", "pptv.com"},
 }
 
+// detectPlatform 识别官方平台：优先用官方平台配置（按优先级+域名+URL正则），未配置时回退内置平台提示
 func detectPlatform(raw string) string {
+	if p := matchOfficialPlatform(raw); p != nil {
+		return p.Platform
+	}
 	host := ""
 	if u, err := url.Parse(raw); err == nil {
 		host = strings.ToLower(u.Host)
@@ -2179,6 +2320,25 @@ func fetchVideoTitle(raw, vidHint string) string {
 		}
 	}
 	return title
+}
+
+// fetchVideoTitleWithSelector 按官方平台配置的「标题选择器」从真实页面提取标题：
+// selector 为正则（第 1 捕获组为标题），为空时回退默认 og:title/<title> 提取
+func fetchVideoTitleWithSelector(raw, selector string) string {
+	if selector != "" {
+		re, err := regexp.Compile(selector)
+		if err == nil {
+			if body, err2 := newClient().fetch(raw); err2 == nil {
+				if m := re.FindStringSubmatch(body); len(m) > 1 {
+					t := strings.TrimSpace(m[1])
+					if t != "" {
+						return t
+					}
+				}
+			}
+		}
+	}
+	return fetchVideoTitle(raw, "")
 }
 
 var epCNRe = regexp.MustCompile(`第\s*([0-9]+|[一二三四五六七八九十百千]+)\s*(集|期|话)`)
@@ -2529,18 +2689,33 @@ func searchSiteOne(s Site, kw string) ([]ResourceVideo, error) {
 	if err != nil {
 		return nil, err
 	}
+	items, err := parseMaccmsItems(b)
+	if err != nil {
+		return nil, err
+	}
+	return itemsToVideos(items, s.Name), nil
+}
+
+// parseMaccmsItems 解析采集接口响应为通用条目列表（JSON / 标准 XML / 自定义 XML）
+func parseMaccmsItems(b []byte) ([]maccmsItem, error) {
 	items := []maccmsItem{}
 	var r maccmsResp
 	if err := json.Unmarshal(b, &r); err == nil && (len(r.List) > 0 || len(r.Data) > 0) {
 		items = append(items, r.List...)
 		items = append(items, r.Data...)
-	} else if x := parseStdXMLItems(b); x != nil {
-		items = x
-	} else if x := parseXgXMLItems(b); x != nil {
-		items = x
-	} else {
-		return nil, fmt.Errorf("响应解析失败（非 JSON/XML）")
+		return items, nil
 	}
+	if x := parseStdXMLItems(b); x != nil {
+		return x, nil
+	}
+	if x := parseXgXMLItems(b); x != nil {
+		return x, nil
+	}
+	return nil, fmt.Errorf("响应解析失败（非 JSON/XML）")
+}
+
+// itemsToVideos 通用条目 → ResourceVideo（过滤无播放地址项）
+func itemsToVideos(items []maccmsItem, siteName string) []ResourceVideo {
 	var vs []ResourceVideo
 	for _, it := range items {
 		playURL := it.VodPlayURL
@@ -2572,13 +2747,62 @@ func searchSiteOne(s Site, kw string) ([]ResourceVideo, error) {
 		}
 		vs = append(vs, ResourceVideo{
 			ID: id, Name: name, Pic: pic, Remarks: remarks,
-			Site: s.Name, PlayFrom: it.VodPlayFrom, URLs: urls, FirstURL: urls[0].URL,
+			Site: siteName, PlayFrom: it.VodPlayFrom, URLs: urls, FirstURL: urls[0].URL,
 		})
 	}
-	if len(vs) == 0 {
-		return nil, fmt.Errorf("无有效视频")
+	return vs
+}
+
+// probeSiteKeywords 资源站检测探针词：任一命中即判可用，避免单词语义/覆盖率导致的整批误判失效
+var probeSiteKeywords = []string{"爱情", "庆余年", "电视剧"}
+
+// probeSiteOne 综合探测单个资源站可用性：
+//  1. 依次用多个探针词搜索，任一命中 → 可用；
+//  2. 搜索词均无结果时，探测不带关键词的列表接口连通性，接口返回有效数据 → 可用（无命中）；
+//  3. 仅当 HTTP 错误/超时/解析失败才判失效。
+func probeSiteOne(s Site) (ms int64, msg string, vs []ResourceVideo, err error) {
+	t0 := time.Now()
+	var lastErr error
+	for _, kw := range probeSiteKeywords {
+		v, e := searchSiteOne(s, kw)
+		if e == nil && len(v) > 0 {
+			return time.Since(t0).Milliseconds(), "搜索命中「" + kw + "」", v, nil
+		}
+		if e != nil {
+			lastErr = e
+		}
 	}
-	return vs, nil
+	// 搜索无结果：探测列表接口连通性
+	if v, e := probeSiteList(s); e == nil && len(v) > 0 {
+		return time.Since(t0).Milliseconds(), "接口正常（搜索无命中）", v, nil
+	} else if e != nil {
+		lastErr = e
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("搜索与列表均无数据")
+	}
+	return time.Since(t0).Milliseconds(), "", nil, lastErr
+}
+
+// probeSiteList 不带搜索词探测资源站接口（?ac=videolist&limit=5），验证接口连通与解析
+func probeSiteList(s Site) ([]ResourceVideo, error) {
+	u, err := url.Parse(s.APIURL)
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	q.Set("ac", "videolist")
+	q.Set("limit", "5")
+	u.RawQuery = q.Encode()
+	b, err := httpGetBody(u.String())
+	if err != nil {
+		return nil, err
+	}
+	items, err := parseMaccmsItems(b)
+	if err != nil {
+		return nil, err
+	}
+	return itemsToVideos(items, s.Name), nil
 }
 
 // searchSites 在所有已启用站点搜索关键词，汇总返回（多站点并发，并发数 siteConcurrency）
@@ -2629,6 +2853,102 @@ type TitleMaps struct {
 	Version    string     `json:"version"`
 	UpdateDate string     `json:"update_date"`
 	NameMaps   []TitleMap `json:"name_maps"`
+}
+
+// OfficialPlatform 官方平台自动更新配置：
+// 按优先级顺序匹配 URL（域名 + URL 匹配正则），用标题选择器从真实页面提取标题，
+// 自动解析出「影视剧名 + 剧集集数」两个映射字段并映射到对应区域
+type OfficialPlatform struct {
+	Platform      string `json:"platform"`       // 平台名称（如：腾讯视频）
+	Domain        string `json:"domain"`         // 域名（如：v.qq.com，包含匹配）
+	URLRe         string `json:"url_re"`         // URL 匹配正则（可选，空=仅域名匹配）
+	TitleSelector string `json:"title_selector"` // 标题选择器（可选，HTML 中提取标题的正则，第 1 捕获组为标题；空=默认 og:title/<title>）
+	Priority      int    `json:"priority"`       // 优先级（数值越小越先匹配）
+	Enabled       bool   `json:"enabled"`        // 是否启用
+	Note          string `json:"note,omitempty"` // 备注
+}
+
+// OfficialPlatforms 官方平台配置（official_platforms.json，可执行文件旁持久化）
+type OfficialPlatforms struct {
+	Version    string             `json:"version"`
+	UpdateDate string             `json:"update_date"`
+	Platforms  []OfficialPlatform `json:"platforms"`
+}
+
+// defaultOfficialPlatforms 内置 7 种官方平台默认配置（可后台增删改，优先级控制顺序）
+var defaultOfficialPlatforms = []OfficialPlatform{
+	{Platform: "腾讯视频", Domain: "v.qq.com", Priority: 1, Enabled: true, Note: "内置默认"},
+	{Platform: "腾讯视频", Domain: "m.v.qq.com", Priority: 2, Enabled: true, Note: "内置默认"},
+	{Platform: "爱奇艺", Domain: "iqiyi.com", Priority: 3, Enabled: true, Note: "内置默认"},
+	{Platform: "优酷", Domain: "youku.com", Priority: 4, Enabled: true, Note: "内置默认"},
+	{Platform: "芒果TV", Domain: "mgtv.com", Priority: 5, Enabled: true, Note: "内置默认"},
+	{Platform: "哔哩哔哩", Domain: "bilibili.com", Priority: 6, Enabled: true, Note: "内置默认"},
+	{Platform: "搜狐视频", Domain: "sohu.com", Priority: 7, Enabled: true, Note: "内置默认"},
+	{Platform: "PP视频", Domain: "pptv.com", Priority: 8, Enabled: true, Note: "内置默认"},
+}
+
+var platformCfgMu sync.Mutex
+
+func officialPlatformsPath() string {
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "official_platforms.json")
+	}
+	return "official_platforms.json"
+}
+
+func loadOfficialPlatforms() *OfficialPlatforms {
+	cfg := &OfficialPlatforms{Version: "1.0", UpdateDate: time.Now().Format("2006-01-02")}
+	if b, err := os.ReadFile(officialPlatformsPath()); err == nil {
+		c2 := &OfficialPlatforms{}
+		if json.Unmarshal(b, c2) == nil && len(c2.Platforms) > 0 {
+			return c2
+		}
+	}
+	// 首次运行/文件缺失：落盘内置 7 平台默认配置
+	cfg.Platforms = append([]OfficialPlatform(nil), defaultOfficialPlatforms...)
+	_ = saveOfficialPlatforms(cfg)
+	return cfg
+}
+
+func saveOfficialPlatforms(c *OfficialPlatforms) error {
+	c.UpdateDate = time.Now().Format("2006-01-02")
+	b, _ := json.MarshalIndent(c, "", "    ")
+	return os.WriteFile(officialPlatformsPath(), b, 0o644)
+}
+
+// matchOfficialPlatform 按优先级顺序匹配官方平台：域名包含 + URL 正则（可选）
+func matchOfficialPlatform(raw string) *OfficialPlatform {
+	host := ""
+	if u, err := url.Parse(raw); err == nil {
+		host = strings.ToLower(u.Host)
+	}
+	platformCfgMu.Lock()
+	cfg := loadOfficialPlatforms()
+	platformCfgMu.Unlock()
+	list := append([]OfficialPlatform(nil), cfg.Platforms...)
+	sort.SliceStable(list, func(i, j int) bool {
+		if list[i].Priority != list[j].Priority {
+			return list[i].Priority < list[j].Priority
+		}
+		return list[i].Platform < list[j].Platform
+	})
+	for i := range list {
+		p := &list[i]
+		if !p.Enabled || p.Domain == "" {
+			continue
+		}
+		if !strings.Contains(host, strings.ToLower(p.Domain)) {
+			continue
+		}
+		if p.URLRe != "" {
+			re, err := regexp.Compile(p.URLRe)
+			if err != nil || !re.MatchString(raw) {
+				continue
+			}
+		}
+		return p
+	}
+	return nil
 }
 
 var titleMapsMu sync.Mutex
@@ -3320,14 +3640,13 @@ func runSiteCheck(task *siteCheckTask, kw string) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			t0 := time.Now()
-			vs, err := searchSiteOne(s, kw)
-			ms := time.Since(t0).Milliseconds()
+			// 多探针词 + 接口连通性综合探测：避免「单词无结果」整批误判失效
+			ms, msg, vs, err := probeSiteOne(s)
 			ok := err == nil && len(vs) > 0
 			item := checkResultItem{Name: s.Name, SiteURL: s.SiteURL, ResponseMS: ms}
 			if ok {
 				item.Usable = true
-				item.Message = "正常"
+				item.Message = "正常 · " + msg
 			} else {
 				item.Blocked = true
 				msg := err.Error()
@@ -3540,6 +3859,193 @@ func handleMapsFetch(w http.ResponseWriter, r *http.Request) {
 		"base_title":  vi.BaseTitle,
 		"episode_raw": vi.Episode, "episode": vi.Episode,
 		"episode_num": vi.EpisodeNum,
+	})
+}
+
+// ============ 官方平台自动更新（official_platforms.json：顺序/平台/域名/URL正则/标题选择器/优先级） ============
+
+func handlePlatformsList(w http.ResponseWriter, r *http.Request) {
+	platformCfgMu.Lock()
+	cfg := loadOfficialPlatforms()
+	platformCfgMu.Unlock()
+	recordCall("/api/platforms", "", true, 0, fmt.Sprintf("官方平台 %d 条", len(cfg.Platforms)))
+	writeJSON(w, cfg)
+}
+
+// handlePlatformsAdd POST /api/platforms/add 添加官方平台配置
+func handlePlatformsAdd(w http.ResponseWriter, r *http.Request) {
+	var req OfficialPlatform
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数解析失败: " + err.Error()})
+		return
+	}
+	req.Platform = strings.TrimSpace(req.Platform)
+	req.Domain = strings.ToLower(strings.TrimSpace(req.Domain))
+	req.URLRe = strings.TrimSpace(req.URLRe)
+	req.TitleSelector = strings.TrimSpace(req.TitleSelector)
+	req.Note = strings.TrimSpace(req.Note)
+	if req.Platform == "" || req.Domain == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "平台名称和域名不能为空"})
+		return
+	}
+	if req.URLRe != "" {
+		if _, err := regexp.Compile(req.URLRe); err != nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "URL 匹配正则无效: " + err.Error()})
+			return
+		}
+	}
+	if req.TitleSelector != "" {
+		if _, err := regexp.Compile(req.TitleSelector); err != nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "标题选择器正则无效: " + err.Error()})
+			return
+		}
+	}
+	platformCfgMu.Lock()
+	defer platformCfgMu.Unlock()
+	cfg := loadOfficialPlatforms()
+	for _, p := range cfg.Platforms {
+		if p.Domain == req.Domain && p.Platform == req.Platform {
+			recordCall("/api/platforms/add", req.Domain, false, 0, "配置已存在")
+			writeJSON(w, map[string]interface{}{"success": false, "message": "该平台域名配置已存在"})
+			return
+		}
+	}
+	cfg.Platforms = append(cfg.Platforms, req)
+	if err := saveOfficialPlatforms(cfg); err != nil {
+		recordCall("/api/platforms/add", req.Domain, false, 0, "保存失败: "+err.Error())
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/platforms/add", req.Platform+"@"+req.Domain, true, 0, "添加成功")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "官方平台配置添加成功", "platform": req})
+}
+
+// handlePlatformsUpdate POST /api/platforms/update 编辑官方平台配置（按 platform+domain 定位）
+func handlePlatformsUpdate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		OldPlatform string `json:"old_platform"`
+		OldDomain   string `json:"old_domain"`
+		OfficialPlatform
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数解析失败: " + err.Error()})
+		return
+	}
+	req.OldPlatform = strings.TrimSpace(req.OldPlatform)
+	req.OldDomain = strings.ToLower(strings.TrimSpace(req.OldDomain))
+	req.Platform = strings.TrimSpace(req.Platform)
+	req.Domain = strings.ToLower(strings.TrimSpace(req.Domain))
+	if req.OldPlatform == "" || req.OldDomain == "" || req.Platform == "" || req.Domain == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "定位(旧平台/旧域名)和新配置均不能为空"})
+		return
+	}
+	if req.URLRe != "" {
+		if _, err := regexp.Compile(req.URLRe); err != nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "URL 匹配正则无效: " + err.Error()})
+			return
+		}
+	}
+	if req.TitleSelector != "" {
+		if _, err := regexp.Compile(req.TitleSelector); err != nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "标题选择器正则无效: " + err.Error()})
+			return
+		}
+	}
+	platformCfgMu.Lock()
+	defer platformCfgMu.Unlock()
+	cfg := loadOfficialPlatforms()
+	idx := -1
+	for i := range cfg.Platforms {
+		if cfg.Platforms[i].Platform == req.OldPlatform && strings.EqualFold(cfg.Platforms[i].Domain, req.OldDomain) {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		recordCall("/api/platforms/update", req.OldDomain, false, 0, "配置不存在")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "配置不存在: " + req.OldPlatform + "@" + req.OldDomain})
+		return
+	}
+	// 改名/改域后查重（排除自身）
+	for i := range cfg.Platforms {
+		if i != idx && cfg.Platforms[i].Platform == req.Platform && strings.EqualFold(cfg.Platforms[i].Domain, req.Domain) {
+			recordCall("/api/platforms/update", req.Domain, false, 0, "目标配置已存在")
+			writeJSON(w, map[string]interface{}{"success": false, "message": "目标配置已存在: " + req.Platform + "@" + req.Domain})
+			return
+		}
+	}
+	cfg.Platforms[idx] = req.OfficialPlatform
+	if err := saveOfficialPlatforms(cfg); err != nil {
+		recordCall("/api/platforms/update", req.Domain, false, 0, "保存失败: "+err.Error())
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/platforms/update", req.Platform+"@"+req.Domain, true, 0, "更新成功")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "官方平台配置更新成功", "platform": cfg.Platforms[idx]})
+}
+
+// handlePlatformsDelete POST /api/platforms/delete?platform=&domain= 删除官方平台配置
+func handlePlatformsDelete(w http.ResponseWriter, r *http.Request) {
+	platform := strings.TrimSpace(r.URL.Query().Get("platform"))
+	domain := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("domain")))
+	if platform == "" || domain == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少平台名称或域名"})
+		return
+	}
+	platformCfgMu.Lock()
+	defer platformCfgMu.Unlock()
+	cfg := loadOfficialPlatforms()
+	kept := []OfficialPlatform{}
+	found := false
+	for _, p := range cfg.Platforms {
+		if p.Platform == platform && strings.EqualFold(p.Domain, domain) {
+			found = true
+			continue
+		}
+		kept = append(kept, p)
+	}
+	if !found {
+		recordCall("/api/platforms/delete", domain, false, 0, "配置不存在")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "配置不存在: " + platform + "@" + domain})
+		return
+	}
+	cfg.Platforms = kept
+	if err := saveOfficialPlatforms(cfg); err != nil {
+		recordCall("/api/platforms/delete", domain, false, 0, "保存失败: "+err.Error())
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/platforms/delete", platform+"@"+domain, true, 0, "删除成功")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "官方平台配置删除成功"})
+}
+
+// handlePlatformsFetch GET /api/platforms/fetch?url=<真实官方链接> 自动更新官方：
+// 按优先级匹配平台配置（域名+URL正则+标题选择器）→ 从真实链接提取「影视剧名 + 剧集集数」→ 返回供自动映射
+func handlePlatformsFetch(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("url"))
+	if raw == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少 url 参数"})
+		return
+	}
+	p := matchOfficialPlatform(raw)
+	if p == nil {
+		recordCall("/api/platforms/fetch", raw, false, 0, "未匹配到官方平台配置")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未匹配到官方平台配置（请先添加对应平台的域名/URL 正则）"})
+		return
+	}
+	title := fetchVideoTitleWithSelector(raw, p.TitleSelector)
+	if title == "" {
+		recordCall("/api/platforms/fetch", raw, false, 0, "无法获取视频信息")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "无法获取官方视频信息，请检查链接或标题选择器"})
+		return
+	}
+	vi := parseVideoTitle(title)
+	recordCall("/api/platforms/fetch", raw, true, 0, fmt.Sprintf("%s · %s · 第%d集", p.Platform, vi.BaseTitle, vi.EpisodeNum))
+	writeJSON(w, map[string]interface{}{
+		"success": true, "platform": p.Platform, "domain": p.Domain,
+		"priority": p.Priority, "title_raw": title,
+		"base_title":  vi.BaseTitle,                             // 影视剧名字段
+		"episode_raw": vi.Episode, "episode_num": vi.EpisodeNum, // 剧集集数字段
 	})
 }
 
@@ -3933,6 +4439,12 @@ func main() {
 	http.HandleFunc("/api/maps/add", guard(handleMapsAdd))
 	http.HandleFunc("/api/maps/delete", guard(handleMapsDelete))
 	http.HandleFunc("/api/maps/fetch", guard(handleMapsFetch))
+	// 官方平台自动更新配置（需登录）：顺序/平台/域名/URL正则/标题选择器/优先级
+	http.HandleFunc("/api/platforms", guard(handlePlatformsList))
+	http.HandleFunc("/api/platforms/add", guard(handlePlatformsAdd))
+	http.HandleFunc("/api/platforms/update", guard(handlePlatformsUpdate))
+	http.HandleFunc("/api/platforms/delete", guard(handlePlatformsDelete))
+	http.HandleFunc("/api/platforms/fetch", guard(handlePlatformsFetch))
 	log.Printf("MXGT-Go %s listening on %s (M3U8 去广告 + 官替链路服务)", AppVersion, *addr)
 	// 使用全局 httpServer 句柄：更新重启时可优雅关闭释放端口（修复更新后不自动重启）
 	httpServer = &http.Server{Addr: *addr, Handler: withCORS(http.DefaultServeMux)}

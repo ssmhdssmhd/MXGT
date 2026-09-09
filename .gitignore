@@ -128,3 +128,7 @@ release/*.zip
 
 # ===== Go 分支后台登录凭据（运行时生成，勿入库）=====
 auth.json
+
+# ===== Go 分支运行时配置（服务启动自动生成/落盘，勿入库）=====
+title_maps.json
+official_platforms.json
