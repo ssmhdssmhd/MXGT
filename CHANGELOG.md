@@ -1,5 +1,29 @@
 # 更新日志
 
+## Go 分支 v0.2.1 (2026-09-09) — 前端跨域 + 直接播放 + 无硬编码
+
+### 后台补全跨域、新增内嵌播放器、播放地址不写死
+
+> 用户诉求：解析结果跨域可播放、有画面、无广告、不硬编码服务器地址。
+
+#### 1. 全局跨域（[main.go](file:///workspace/main.go) `withCORS`）
+
+- 新增 `withCORS` 中间件包裹整个服务：所有响应统一补 `Access-Control-Allow-Origin/-Methods/-Headers/-Expose-Headers`，放行 `Range`（TS 分片片段请求），`Access-Control-Max-Age` 兜底；OPTIONS 预检直接返回 204；
+- `Origin` 为空时回退 `*`，否则回显来源 Origin，并设 `Vary: Origin`。
+
+#### 2. 内嵌播放器（后台页）
+
+- 「解析测试」新增「▶ 直接播放无广告」按钮；点击后弹出 `video` 播放器（hls.js 多 CDN 兜底加载，动态设置请求 `Origin`），**就地播放过滤后的无广告画面**；
+- 播放源地址由 `location.origin + buildCleanURL(...)` **动态拼接**，不硬编码任何 IP/域名；
+- 新增后端 `playURL(r, path, query)` 按请求 Host 动态推导可播放地址的辅助函数。
+
+#### 3. 版本与验证
+
+- 版本升级 `v0.2.0 → v0.2.1`；[README.md](file:///workspace/README.md) Go 章节同步 v0.2.1 更新日志。
+- 验证：OPTIONS 预检 204 + 全套 CORS 头；`/api/clean` m3u8 带 CORS；后台页、`/api/stats` 均带 `Access-Control-Allow-Origin`；浏览器实测后台渲染正常、解析输出过滤后 `#EXTM3U`、点击直接播放弹出播放器并显示动态播放源，控制台无致命报错。
+
+---
+
 ## Go 分支 v0.2.0 (2026-09-09) — 新增后台管理页面
 
 ### 单文件服务新增玻璃拟态风格后台（运行统计 + 解析测试 + 接口说明）

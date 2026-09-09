@@ -1,4 +1,4 @@
-// MXGT-Go v0.2.0 — M3U8 广告分析与去广告单文件服务
+// MXGT-Go v0.2.1 — M3U8 广告分析与去广告单文件服务
 //
 // 单文件、标准库零依赖：HTTP 服务接收 m3u8 链接，抓取-解析-保守广告检测-输出无广告 M3U8。
 //
@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.2.0"
+	AppVersion = "v0.2.1"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -594,9 +594,16 @@ const adminPageHTML = `<!DOCTYPE html>
              onkeydown="if(event.key==='Enter')runClean()">
       <label class="sw"><input type="checkbox" id="aggrOpt"> 聚合识别(opt=aggresive)</label>
       <button class="btn" onclick="runClean()">⚡ 解析并去广告</button>
+      <button class="btn ghost" onclick="playClean()">▶ 直接播放无广告</button>
     </div>
     <div class="stat-line" id="resStats"></div>
     <pre id="resOut"></pre>
+  </div>
+
+  <div class="panel" id="playPanel" style="display:none">
+    <h2>🎬 无广告播放</h2>
+    <video id="player" controls playsinline style="width:100%;aspect-ratio:16/9;background:#000;border-radius:12px"></video>
+    <div class="stat-line" id="playSrc" style="display:block"></div>
   </div>
 
   <div class="panel">
@@ -651,6 +658,49 @@ async function runClean(){
   }catch(e){el('resOut').textContent='解析失败: '+e.message}
 }
 refreshStats(); setInterval(refreshStats,5000);
+
+function buildCleanURL(url, aggr){
+  return '/api/clean?url='+encodeURIComponent(url)+(aggr?'&opt=aggresive':'');
+}
+function loadHls(cb){
+  if(window.Hls){return cb();}
+  const cdn=['https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js',
+             'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.20/hls.min.js',
+             'https://unpkg.com/hls.js@1/dist/hls.min.js'];
+  let i=0;
+  (function load(){
+    if(i>=cdn.length){alert('hls.js 加载失败');return;}
+    const s=document.createElement('script');
+    s.src=cdn[i++];s.onload=cb;s.onerror=load;
+    document.head.appendChild(s);
+  })();
+}
+let hlsInst=null;
+function playClean(){
+  const url=(el('urlInput').value||'').trim();
+  if(!url){alert('请先粘贴 M3U8 地址');return;}
+  const aggr=el('aggrOpt').checked;
+  const src=buildCleanURL(url,aggr);
+  const player=el('player');
+  // 动态拼绝对播放地址（基于当前站点 origin，不硬编码）
+  el('playSrc').textContent='播放源: '+location.origin+src;
+  el('playPanel').style.display='block';
+  loadHls(function(){
+    if(hlsInst){hlsInst.destroy();hlsInst=null;}
+    if(Hls.isSupported()){
+      hlsInst=new Hls({enableWorker:true,
+        xhrSetup:function(xhr){
+          xhr.withCredentials=false;
+          xhr.setRequestHeader('Origin',location.origin);
+        }});
+      hlsInst.loadSource(src);hlsInst.attachMedia(player);
+    }else if(player.canPlayType('application/vnd.apple.mpegurl')){
+      player.src=src;
+    }else{alert('当前浏览器不支持 HLS 播放');return;}
+    player.play().catch(function(){});
+  });
+  refreshStats();
+}
 </script>
 </body>
 </html>
@@ -660,6 +710,39 @@ refreshStats(); setInterval(refreshStats,5000);
 func handleAdmin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	io.WriteString(w, adminPageHTML)
+}
+
+// withCORS 全局跨域中间件：所有响应补 CORS 头（含播放分片所需的 Range 头放行），并处理 OPTIONS 预检
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		h := w.Header()
+		h.Set("Access-Control-Allow-Origin", origin)
+		h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		h.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Range, Accept, User-Agent, Referer")
+		h.Set("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Range")
+		h.Set("Allow", "GET, POST, OPTIONS")
+		h.Set("Vary", "Origin")
+		if r.Method == http.MethodOptions {
+			h.Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// playURL 基于请求动态推导本服务可播放地址（不硬编码域名/IP，来源 request Host）
+func playURL(r *http.Request, path string, query url.Values) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	u := url.URL{Scheme: scheme, Host: r.Host, Path: path, RawQuery: query.Encode()}
+	return u.String()
 }
 
 func main() {
@@ -720,7 +803,7 @@ func main() {
 		writeJSON(w, res)
 	})
 	log.Printf("MXGT-Go %s listening on %s (单文件 M3U8 去广告服务)", AppVersion, *addr)
-	if err := http.ListenAndServe(*addr, nil); err != nil {
+	if err := http.ListenAndServe(*addr, withCORS(http.DefaultServeMux)); err != nil {
 		log.Fatal(err)
 	}
 }

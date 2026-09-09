@@ -82,6 +82,24 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.2.1 (2026-09-09) — 前端跨域 + 直接播放 + 无硬编码
+
+> 前端补全跨域（CORS + OPTIONS 预检 + Range 放行），后台新增内嵌播放器「直接播放无广告」，播放地址基于当前站点动态推导，不硬编码域名/IP。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **全局跨域**：新增 `withCORS` 中间件覆盖所有响应（含后台页），统一补 `Access-Control-Allow-Origin` / `-Methods` / `-Headers` / `-Expose-Headers`，并放行 `Range`（TS 分片片断请求）；OPTIONS 预检返回 204；
+- **内嵌播放器**：后台「解析测试」新增「▶ 直接播放无广告」按钮，点击后弹出 `video` 播放器（hls.js 多 CDN 兜底加载），**就地播放过滤后的无广告画面**；
+- **无硬编码**：播放源地址由 `location.origin + /api/clean?...` **动态拼接**（非写死 IP/域名），并提供 `playURL()` 后端按请求 Host 动态推导的辅助函数。
+- 版本升级 `v0.2.0 → v0.2.1`。
+
+### 验证
+
+- OPTIONS 预检 → 204 且带全套 CORS 头；`/api/clean` 返回 m3u8 带 CORS；`/api/stats`、后台页均带 `Access-Control-Allow-Origin`；
+- 浏览器实测：后台渲染正常、解析输出 `#EXTM3U` 过滤后文本、点击「直接播放无广告」弹出播放器并显示动态播放源，控制台无致命报错。
+
+---
+
 ## v0.2.0 (2026-09-09) — 新增后台管理页面
 
 > 单文件服务新增玻璃拟态风格后台：访问服务地址（`/` 或 `/admin`）即进入，含运行统计 + M3U8 解析去广告测试 + 接口说明。全程内嵌单文件，仍零依赖。
