@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.4.8"
+	AppVersion = "v0.4.9"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -949,7 +949,7 @@ const adminPageHTML = `<!DOCTYPE html>
       <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;&amp;opt=aggresive</code></td><td>开启聚合聚类识别（可能误伤统一切片正片）</td></tr>
       <tr><td><code>GET /api/replace?url=&lt;官方视频页&gt;</code></td><td>官替链路：资源站匹配后返回无广告直链 ad_skip_url</td></tr>
       <tr><td><code>GET /api/sites</code> / <code>/toggle</code> / <code>/test</code></td><td>资源站列表（默认隐藏失效）/ 启停 / 搜索测试</td></tr>
-      <tr><td><code>POST /api/sites/add</code> / <code>/delete</code> / <code>/check</code></td><td>添加 / 删除资源站 / 异步批量检测（并发）并屏蔽失效站</td></tr>
+      <tr><td><code>POST /api/sites/add</code> / <code>/update</code> / <code>/delete</code> / <code>/check</code></td><td>添加 / 编辑 / 删除资源站 / 异步批量检测（并发）并屏蔽失效站</td></tr>
       <tr><td><code>GET /api/sites/check/progress?task=</code></td><td>查询批量检测任务进度（供进度条轮询）</td></tr>
       <tr><td><code>GET /api/stats</code></td><td>运行统计（JSON）</td></tr>
       <tr><td><code>GET /healthz</code></td><td>健康检查</td></tr>
@@ -1128,8 +1128,10 @@ function renderSites(){
         '<b>'+esc(x.name)+'</b>'+
         '<span class="muted" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.note)+'</span>'+
         '<button class="btn gh" onclick="siteDetail(\''+x.name.replace(/'/g,"\\'")+'\')">详情</button>'+
+        '<button class="btn gh" onclick="editSite(\''+x.name.replace(/'/g,"\\'")+'\')">✏️ 编辑</button>'+
         '<button class="btn gh" style="color:#dc2626" onclick="deleteSite(\''+x.name.replace(/'/g,"\\'")+'\')">🗑 删除</button>'+
-        '</div><div class="sitedtl" id="dtl_'+esc(x.name)+'"></div>';
+        '</div><div class="sitedtl" id="dtl_'+esc(x.name)+'"></div>'+
+        '<div class="sitedtl" id="edt_'+esc(x.name)+'" style="display:none"></div>';
     }).join('');
     html+='</details>';
   });
@@ -1147,6 +1149,40 @@ async function addSite(){
     const j=await r.json();
     alert(j.message||(j.success?'添加成功':'添加失败'));
     if(j.success){el('nsName').value='';el('nsApi').value='';el('nsSite').value='';el('nsNote').value='';await loadSites();}
+  }catch(e){alert('网络错误: '+e.message);}
+  showProg(false);
+}
+async function editSite(name){
+  const box=document.getElementById('edt_'+esc(name));
+  if(!box)return;
+  if(box.style.display==='block'){box.style.display='none';return;}
+  const s=sitesData.filter(function(x){return x.name===name})[0]||{};
+  box.style.display='block';
+  box.innerHTML='<div class="row" style="flex-wrap:wrap;align-items:center">'+
+    '<span class="muted">名称</span><input id="edName" value="'+esc(s.name||'')+'" style="width:140px;padding:7px 9px;border-radius:8px;border:1px solid #d1d5db">'+
+    '<span class="muted">接口</span><input id="edApi" value="'+esc(s.api_url||'')+'" style="flex:1;min-width:260px;padding:7px 9px;border-radius:8px;border:1px solid #d1d5db">'+
+    '<span class="muted">官网</span><input id="edSite" value="'+esc(s.site_url||'')+'" style="width:190px;padding:7px 9px;border-radius:8px;border:1px solid #d1d5db">'+
+    '<span class="muted">备注</span><input id="edNote" value="'+esc(s.note||'')+'" style="flex:1;min-width:160px;padding:7px 9px;border-radius:8px;border:1px solid #d1d5db">'+
+    '<span class="muted">优先级</span><input id="edPri" type="number" value="'+(s.priority||100)+'" style="width:70px;padding:7px 9px;border-radius:8px;border:1px solid #d1d5db">'+
+    '<button class="btn" style="padding:7px 14px;font-size:12px" onclick="saveSite(\''+name.replace(/'/g,"\\'")+'\')">💾 保存</button>'+
+    '</div>';
+}
+async function saveSite(name){
+  const payload={name:name,
+    new_name:(el('edName').value||'').trim(),
+    api_url:(el('edApi').value||'').trim(),
+    site_url:(el('edSite').value||'').trim(),
+    note:(el('edNote').value||'').trim(),
+    priority:parseInt(el('edPri').value||'0',10)||0};
+  if(!payload.new_name){alert('名称不能为空');return;}
+  if(!payload.api_url){alert('采集接口不能为空');return;}
+  showProg(true);
+  try{
+    const r=await fetch('/api/sites/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    alert(j.message||(j.success?'更新成功':'更新失败'));
+    if(j.success)await loadSites();
   }catch(e){alert('网络错误: '+e.message);}
   showProg(false);
 }
@@ -2742,6 +2778,94 @@ func handleSiteAdd(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"success": true, "message": "添加成功", "site": req})
 }
 
+// siteUpdateReq 编辑资源站请求（参考 PHP updateSite：name 定位，可更新接口/官网/备注等，可选改名）
+type siteUpdateReq struct {
+	Name     string `json:"name"`     // 定位原名（必填）
+	NewName  string `json:"new_name"` // 可选：改名
+	SiteURL  string `json:"site_url"`
+	APIURL   string `json:"api_url"`
+	Type     string `json:"type"`
+	Status   string `json:"status"`
+	Note     string `json:"note"`
+	Priority int    `json:"priority"`
+	Enabled  *bool  `json:"enabled"`
+}
+
+// handleSiteUpdate 编辑资源站（接口/官网/备注/优先级/启停/改名），落盘持久化
+func handleSiteUpdate(w http.ResponseWriter, r *http.Request) {
+	var req siteUpdateReq
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数解析失败: " + err.Error()})
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少站点名称"})
+		return
+	}
+	req.APIURL = strings.TrimSpace(req.APIURL)
+	req.SiteURL = strings.TrimSpace(req.SiteURL)
+	req.NewName = strings.TrimSpace(req.NewName)
+	if req.APIURL != "" && !strings.HasPrefix(req.APIURL, "http://") && !strings.HasPrefix(req.APIURL, "https://") {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "采集接口需以 http(s):// 开头"})
+		return
+	}
+	sitesMu.Lock()
+	defer sitesMu.Unlock()
+	cfg := loadSites()
+	idx := -1
+	for i := range cfg.Sites {
+		if cfg.Sites[i].Name == name || strings.EqualFold(strings.TrimSpace(cfg.Sites[i].Name), name) {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		recordCall("/api/sites/update", name, false, 0, "资源站不存在")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "资源站不存在: " + name})
+		return
+	}
+	s := &cfg.Sites[idx]
+	if req.NewName != "" && req.NewName != s.Name {
+		for i := range cfg.Sites {
+			if i != idx && cfg.Sites[i].Name == req.NewName {
+				recordCall("/api/sites/update", name, false, 0, "新名称已存在")
+				writeJSON(w, map[string]interface{}{"success": false, "message": "资源站名称已存在: " + req.NewName})
+				return
+			}
+		}
+		s.Name = req.NewName
+	}
+	if req.APIURL != "" {
+		s.APIURL = req.APIURL
+	}
+	if req.SiteURL != "" {
+		s.SiteURL = req.SiteURL
+	}
+	if req.Note != "" {
+		s.Note = strings.TrimSpace(req.Note)
+	}
+	if req.Type != "" {
+		s.Type = req.Type
+	}
+	if req.Status != "" {
+		s.Status = req.Status
+	}
+	if req.Priority > 0 {
+		s.Priority = req.Priority
+	}
+	if req.Enabled != nil {
+		s.Enabled = *req.Enabled
+	}
+	if err := saveSites(cfg); err != nil {
+		recordCall("/api/sites/update", name, false, 0, "保存失败: "+err.Error())
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/sites/update", name, true, 0, fmt.Sprintf("更新 %s -> %s", name, s.Name))
+	writeJSON(w, map[string]interface{}{"success": true, "message": "更新成功", "site": *s})
+}
+
 // handleSiteDelete 删除资源站（参考 PHP deleteSite：精确 + 忽略大小写兜底）
 func handleSiteDelete(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
@@ -3346,6 +3470,7 @@ func main() {
 	http.HandleFunc("/api/sites/toggle", guard(handleSiteToggle))
 	http.HandleFunc("/api/sites/test", guard(handleSiteTest))
 	http.HandleFunc("/api/sites/add", guard(handleSiteAdd))
+	http.HandleFunc("/api/sites/update", guard(handleSiteUpdate))
 	http.HandleFunc("/api/sites/delete", guard(handleSiteDelete))
 	http.HandleFunc("/api/sites/check", guard(handleSiteCheck))
 	http.HandleFunc("/api/sites/check/progress", guard(handleSiteCheckProgress))
