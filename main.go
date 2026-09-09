@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.5.0"
+	AppVersion = "v0.5.1"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1104,8 +1104,12 @@ async function runReplace(){
       s+=' <a href="'+j.m3u8_url+'" target="_blank">源 m3u8 ↗</a>';
     }
     if(j.ad_skip_url){
+      const safe=j.ad_skip_url.replace(/'/g,"\\'");
       s+=' <a href="'+j.ad_skip_url+'" target="_blank">无广告直链 ↗</a>';
-      s+=' <button class="btn" style="padding:4px 10px;font-size:12px" onclick="playURL(\''+j.ad_skip_url+'\')">▶ 播放</button>';
+      s+=' <button class="btn" style="padding:4px 10px;font-size:12px" onclick="playURL(\''+safe+'\')">▶ 内置播放</button>';
+      if(j.external_url){
+        s+=' <button class="btn" style="padding:4px 10px;font-size:12px" onclick="window.open(\''+j.external_url.replace(/'/g,"\\'")+'\',\'_blank\')">↗ 外置播放</button>';
+      }
     }
     el('repStats').style.display='block';el('repStats').innerHTML=s;
     el('repOut').textContent=JSON.stringify(j,null,2);
@@ -1283,10 +1287,15 @@ async function fetchMap(){
     if(r.status===401){location.href='/mxadmin/login';return;}
     const j=await r.json();
     if(!j.success){el('mapFetchInfo').textContent='抓取失败: '+(j.message||'');return;}
-    el('mapFetchInfo').innerHTML='抓取成功：<b>'+esc(j.platform)+'</b> · 剧名「<b>'+esc(j.base_title)+'</b>」'+(j.episode_num>0?' · 第'+j.episode_num+'集':'')+
-      '　<button class="btn" style="padding:3px 10px;font-size:12px" onclick="fillMap()">📥 填入下方表单</button>';
+    // 自动映射：剧名字段（from=官方剧名）+ 平台，直接填入表单
     window._fetchedBase=j.base_title||'';
     window._fetchedPlat=j.platform||'';
+    fillMap();
+    const epRaw=j.episode_raw||'';
+    let epTxt=j.episode_num>0?('剧集字段「<b>'+esc(epRaw||('第'+j.episode_num+'集'))+'</b>('+j.episode_num+')'):'单集/未识别集数';
+    el('mapFetchInfo').innerHTML='自动映射成功：平台 <b>'+esc(j.platform)+'</b> ｜ 剧名字段「<b>'+esc(j.base_title)+'</b>」 ｜ '+epTxt+
+      '　<button class="btn" style="padding:3px 10px;font-size:12px" onclick="el(\'mTo\').focus()">✏️ 填资源站剧名(to)</button>'+
+      '　<button class="btn" style="padding:3px 10px;font-size:12px" onclick="addMap()">➕ 直接添加映射</button>';
   }catch(e){el('mapFetchInfo').textContent='抓取失败: '+esc(e.message);}
 }
 function fillMap(){
@@ -1296,8 +1305,9 @@ function fillMap(){
 }
 async function addMap(){
   const from=(el('mFrom').value||'').trim();
-  const to=(el('mTo').value||'').trim();
-  if(!from||!to){alert('官方剧名(from)和目标剧名(to)不能为空');return;}
+  let to=(el('mTo').value||'').trim();
+  if(!from){alert('官方剧名(from)不能为空');return;}
+  if(!to){to=from;} // to 留空时默认同名，支持「直接添加映射」一键添加
   showProg(true);
   try{
     const r=await fetch('/api/maps/add',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1663,6 +1673,79 @@ refresh(); setInterval(refresh,3000);
 </body>
 </html>
 `
+
+// playerPageHTML 独立外置播放页（/player?url=<m3u8|mp4>&title=…）：hls.js 多 CDN 兜底，mp4 直链原生播放
+// 响应带全站 CORS 头（withCORS），页面内 hls.js 请求分片时携带 Origin 头，跨域播放无障碍
+const playerPageHTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MXGT-Go 播放器</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{min-height:100vh;background:#0f172a;color:#e2e8f0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:20px;display:flex;flex-direction:column;align-items:center}
+  h1{font-size:18px;margin-bottom:6px;color:#f5f3ff}
+  .sub{font-size:12px;color:#94a3b8;margin-bottom:14px;text-align:center;word-break:break-all;max-width:900px}
+  video{width:100%;max-width:960px;aspect-ratio:16/9;background:#000;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+  .tip{font-size:12px;color:#64748b;margin-top:12px}
+  a{color:#c084fc;text-decoration:none}
+</style>
+</head>
+<body>
+  <h1>🎬 MXGT-Go 无广告播放器</h1>
+  <div class="sub" id="src"></div>
+  <video id="player" controls playsinline autoplay></video>
+  <div class="tip">来源：资源站 → 官替去广告直链（支持跨域）。m3u8 自动走 hls.js，mp4/mkv 直链原生播放。</div>
+<script>
+function g(n){return new URLSearchParams(location.search).get(n)||''}
+var src=g('url'),title=g('title');
+var video=document.getElementById('player');
+if(title){document.title=title+' - MXGT-Go 播放器';}
+document.getElementById('src').textContent=src||'缺少 url 参数';
+function isDirect(u){return /\.(mp4|mkv|webm|flv)(\?|$)/i.test(u);}
+function loadHls(cb){
+  if(window.Hls){return cb();}
+  var cdn=['https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js',
+           'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.20/hls.min.js',
+           'https://unpkg.com/hls.js@1/dist/hls.min.js',
+           'https://fastly.jsdelivr.net/npm/hls.js@1/dist/hls.min.js'];
+  var i=0;
+  (function load(){
+    if(i>=cdn.length){alert('hls.js 加载失败，请检查网络后重试');return;}
+    var s=document.createElement('script');
+    s.src=cdn[i++];s.onload=cb;s.onerror=load;
+    document.head.appendChild(s);
+  })();
+}
+if(src){
+  if(isDirect(src)){
+    video.src=src;video.play().catch(function(){});
+  }else if(video.canPlayType('application/vnd.apple.mpegurl')){
+    video.src=src;video.play().catch(function(){});
+  }else{
+    loadHls(function(){
+      if(Hls&&Hls.isSupported()){
+        var hls=new Hls({enableWorker:true,
+          xhrSetup:function(xhr){xhr.withCredentials=false;xhr.setRequestHeader('Origin',location.origin);}});
+        hls.loadSource(src);hls.attachMedia(video);
+        video.play().catch(function(){});
+      }else if(video.canPlayType('application/vnd.apple.mpegurl')){
+        video.src=src;
+      }else{alert('当前浏览器不支持 HLS 播放');}
+    });
+  }
+}
+</script>
+</body>
+</html>
+`
+
+// handlePlayer 渲染独立外置播放页（开放，无需登录；播放地址来自 /api/replace 的 external_url，基于请求 Host 动态生成）
+func handlePlayer(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	io.WriteString(w, playerPageHTML)
+}
 
 // handleFront 渲染前台接口调用详情页
 func handleFront(w http.ResponseWriter, r *http.Request) {
@@ -2700,6 +2783,8 @@ type ReplaceResult struct {
 	VideoRemarks   string        `json:"video_remarks,omitempty"`
 	M3U8URL        string        `json:"m3u8_url,omitempty"`
 	ADSkipURL      string        `json:"ad_skip_url,omitempty"`
+	PlayURL        string        `json:"play_url,omitempty"`     // 内置播放地址（= ad_skip_url，经 /api/clean 去广告）
+	ExternalURL    string        `json:"external_url,omitempty"` // 外置播放页（/player?url=…，基于请求 Host 动态拼接）
 	UsedKeyword    string        `json:"used_keyword,omitempty"`
 	SearchKeywords []string      `json:"search_keywords,omitempty"`
 	SearchedSites  int           `json:"searched_sites"`
@@ -2839,7 +2924,10 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 	}
 	res.M3U8URL = m3u8
 	res.ADSkipURL = playURL(r, "/api/clean", url.Values{"url": {m3u8}})
-	steps = append(steps, replaceStep{"output", "组装输出", "ok", "ad_skip_url 已生成（经 /api/clean 去广告）"})
+	// 内置播放：直接播放去广告直链；外置播放：独立播放页（跨域由 withCORS 覆盖，URL 基于请求 Host 动态拼接不硬编码）
+	res.PlayURL = res.ADSkipURL
+	res.ExternalURL = playURL(r, "/player", url.Values{"url": {m3u8}, "title": {vi.BaseTitle}})
+	steps = append(steps, replaceStep{"output", "组装输出", "ok", "ad_skip_url 已生成（经 /api/clean 去广告）；支持内置/外置播放"})
 
 	res.Success = true
 	res.Message = "官替解析成功，请播放 ad_skip_url（无广告）"
@@ -3403,10 +3491,14 @@ func handleMapsFetch(w http.ResponseWriter, r *http.Request) {
 	}
 	vi := parseVideoTitle(title)
 	recordCall("/api/maps/fetch", raw, true, 0, fmt.Sprintf("%s · %s · 第%d集", platform, vi.BaseTitle, vi.EpisodeNum))
+	// title_raw：官方原始标题（可能直接包含当前剧集，如「独剑九天01」「独剑九天 第01集」）
+	// base_title：拆出的剧名字段；episode_raw/episode_num：拆出的剧集字段
 	writeJSON(w, map[string]interface{}{
 		"success": true, "platform": platform,
-		"title": title, "base_title": vi.BaseTitle,
-		"episode_num": vi.EpisodeNum, "episode": vi.Episode,
+		"title_raw": title, "title": title,
+		"base_title":  vi.BaseTitle,
+		"episode_raw": vi.Episode, "episode": vi.Episode,
+		"episode_num": vi.EpisodeNum,
 	})
 }
 
@@ -3741,6 +3833,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "ok %s\n", AppVersion)
 	})
+	http.HandleFunc("/player", handlePlayer) // 独立外置播放页（开放，供官替 external_url 新窗口播放）
 	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, stats.snapshot())
 	})

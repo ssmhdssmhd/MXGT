@@ -38,7 +38,8 @@ go run main.go "https://示例.com/playlist.m3u8"
 | `GET /api/clean?url=<m3u8>` | 返回过滤后的无广告 M3U8 纯文本（绝对地址，保留 KEY/MAP/不连续标签） |
 | `GET /api/clean/json?url=<m3u8>` | 返回 JSON：统计 + 过滤后文本 + 每个片段的广告标记/原因 |
 | `GET /api/clean?url=...&opt=aggresive` | 开启聚合聚类识别（同目录统一切片批量判广告，可能误伤统一节奏正片，默认关） |
-| `GET /api/replace?url=<官方视频页>` | **官替链路**：识别平台→抓标题→资源站搜索→智能匹配→取集→经 `/api/clean` 去广告，返回 `ad_skip_url` 无广告直链 |
+| `GET /api/replace?url=<官方视频页>` | **官替链路**：识别平台→抓标题→资源站搜索→智能匹配→取集→经 `/api/clean` 去广告，返回 `ad_skip_url`/`play_url`（内置播放）/`external_url`（外置播放页） |
+| `GET /player?url=<去广告直链>&title=<剧名>` | **独立外置播放页**（开放）：hls.js/原生播放，全站跨域 |
 | `GET /api/maps` | 官替映射列表（`title_maps.json`：官方剧名 ↔ 资源站标准剧名） |
 | `POST /api/maps/add` | 添加映射 `{from, to, platform?, note?}`（自动去重） |
 | `POST /api/maps/delete?from=&to=` | 删除映射 |
@@ -154,6 +155,26 @@ chmod +x mxgt-go
 ---
 
 ## Go 版更新日志（branch `go`）
+
+## v0.5.1 (2026-09-09) — 官替映射自动填充 + 内置/外置播放
+
+> 映射专区输入官方链接即**自动映射剧名字段和剧集字段**（官方原始标题含当前剧集也能拆分）；官替结果支持「▶ 内置播放」（后台内嵌播放器）与「↗ 外置播放」（独立 `/player` 播放页新窗口），全站跨域、播放地址基于请求 Host 动态拼接不硬编码。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **映射自动填充**：`GET /api/maps/fetch` 返回 `title_raw`（原始标题）/`base_title`（剧名字段）/`episode_raw`+`episode_num`（剧集字段）；「从链接抓取」后自动填入 from 与平台，显示剧名/剧集拆分，「直接添加映射」时 to 留空默认等于官方剧名；
+- **官替播放**：`GET /api/replace` 新增 `play_url`（内置播放地址）与 `external_url`（外置播放页地址）；
+  - 内置播放：后台结果区「▶ 内置播放」按钮，页面内嵌播放器直接播放；
+  - 外置播放：新增开放播放页 `GET /player?url=<去广告直链>&title=<剧名>`，hls.js 多 CDN 兜底 + iOS 原生 HLS + mp4 直链原生播放；
+- **跨域**：`/player` 响应与 m3u8 分片请求均带 CORS 头（`withCORS` 全局），hls.js 请求分片携带 `Origin` 头；
+- **URL 不硬编码**：`play_url` / `external_url` 由 `playURL` 基于请求 `Host` 动态生成；
+- 版本升级 `v0.5.0 → v0.5.1`。
+
+### 验证
+
+- `go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过。
+
+---
 
 ## v0.5.0 (2026-09-09) — 官替映射专区：解决官方剧名/剧集与资源站表述不同导致的匹配失败
 
