@@ -125,3 +125,6 @@ _setup*
 mxgt-go
 release/*.zip
 *.exe
+
+# ===== Go 分支后台登录凭据（运行时生成，勿入库）=====
+auth.json

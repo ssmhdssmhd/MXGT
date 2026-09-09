@@ -26,7 +26,10 @@ package main
 import (
 	"archive/zip"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -49,7 +52,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.4.1"
+	AppVersion = "v0.4.2"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -581,6 +584,21 @@ const adminPageHTML = `<!DOCTYPE html>
   th{color:#581c87;font-size:12.5px}
   code{background:#f3f4f6;padding:2px 7px;border-radius:6px;color:#7e22ce;font-size:12px}
   .muted{color:#9ca3af;font-size:12px}
+  .prog-wrap{height:6px;background:#eee;border-radius:4px;overflow:hidden;margin:10px 0;position:relative}
+  .prog-bar{height:100%;width:40%;background:linear-gradient(90deg,#7e22ce,#c026d3);border-radius:4px;animation:prog 1s ease-in-out infinite}
+  @keyframes prog{0%{margin-left:-40%}100%{margin-left:100%}}
+  details.site{margin:6px 0;border:1px solid #eee;border-radius:10px;background:#fff}
+  details.site summary{cursor:pointer;padding:8px 12px;font-size:13.5px;font-weight:600;color:#581c87;list-style:none}
+  details.site summary::before{content:"▸ ";color:#c026d3}
+  details.site[open] summary::before{content:"▾ "}
+  details.site summary::-webkit-details-marker{display:none}
+  details.site[open] summary{border-bottom:1px solid #f0f0f0}
+  .siterow{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid #f6f6f6;font-size:13px}
+  .siterow:last-child{border-bottom:0}
+  .sitedtl{display:none;padding:8px 12px 12px;background:#fafafa;font-size:12.5px;color:#374151;word-break:break-all}
+  .sitedtl code{background:#f3f4f6;padding:2px 6px;border-radius:6px;color:#7e22ce}
+  .btn.gh{background:#fff;color:#581c87;border:1px solid #d1d5db;box-shadow:none;padding:3px 10px;font-size:12px}
+  .btn.mini{padding:5px 12px;font-size:12px}
 </style>
 </head>
 <body>
@@ -594,6 +612,8 @@ const adminPageHTML = `<!DOCTYPE html>
       <div style="font-size:14px;font-weight:700;color:#ffe4f1">开发者 · ssmhdssmhd</div>
       <div class="ver" style="font-size:11px;margin-top:2px">品牌 MXGT</div>
     </div>
+    <button class="btn ghost" onclick="openPwd()">🔑 改密码</button>
+    <button class="btn ghost" onclick="doLogout()">⎋ 退出</button>
     <button class="btn ghost" onclick="refreshStats()">⟳ 刷新</button>
   </div>
 
@@ -631,7 +651,18 @@ const adminPageHTML = `<!DOCTYPE html>
 
   <div class="panel">
     <h2>🏢 资源站管理 <span class="muted">（默认全部禁用，按需启用）</span></h2>
-    <button class="btn" onclick="loadSites()" style="padding:6px 12px;font-size:12px">⟳ 刷新</button>
+    <div class="row">
+      <input id="siteSearch" placeholder="🔍 搜索站点/备注/接口…" style="flex:0 0 260px;padding:9px 12px;border-radius:10px;border:1px solid #d1d5db" onkeyup="renderSites()">
+      <span class="muted" id="siteCount"></span>
+    </div>
+    <div class="row">
+      <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="loadSites()">⟳ 刷新</button>
+      <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="setAllSites(false)">全部折叠</button>
+      <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="setAllSites(true)">全部展开</button>
+      <span class="muted">测试词</span>
+      <input id="siteKw" value="庆余年" style="width:110px;padding:6px;border-radius:8px;border:1px solid #d1d5db">
+    </div>
+    <div class="prog-wrap" id="siteProg" style="display:none"><div class="prog-bar"></div></div>
     <div id="siteList"></div>
   </div>
 
@@ -775,36 +806,114 @@ async function runReplace(){
     refreshStats();
   }catch(e){el('repOut').textContent='官替失败: '+e.message}
 }
+let sitesData=null;
+const esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')};
+function showProg(on){el('siteProg').style.display=on?'block':'none';}
 async function loadSites(){
+  showProg(true);
   try{
-    const j=await getJSON('/api/sites');
-    if(!j||!j.sites){el('siteList').innerHTML='<span class="muted">无配置</span>';return;}
-    let en=0,total=j.sites.length;
-    j.sites.forEach(function(s){if(s.enabled)en++;});
-    let html='<span class="muted" style="margin-right:14px">已启用 '+en+'/'+total+'</span> ';
-    html+='<span class="muted">测试词: <input id="siteKw" value="庆余年" style="width:120px;padding:6px;border-radius:8px;border:1px solid #d1d5db"></span>';
-    html+='<table style="margin-top:12px"><thead><tr><th>站点</th><th>状态</th><th>测试</th></tr></thead><tbody>';
-    for(var i=0;i<j.sites.length;i++){
-      var s=j.sites[i];
-      html+='<tr><td>'+s.name+'<div class="muted">'+s.note+'</div></td>'+
-            '<td><label class="sw"><input type="checkbox" '+(s.enabled?'checked':'')+' onchange="toggleSite(\''+s.name.replace(/'/g,"\\'")+'\',this.checked)"> '+((s.enabled)?'已启用':'已禁用')+'</label></td>'+
-            '<td><button class="btn ghost" style="padding:4px 10px;font-size:12px" onclick="siteTest(\''+s.name.replace(/'/g,"\\'")+'\')">测试</button></td></tr>';
-    }
-    html+='</tbody></table>';
-    el('siteList').innerHTML=html;
-  }catch(e){el('siteList').textContent='加载失败: '+e.message}
+    const r=await fetch('/api/sites');
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    sitesData=(j&&j.sites)?j.sites:[];
+    renderSites();
+  }catch(e){el('siteList').innerHTML='<span class="muted">加载失败: '+esc(e.message)+'</span>';}
+  showProg(false);
 }
-async function toggleSite(name,on){
-  await fetch('/api/sites/toggle?name='+encodeURIComponent(name)+'&enabled='+(on?1:0)).then(r=>r.json());
-  loadSites();
+function renderSites(){
+  if(!sitesData)return;
+  const q=((el('siteSearch').value)||'').trim().toLowerCase();
+  const s2=sitesData.filter(function(x){
+    if(!q)return true;
+    return (x.name+((x.note)||'')+((x.api_url)||'')).toLowerCase().indexOf(q)>=0;
+  });
+  const en=s2.filter(function(x){return x.enabled}).length;
+  el('siteCount').innerHTML='已启用 '+en+' / 共 '+s2.length+' 个站点'+(q?'（筛选：'+esc(q)+'）':'');
+  const groups=[[esc('🟢 已启用'),s2.filter(x=>x.enabled)],[esc('⚪ 未启用'),s2.filter(x=>!x.enabled)]];
+  let html='';
+  groups.forEach(function(g){
+    const label=g[0],arr=g[1];
+    if(arr.length===0)return;
+    html+='<details class="site" open><summary>'+label+'（'+arr.length+'）</summary>';
+    html+=arr.map(function(x){
+      return '<div class="siterow">'+
+        '<label class="sw"><input type="checkbox" '+(x.enabled?'checked':'')+' onchange="toggleSite(\''+x.name.replace(/'/g,"\\'")+'\',this.checked)"></label>'+
+        '<b>'+esc(x.name)+'</b>'+
+        '<span class="muted" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.note)+'</span>'+
+        '<button class="btn gh" onclick="siteDetail(\''+x.name.replace(/'/g,"\\'")+'\')">详情</button>'+
+        '</div><div class="sitedtl" id="dtl_'+esc(x.name)+'"></div>';
+    }).join('');
+    html+='</details>';
+  });
+  el('siteList').innerHTML=html||'<span class="muted">无匹配站点</span>';
 }
-async function siteTest(name){
+async function toggleSite(name,onValue){
+  showProg(true);
+  try{
+    const r=await fetch('/api/sites/toggle?name='+encodeURIComponent(name)+'&enabled='+(onValue?1:0));
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    await loadSites();
+  }catch(e){}
+  showProg(false);
+}
+async function siteDetail(name){
+  const box=document.getElementById('dtl_'+esc(name));
+  if(!box)return;
+  if(box.innerHTML!==''){box.style.display=box.style.display==='block'?'none':'block';return;}
+  box.style.display='block';box.innerHTML='<span class="muted">查询中…</span>';
   const kw=el('siteKw')?el('siteKw').value:'庆余年';
   try{
     const r=await fetch('/api/sites/test?name='+encodeURIComponent(name)+'&kw='+encodeURIComponent(kw));
+    if(r.status===401){location.href='/mxadmin/login';return;}
     const j=await r.json();
-    alert(name+'：命中 '+j.count+' 条'+(j.count>0?('（'+j.videos[0].name+'）'):'  —— 无结果或站点失效，可在测试词里换关键词'));
-  }catch(e){alert('测试失败: '+e.message)}
+    const s=sitesData.filter(function(x){return x.name===name})[0]||{};
+    let v='<div><b>站点：</b><code>'+esc(name)+'</code></div>'+
+          '<div><b>官网：</b><code>'+esc(s.site_url||'')+'</code></div>'+
+          '<div><b>接口：</b><code>'+esc(s.api_url||'')+'</code></div>'+
+          '<div class="muted">状态：'+(s.enabled?'已启用':'已禁用')+(s.note?(' · '+esc(s.note)):'')+'</div>';
+    if(j.count>0){
+      const v0=j.videos[0];
+      v+='<div class="muted" style="margin-top:6px">搜索「'+esc(kw)+'」命中 '+j.count+' 条，示例：'+esc(v0.name)+'</div>'+
+         '<div style="margin-top:4px"><code>'+esc(v0.first_url)+'</code></div>'+
+         '<button class="btn mini" onclick="copyText(this,decodeURIComponent(\''+encodeURIComponent(v0.first_url)+'\'))">复制播放链接</button>';
+    }else{
+      v+='<div class="muted" style="margin-top:6px">未命中：该站点无结果或已失效，可换测试词再点详情</div>';
+    }
+    box.innerHTML=v;
+  }catch(e){box.innerHTML='<span class="muted">查询失败: '+esc(e.message)+'</span>';}
+}
+function copyText(btn,text){
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){
+      btn.textContent='已复制 ✓';setTimeout(function(){btn.textContent='复制播放链接';},1500);
+    }).catch(function(){fallbackCopy(text,btn);});
+  }else{fallbackCopy(text,btn);}
+}
+function fallbackCopy(text,btn){
+  const t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();
+  try{document.execCommand('copy');btn.textContent='已复制 ✓';setTimeout(function(){btn.textContent='复制播放链接';},1500);}catch(e){}
+  document.body.removeChild(t);
+}
+function setAllSites(openState){
+  document.querySelectorAll('#siteList details.site').forEach(function(d){d.open=openState;});
+}
+async function openPwd(){
+  const old=prompt('请输入原密码：');
+  if(old==null)return;
+  const nw=prompt('请输入新密码（至少 4 位）：');
+  if(nw==null)return;
+  const nw2=prompt('请再次输入新密码：');
+  if(nw!==nw2){alert('两次新密码不一致');return;}
+  try{
+    const r=await fetch('/api/auth/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({old:old,new:nw})});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    alert(j.message||(j.success?'密码已修改':'修改失败'));
+  }catch(e){alert('网络错误: '+e.message);}
+}
+async function doLogout(){
+  await fetch('/api/auth/logout',{method:'POST'});
+  location.href='/mxadmin/login';
 }
 function playClean(){
   const url=(el('urlInput').value||'').trim();
@@ -850,11 +959,78 @@ func renderUpdateBlock() string {
 	return s
 }
 
-// handleAdmin 渲染后台页面
+// handleAdmin 渲染后台页面（需登录，未登录跳转登录页）
 func handleAdmin(w http.ResponseWriter, r *http.Request) {
+	if !isAuthed(r) {
+		http.Redirect(w, r, "/mxadmin/login", http.StatusFound)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	page := strings.Replace(adminPageHTML, `<!--UPD_BLOCK-->`, renderUpdateBlock(), 1)
 	io.WriteString(w, page)
+}
+
+// loginPageHTML 后台登录页
+const loginPageHTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MXGT-Go 后台登录</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{min-height:100vh;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:linear-gradient(135deg,#581c87,#7e22ce,#a21caf);display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{width:100%;max-width:360px;background:rgba(255,255,255,.92);backdrop-filter:blur(16px);
+        border-radius:18px;padding:30px 28px;box-shadow:0 16px 40px rgba(0,0,0,.28);text-align:center}
+  h1{font-size:20px;color:#581c87;margin-bottom:4px}
+  .sub{font-size:12.5px;color:#9ca3af;margin-bottom:22px}
+  label{display:block;text-align:left;font-size:12.5px;color:#4b5563;margin:12px 0 6px}
+  input{width:100%;padding:11px 14px;border-radius:10px;border:1px solid #d1d5db;font-size:14px}
+  .btn{width:100%;margin-top:20px;background:linear-gradient(135deg,#7e22ce,#c026d3);color:#fff;border:0;
+       border-radius:10px;padding:12px;font-size:15px;cursor:pointer;box-shadow:0 6px 16px rgba(124,58,237,.35)}
+  .btn:hover{filter:brightness(1.08)}
+  .err{color:#dc2626;font-size:12.5px;margin-top:12px;min-height:18px}
+  .foot{margin-top:18px;font-size:11px;color:#9ca3af}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🎬 MXGT-Go 后台</h1>
+  <div class="sub">登录后进入后台管理 · 开发者 ssmhdssmhd</div>
+  <label>账号</label>
+  <input id="user" value="admin" autocomplete="username">
+  <label>密码</label>
+  <input id="pass" type="password" placeholder="请输入密码" autocomplete="current-password"
+         onkeydown="if(event.key==='Enter')doLogin()">
+  <button class="btn" onclick="doLogin()">登 录</button>
+  <div class="err" id="err"></div>
+  <div class="foot">默认账号 admin / admin123（可在后台修改密码）</div>
+</div>
+<script>
+async function doLogin(){
+  const user=document.getElementById('user').value.trim();
+  const pass=document.getElementById('pass').value;
+  const err=document.getElementById('err');
+  if(!user||!pass){err.textContent='请输入账号和密码';return;}
+  err.textContent='登录中…';
+  try{
+    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:user,password:pass})});
+    const j=await r.json();
+    if(j.success){location.href='/mxadmin';}
+    else{err.textContent=j.message||'登录失败';}
+  }catch(e){err.textContent='网络错误: '+e.message;}
+}
+</script>
+</body>
+</html>
+`
+
+// handleLogin 渲染登录页
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	io.WriteString(w, loginPageHTML)
 }
 
 // withCORS 全局跨域中间件：所有响应补 CORS 头（含播放分片所需的 Range 头放行），并处理 OPTIONS 预检
@@ -1851,6 +2027,200 @@ func handleSiteTest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ============================================================
+// 后台登录鉴权：账号密码（默认 admin / admin123，后台可改，持久化 auth.json）
+// ============================================================
+
+const cookieName = "mxgt_token"
+
+type AuthConfig struct {
+	Username     string `json:"username"`
+	PasswordHash string `json:"password_hash"`
+	Salt         string `json:"salt"`
+}
+
+var (
+	authMu       sync.Mutex
+	authUsername = "admin"
+	authSalt     = ""
+	authPwHash   = ""
+	sessions     = map[string]int64{} // token -> expiry(ms)
+	sessionTTL   = 7 * 24 * time.Hour
+)
+
+func authPath() string {
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "auth.json")
+	}
+	return "auth.json"
+}
+
+func hashPw(salt, pw string) string {
+	sum := sha256.Sum256([]byte("mxgt:" + salt + ":" + pw))
+	return hex.EncodeToString(sum[:])
+}
+
+// loadAuth 读取/初始化账号密码。默认 admin/admin123，首次运行生成随机盐并落盘。
+func loadAuth() {
+	authMu.Lock()
+	defer authMu.Unlock()
+	p := authPath()
+	if b, err := os.ReadFile(p); err == nil {
+		var c AuthConfig
+		if json.Unmarshal(b, &c) == nil && c.Username != "" && c.Salt != "" && c.PasswordHash != "" {
+			authUsername, authSalt, authPwHash = c.Username, c.Salt, c.PasswordHash
+			return
+		}
+	}
+	// 默认 admin/admin123
+	buf := make([]byte, 16)
+	_, _ = rand.Read(buf)
+	authSalt = hex.EncodeToString(buf)
+	authUsername = "admin"
+	authPwHash = hashPw(authSalt, "admin123")
+	_ = saveAuthLocked()
+}
+
+func saveAuthLocked() error {
+	c := AuthConfig{Username: authUsername, Salt: authSalt, PasswordHash: authPwHash}
+	b, _ := json.MarshalIndent(c, "", "    ")
+	return os.WriteFile(authPath(), b, 0o600)
+}
+
+func newToken() string {
+	buf := make([]byte, 24)
+	_, _ = rand.Read(buf)
+	return hex.EncodeToString(buf)
+}
+
+func isAuthed(r *http.Request) bool {
+	c, err := r.Cookie(cookieName)
+	if err != nil || c.Value == "" {
+		return false
+	}
+	now := time.Now().UnixMilli()
+	authMu.Lock()
+	defer authMu.Unlock()
+	exp, ok := sessions[c.Value]
+	if !ok {
+		return false
+	}
+	if now > exp {
+		delete(sessions, c.Value)
+		return false
+	}
+	return true
+}
+
+func setSession(w http.ResponseWriter) string {
+	tok := newToken()
+	authMu.Lock()
+	sessions[tok] = time.Now().Add(sessionTTL).UnixMilli()
+	authMu.Unlock()
+	http.SetCookie(w, &http.Cookie{
+		Name: cookieName, Value: tok, Path: "/", HttpOnly: true,
+		MaxAge: int(sessionTTL / time.Second),
+	})
+	return tok
+}
+
+func clearSession(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(cookieName); err == nil {
+		authMu.Lock()
+		delete(sessions, c.Value)
+		authMu.Unlock()
+	}
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1})
+}
+
+// handleAuthLogin POST /api/auth/login {username,password}
+func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数错误"})
+		return
+	}
+	authMu.Lock()
+	ok := in.Username == authUsername && hashPw(authSalt, in.Password) == authPwHash
+	name := authUsername
+	authMu.Unlock()
+	if !ok {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "账号或密码错误"})
+		return
+	}
+	setSession(w)
+	writeJSON(w, map[string]interface{}{"success": true, "username": name})
+}
+
+// handleAuthLogout POST /api/auth/logout
+func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+	clearSession(w, r)
+	writeJSON(w, map[string]interface{}{"success": true})
+}
+
+// handleAuthMe GET /api/auth/me
+func handleAuthMe(w http.ResponseWriter, r *http.Request) {
+	if isAuthed(r) {
+		authMu.Lock()
+		n := authUsername
+		authMu.Unlock()
+		writeJSON(w, map[string]interface{}{"success": true, "username": n})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"success": false})
+}
+
+// handleAuthPassword POST /api/auth/password {old,new}（需已登录）
+func handleAuthPassword(w http.ResponseWriter, r *http.Request) {
+	if !isAuthed(r) {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未登录"})
+		return
+	}
+	var in struct {
+		Old string `json:"old"`
+		New string `json:"new"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数错误"})
+		return
+	}
+	if len(in.New) < 4 {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "新密码至少 4 位"})
+		return
+	}
+	authMu.Lock()
+	defer authMu.Unlock()
+	if hashPw(authSalt, in.Old) != authPwHash {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "原密码错误"})
+		return
+	}
+	buf := make([]byte, 16)
+	_, _ = rand.Read(buf)
+	authSalt = hex.EncodeToString(buf)
+	authPwHash = hashPw(authSalt, in.New)
+	if err := saveAuthLocked(); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"success": true, "message": "密码已更新"})
+}
+
+// guard 需要登录的接口包装：未登录返回 401 JSON
+func guard(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAuthed(r) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "message": "请先登录 (/mxadmin/login)"})
+			return
+		}
+		next(w, r)
+	}
+}
+
 func main() {
 	addr := flag.String("addr", ":8080", "监听地址")
 	flag.Parse()
@@ -1866,7 +2236,9 @@ func main() {
 		fmt.Println(res.FilteredM3U8)
 		return
 	}
-
+	loadAuth() // 初始化后台账号密码（默认 admin/admin123）
+	// 登录页
+	http.HandleFunc("/mxadmin/login", handleLogin)
 	// 首页固定进了后台；后台入口为 /mxadmin
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/mxadmin" || r.URL.Path == "/mxadmin/" {
@@ -1887,8 +2259,13 @@ func main() {
 	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, stats.snapshot())
 	})
+	// 鉴权
+	http.HandleFunc("/api/auth/login", handleAuthLogin)
+	http.HandleFunc("/api/auth/logout", handleAuthLogout)
+	http.HandleFunc("/api/auth/me", handleAuthMe)
+	http.HandleFunc("/api/auth/password", guard(handleAuthPassword))
 	http.HandleFunc("/api/update/check", handleUpdateCheck)
-	http.HandleFunc("/api/update/apply", handleUpdateApply)
+	http.HandleFunc("/api/update/apply", guard(handleUpdateApply))
 	http.HandleFunc("/api/clean", func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
 		aggr := r.URL.Query().Get("opt") == "aggresive"
@@ -1917,10 +2294,10 @@ func main() {
 	})
 	// 官替链路：官方视频页 → 资源站 → 无广告 m3u8
 	http.HandleFunc("/api/replace", handleReplace)
-	// 资源站管理
-	http.HandleFunc("/api/sites", handleSitesList)
-	http.HandleFunc("/api/sites/toggle", handleSiteToggle)
-	http.HandleFunc("/api/sites/test", handleSiteTest)
+	// 资源站管理（需登录）
+	http.HandleFunc("/api/sites", guard(handleSitesList))
+	http.HandleFunc("/api/sites/toggle", guard(handleSiteToggle))
+	http.HandleFunc("/api/sites/test", guard(handleSiteTest))
 	log.Printf("MXGT-Go %s listening on %s (M3U8 去广告 + 官替链路服务)", AppVersion, *addr)
 	// 使用全局 httpServer 句柄：更新重启时可优雅关闭释放端口（修复更新后不自动重启）
 	httpServer = &http.Server{Addr: *addr, Handler: withCORS(http.DefaultServeMux)}

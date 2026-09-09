@@ -47,7 +47,7 @@ go run main.go "https://示例.com/playlist.m3u8"
 | `POST /api/update/apply` | 下载 GitHub Release 最新版并自动替换重启（远程在线更新） |
 | `GET /healthz` | 健康检查 |
 
-> 打开浏览器访问 `http://<IP>:8080/mxadmin` 进入后台（`/` 仅为落地页，不再直达后台）。后台展示运行统计、M3U8 解析去广告测试、内嵌无广告播放器与**远程在线更新**，页头显眼标注「开发者 · ssmhdssmhd」。
+> 打开浏览器访问 `http://<IP>:8080/mxadmin` 进入后台（`/` 仅为落地页，不再直达后台）。后台**需登录**（默认 admin / admin123，可在后台「🔑 改密码」修改）。后台展示运行统计、M3U8 解析去广告测试、内嵌无广告播放器、官替链路、资源站管理与**远程在线更新**，页头显眼标注「开发者 · ssmhdssmhd」。
 
 ### 官替链路（Official Replace）
 
@@ -117,6 +117,24 @@ chmod +x mxgt-go
 ---
 
 ## Go 版更新日志（branch `go`）
+
+## v0.4.2 (2026-09-09) — 后台登录鉴权 + 资源站折叠/搜索/详情/复制
+
+> 新增后台登录（默认 admin / admin123，后台可改密码并持久化）；资源站长列表改为可折叠、可搜索、可查看站点详情并一键复制播放链接（带加载进度条）。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **后台登录**：新增登录页 `/mxadmin/login`；未登录访问 `/mxadmin` 或后台管理接口会自动跳转登录；默认账号 **admin / admin123**，凭据以随机盐+sha256 摘要持久化到可执行文件旁的 `auth.json`（[.gitignore](file:///workspace/.gitignore) 已忽略，不入库）；
+- **改密码**：后台页头新增「🔑 改密码」（`POST /api/auth/password`，需登录，校验原密码），修改后持久化；
+- **退出登录**：页头「⎋ 退出」清会话并回登录页；
+- **接口保护**：`/api/sites`、`/api/sites/toggle`、`/api/sites/test`、`/api/update/apply` 需登录（401）；对外解析接口 `/api/clean`、`/api/replace` 保持开放；
+- **资源站列表体验**：折叠面板（原生 `<details>` 按「已启用/未启用」分组）→ 大幅缩短页面；顶部搜索框即时过滤；「详情」展开显示站点官网/接口/备注并「复制播放链接」；「全部折叠/全部展开」一键切换；启停/详情加载显示**进度条动画**。
+
+### 验证
+
+- `go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过；实测：未登录 `/mxadmin`→302 `/mxadmin/login`；错密码拒绝；admin/admin123 登录成功设会话；带会话 `/api/sites` 正常（122站/0启用）、无会话 401；改密码→新密码重新登录→改回 admin123 均成功，`auth.json` 持久化。
+
+---
 
 ## v0.4.1 (2026-09-09) — 修复更新后不会自动重启
 

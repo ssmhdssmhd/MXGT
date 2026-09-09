@@ -1,5 +1,35 @@
 # 更新日志
 
+## Go 分支 v0.4.2 (2026-09-09) — 后台登录鉴权 + 资源站折叠/搜索/详情/复制
+
+### 新增后台登录（admin/admin123，可改密码）；资源站长列表体验优化
+
+> 用户诉求：①资源站太长——增加折叠、搜索、站点详情、复制播放链接，并带进度条交互；②增加登录页面（账号密码 admin / admin123），后台可改密码。
+
+#### 1. 后台登录鉴权（[main.go](file:///workspace/main.go)）
+
+- **登录页 `/mxadmin/login`**：独立居中卡片页，默认账号 **admin / admin123**；未登录访问 `/mxadmin`/后台接口自动跳转登录；
+- **凭据持久化**：随机盐 + sha256 摘要存到可执行文件旁的 `auth.json`（[.gitignore](file:///workspace/.gitignore) 忽略，不入库）；
+- **改密码**：页头「🔑 改密码」`POST /api/auth/password`（需登录，校验原密码），改后持久化并立即生效；
+- **退出登录**：页头「⎋ 退出」`POST /api/auth/logout` 清会话回登录页；
+- **会话**：登录成功下发 `mxgt_token` Cookie（HttpOnly，7 天），内存会话表校验；
+- **接口保护**：`/api/sites`、`/api/sites/toggle`、`/api/sites/test`、`/api/update/apply` 统一走 `guard()` 校验（未登录 401）；对外 `/api/clean`、`/api/replace` 等保持开放。
+
+#### 2. 资源站列表优化（[main.go](file:///workspace/main.go) 后台面板+JS）
+
+- **折叠**：原生 `<details>` 按「已启用 / 未启用」分组（默认展开），页面大幅缩短；配「全部折叠/全部展开」一键切换；
+- **搜索**：顶部搜索框按站点名/备注/接口即时过滤（`onkeyup`）；
+- **站点详情**：每行「详情」展开显示官网、接口、状态与备注，并用测试词调 `/api/sites/test` 展示示例命中与**可复制的播放链接**；
+- **复制播放链接**：`navigator.clipboard` + 文本域兜底复制；
+- **进度条**：加载/启停/查询时显示彩色流动进度条动画。
+
+#### 3. 版本与验证
+
+- 版本升级 `v0.4.1 → v0.4.2`；[README.md](file:///workspace/README.md) 同步 v0.4.2 更新日志；
+- 验证：`go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过；实测未登录 `/mxadmin`→302 登录页、错密码拒绝、admin/admin123 登录设会话、带会话 `/api/sites` 正常（122站/0启用）、无会话 401、改密码→新密码重登→改回 admin123 成功且 `auth.json` 持久化。
+
+---
+
 ## Go 分支 v0.4.1 (2026-09-09) — 修复更新后不会自动重启
 
 ### 远程在线更新「下载替换成功但服务未自动起来」修复
