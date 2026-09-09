@@ -53,7 +53,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.4.5"
+	AppVersion = "v0.4.6"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1336,6 +1336,18 @@ const frontPageHTML = `<!DOCTYPE html>
   .muted{color:#9ca3af;font-size:12px}
   .url{max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
   a{color:#fff;background:#c026d3;padding:9px 18px;border-radius:10px;text-decoration:none}
+  .api-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #eee}
+  .api-row:last-child{border-bottom:none}
+  .api-meta{min-width:150px;flex-shrink:0}
+  .api-meta b{color:#581c87;font-size:13.5px}
+  .api-meta .d{font-size:11.5px;color:#9ca3af;margin-top:3px;line-height:1.5}
+  .api-cmd{flex:1;background:#1f2937;color:#e5e7eb;border-radius:8px;padding:8px 11px;font-size:12px;
+           overflow-x:auto;white-space:nowrap;word-break:break-all;min-width:0}
+  .api-cmd .muted{color:#9ca3af}
+  .copy-btn{background:#c026d3;color:#fff;border:none;border-radius:8px;padding:6px 13px;cursor:pointer;
+            font-size:12px;flex-shrink:0;font-weight:600}
+  .copy-btn:hover{opacity:.85}
+  .copy-btn.copied{background:#16a34a}
 </style>
 </head>
 <body>
@@ -1349,6 +1361,11 @@ const frontPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="grid" id="statGrid"></div>
+
+  <div class="panel">
+    <h2>🔌 API 调用方式 <span class="muted">（地址基于当前访问域名自动生成，点击复制）</span></h2>
+    <div id="apiList"></div>
+  </div>
 
   <div class="panel">
     <h2>📊 接口调用次数明细</h2>
@@ -1368,6 +1385,44 @@ const frontPageHTML = `<!DOCTYPE html>
 function el(id){return document.getElementById(id)}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function card(lab,val,sub){return '<div class="card"><div class="lab">'+lab+'</div><div class="val">'+val+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';}
+// —— API 调用方式（地址基于当前访问域名动态生成，支持一键复制）——
+var APIS=[
+  {n:'去广告 M3U8',d:'传入 m3u8 链接，返回过滤后无广告 M3U8 纯文本，可直接播放',p:'/api/clean?url=<m3u8链接>'},
+  {n:'去广告 JSON',d:'同上去广告，返回 JSON（统计 + 过滤后文本 + 广告明细）',p:'/api/clean/json?url=<m3u8链接>'},
+  {n:'官替链路',d:'官方视频页链接 → 资源站匹配 → 返回无广告直链',p:'/api/replace?url=<官方视频页链接>'},
+  {n:'影视/TVBox 兼容',d:'影视 App / TVBox 等通用解析接口（JSON）',p:'/api/jx?url=<播放链接>'},
+  {n:'运行统计',d:'接口调用次数 / 广告统计 / 运行时长（JSON）',p:'/api/stats'},
+  {n:'健康检查',d:'服务存活状态与版本号',p:'/healthz'}
+];
+function renderApis(){
+  var base=location.origin;
+  el('apiList').innerHTML=APIS.map(function(a){
+    var u=base+a.p;
+    var c='curl -s "'+u+'"';
+    return '<div class="api-row">'+
+      '<div class="api-meta"><b>'+a.n+'</b><div class="d">'+a.d+'</div></div>'+
+      '<div class="api-cmd"><span class="muted">URL </span>'+esc(u)+'<br><span class="muted">CURL </span>'+esc(c)+'</div>'+
+      '<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">'+
+      '<button class="copy-btn" onclick="copyApi(this)" data-t="'+esc(u)+'">复制URL</button>'+
+      '<button class="copy-btn" onclick="copyApi(this)" data-t="'+esc(c)+'">复制CURL</button>'+
+      '</div></div>';
+  }).join('');
+}
+function copyApi(btn){
+  var txt=btn.dataset.t;
+  var ok=function(){btn.textContent='✓ 已复制';btn.classList.add('copied');setTimeout(function(){btn.textContent=btn.dataset.label;btn.classList.remove('copied');},1600);};
+  btn.dataset.label=btn.textContent;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(ok,function(){fbCopy(txt,btn,ok);});
+  }else{fbCopy(txt,btn,ok);}
+}
+function fbCopy(t,btn,ok){
+  var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');ok();}catch(e){btn.textContent='失败';}
+  document.body.removeChild(ta);
+}
+renderApis();
 async function refresh(){
   try{
     const r=await fetch('/api/stats');

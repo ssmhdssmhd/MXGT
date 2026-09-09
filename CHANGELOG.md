@@ -1,5 +1,29 @@
 # 更新日志
 
+## Go 分支 v0.4.6 (2026-09-09) — 前台显示 API 接口调用方式（支持一键复制）
+
+### 前台展示调用方式 + 复制调用
+
+> 用户诉求：前台也要显示调用 API 接口的调用方式，可以复制调用的那种。
+
+#### 1. 前台「🔌 API 调用方式」面板（[main.go](file:///workspace/main.go) `frontPageHTML`）
+
+- 首页 `/` 新增面板，列出 6 个对外接口：
+  - 去广告 M3U8 `GET /api/clean?url=<m3u8链接>`（返回无广告 M3U8 纯文本）；
+  - 去广告 JSON `GET /api/clean/json?url=<m3u8链接>`；
+  - 官替链路 `GET /api/replace?url=<官方视频页链接>`；
+  - 影视/TVBox 兼容 `GET /api/jx?url=<播放链接>`；
+  - 运行统计 `GET /api/stats`；健康检查 `GET /healthz`；
+- 每行展示 **URL** 与 **curl** 两条调用命令，地址基于当前访问域名 `location.origin` 动态拼接（不硬编码 IP/域名）；
+- 每行「复制URL」「复制CURL」两个按钮：优先 `navigator.clipboard`，不支持时降级隐藏 textarea + `execCommand('copy')`；点击后按钮变绿显示「✓ 已复制」约 1.6s 自动恢复。
+
+#### 2. 版本与验证
+
+- 版本升级 `v0.4.5 → v0.4.6`；[README.md](file:///workspace/README.md) 同步 v0.4.6 更新日志；
+- 验证：`go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过；浏览器实测：6 行 API 面板正常渲染、点击「复制URL」变绿显示「✓ 已复制」并自动恢复、深色代码块与紫色按钮样式正常、无横向溢出错位。
+
+---
+
 ## Go 分支 v0.4.5 (2026-09-09) — 修复更新后/端口被占时不能启动
 
 ### 端口占用自动重试，解决"更新好不能启动"
