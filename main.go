@@ -25,6 +25,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -52,7 +53,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.4.3"
+	AppVersion = "v0.4.4"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -87,6 +88,8 @@ type ParseResult struct {
 	Segments      []Segment `json:"segments,omitempty"`
 	FilteredM3U8  string    `json:"filtered_m3u8,omitempty"`
 	DurationSec   float64   `json:"duration_sec"`
+	Engine        string    `json:"engine,omitempty"`
+	AiHits        int       `json:"ai_hits,omitempty"`
 }
 
 // Variant master playlist 备选流
@@ -347,6 +350,180 @@ func detectClusters(segs []Segment) {
 	}
 }
 
+// ============================================================
+// AI 去广告（独立子模块 ai/，独立版本、可单独更新）
+// 配置：可执行文件旁 ai/config.json；缺失时用内置默认（enabled=false, mode=basic）
+// ============================================================
+
+type AIConfig struct {
+	Version     string `json:"version"`
+	Enabled     bool   `json:"enabled"`
+	Mode        string `json:"mode"` // basic|ai|auto
+	Provider    string `json:"provider"`
+	APIURL      string `json:"api_url"`
+	APIKey      string `json:"api_key"`
+	Model       string `json:"model"`
+	Prompt      string `json:"prompt"`
+	MaxSegments int    `json:"max_segments"`
+	Timeout     int    `json:"timeout"`
+}
+
+const defaultAIConfigJSON = `{"version":"v0.1.0","enabled":false,"mode":"basic","provider":"openai","api_url":"","api_key":"","model":"","prompt":"","max_segments":300,"timeout":25}`
+
+func aiConfigFile() string {
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "ai", "config.json")
+	}
+	return filepath.Join("ai", "config.json")
+}
+
+func aiVersionText() string {
+	if exe, err := os.Executable(); err == nil {
+		if b, e := os.ReadFile(filepath.Join(filepath.Dir(exe), "ai", "VERSION")); e == nil {
+			return strings.TrimSpace(string(b))
+		}
+	}
+	return "v0.1.0"
+}
+
+func loadAIConfig() *AIConfig {
+	cfg := &AIConfig{}
+	_ = json.Unmarshal([]byte(defaultAIConfigJSON), cfg)
+	if b, err := os.ReadFile(aiConfigFile()); err == nil {
+		c2 := &AIConfig{}
+		if json.Unmarshal(b, c2) == nil {
+			return c2
+		}
+	}
+	return cfg
+}
+
+func saveAIConfig(cfg *AIConfig) error {
+	b, _ := json.MarshalIndent(cfg, "", "  ")
+	return os.WriteFile(aiConfigFile(), b, 0o644)
+}
+
+// resolveEngine 根据用户 engine 参数与 AI 配置决定实际去广告引擎（basic / ai）
+func resolveEngine(engine string, cfg *AIConfig) string {
+	switch engine {
+	case "ai":
+		return "ai"
+	case "basic":
+		return "basic"
+	case "":
+		fallthrough
+	default:
+		switch cfg.Mode {
+		case "ai":
+			if cfg.Enabled {
+				return "ai"
+			}
+		case "auto":
+			if cfg.Enabled && cfg.APIURL != "" && cfg.APIKey != "" {
+				return "ai"
+			}
+		}
+		return "basic"
+	}
+}
+
+func shortURL(u string, n int) string {
+	if len(u) <= n {
+		return u
+	}
+	return u[:n] + "…"
+}
+
+func stripCodeFence(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, "```json")
+	s = strings.TrimPrefix(s, "```")
+	s = strings.TrimSuffix(s, "```")
+	return strings.TrimSpace(s)
+}
+
+// aiDetectAdIndexes 调用外部 AI（OpenAI Chat Completions 兼容）识别广告片段索引
+func aiDetectAdIndexes(rawURL string, segs []Segment, cfg *AIConfig) ([]int, error) {
+	if !cfg.Enabled || cfg.APIURL == "" || cfg.APIKey == "" {
+		return nil, fmt.Errorf("AI 未启用或未配置")
+	}
+	if len(segs) == 0 || len(segs) > cfg.MaxSegments {
+		return nil, fmt.Errorf("片段数 %d 不在可送审范围(≤%d)", len(segs), cfg.MaxSegments)
+	}
+	lines := make([]string, 0, len(segs))
+	for i, s := range segs {
+		dur := s.Duration
+		if dur <= 0 {
+			dur = 0
+		}
+		lines = append(lines, fmt.Sprintf("%d|%.1f|%s", i, dur, shortURL(s.AbsURI, 100)))
+	}
+	prompt := cfg.Prompt
+	if prompt == "" {
+		prompt = "识别以下视频片段中的广告，返回广告片段索引 JSON 数组，仅返回数组。"
+	}
+	if codeHint := regexp.MustCompile(`[【}]`).MatchString(prompt); codeHint {
+		// 已有返回格式引导则保留原文
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"model":       cfg.Model,
+		"messages":    []map[string]string{{"role": "system", "content": prompt + " 只输出 JSON 数组，如 [2,5,8]，不含其它文字。"}, {"role": "user", "content": strings.Join(lines, "\n")}},
+		"temperature": 0,
+		"max_tokens":  1000,
+	})
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 25
+	}
+	req, err := http.NewRequest("POST", cfg.APIURL, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	client := &http.Client{Timeout: time.Duration(timeout) * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("AI HTTP %d", resp.StatusCode)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	var r struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
+	if len(r.Choices) == 0 {
+		return nil, fmt.Errorf("AI 无返回")
+	}
+	content := stripCodeFence(r.Choices[0].Message.Content)
+	if content == "" {
+		return nil, fmt.Errorf("AI 返回为空")
+	}
+	var idx []int
+	if err := json.Unmarshal([]byte(content), &idx); err != nil {
+		// 尝试提取数字
+		re := regexp.MustCompile(`\d+`)
+		for _, m := range re.FindAllString(content, -1) {
+			if n, e := strconv.Atoi(m); e == nil {
+				idx = append(idx, n)
+			}
+		}
+	}
+	return idx, nil
+}
+
 // buildFilteredM3U8 输出过滤后 M3U8（绝对地址、保留 KEY/MAP/不连续标签）
 func buildFilteredM3U8(segs []Segment, targetDuration int) string {
 	if targetDuration <= 0 {
@@ -396,13 +573,17 @@ func buildFilteredM3U8(segs []Segment, targetDuration int) string {
 }
 
 // cleanOne 主流程：抓取-解析-检测-输出
-func cleanOne(rawURL string, aggresive bool) ParseResult {
+func cleanOne(rawURL string, aggresive bool, engine string) ParseResult {
 	start := time.Now()
 	res := ParseResult{}
 	if rawURL == "" {
 		res.Message = "缺少 url 参数"
 		return res
 	}
+	// 解析去广告引擎（basic/ai）
+	aiCfg := loadAIConfig()
+	eng := resolveEngine(engine, aiCfg)
+	res.Engine = eng
 	mediaURL := rawURL
 	body, err := newClient().fetch(rawURL)
 	if err != nil {
@@ -432,6 +613,19 @@ func cleanOne(rawURL string, aggresive bool) ParseResult {
 
 	detectAds(segs, aggresive)
 
+	// AI 去广告：规则检测后追加 AI 识别标记（失败自动回退到规则结果，不影响播放）
+	if eng == "ai" && len(segs) > 0 {
+		if idx, err := aiDetectAdIndexes(rawURL, segs, aiCfg); err == nil {
+			for _, i := range idx {
+				if i >= 0 && i < len(segs) && !segs[i].IsAd {
+					segs[i].IsAd = true
+					segs[i].AdReason = "ai_model"
+					res.AiHits++
+				}
+			}
+		}
+	}
+
 	adCount := 0
 	for i := range segs {
 		if segs[i].IsAd {
@@ -448,8 +642,11 @@ func cleanOne(rawURL string, aggresive bool) ParseResult {
 	res.DurationSec = time.Since(start).Seconds()
 	res.Success = len(segs) > 0
 	if res.Success {
-		res.Message = fmt.Sprintf("解析 %d 段，识别广告 %d 段（%.1f%%），保留 %d 段",
-			len(segs), adCount, res.AdRatio, res.KeptSegments)
+		msg := fmt.Sprintf("解析 %d 段，识别广告 %d 段（%.1f%%），保留 %d 段", len(segs), adCount, res.AdRatio, res.KeptSegments)
+		if eng == "ai" {
+			msg += " · 引擎=AI"
+		}
+		res.Message = msg
 	}
 	return res
 }
@@ -675,6 +872,10 @@ const adminPageHTML = `<!DOCTYPE html>
       <input type="url" id="urlInput" placeholder="粘贴 M3U8 地址，如 https://example.com/playlist.m3u8"
              onkeydown="if(event.key==='Enter')runClean()">
       <label class="sw"><input type="checkbox" id="aggrOpt"> 聚合识别(opt=aggresive)</label>
+      <label class="sw">去广告引擎
+        <select id="engOpt" style="padding:6px 8px;border-radius:8px;border:1px solid #d1d5db">
+          <option value="">基础(默认)</option><option value="ai">AI 审核</option>
+        </select></label>
       <button class="btn" onclick="runClean()">⚡ 解析并去广告</button>
       <button class="btn ghost" onclick="playClean()">▶ 直接播放无广告</button>
     </div>
@@ -802,36 +1003,54 @@ function applyUpdate(){
 refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites();
 
 function buildCleanURL(url, aggr){
-  return '/api/clean?url='+encodeURIComponent(url)+(aggr?'&opt=aggresive':'');
+  const eng=el('engOpt')?el('engOpt').value:'';
+  return '/api/clean?url='+encodeURIComponent(url)+(aggr?'&opt=aggresive':'')+(eng?'&engine='+eng:'');
 }
-function loadHls(cb){
+function loadHls(cb,onFail){
   if(window.Hls){return cb();}
   const cdn=['https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js',
              'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.20/hls.min.js',
-             'https://unpkg.com/hls.js@1/dist/hls.min.js'];
+             'https://unpkg.com/hls.js@1/dist/hls.min.js',
+             'https://fastly.jsdelivr.net/npm/hls.js@1/dist/hls.min.js'];
   let i=0;
   (function load(){
-    if(i>=cdn.length){alert('hls.js 加载失败');return;}
+    if(i>=cdn.length){if(onFail)onFail();else alert('hls.js 加载失败，请检查网络后重试');return;}
     const s=document.createElement('script');
     s.src=cdn[i++];s.onload=cb;s.onerror=load;
     document.head.appendChild(s);
   })();
+}
+// 兼容多浏览器：mp4 直链原生播放；iOS/Safari 原生 HLS；其余用 hls.js（多 CDN 兜底）
+function isDirectVideo(src){
+  return /\.(mp4|mkv|webm|flv)(\?|$)/i.test(src);
 }
 let hlsInst=null;
 function playURL(src){
   const player=el('player');
   el('playSrc').textContent='播放源: '+src;
   el('playPanel').style.display='block';
+  if(hlsInst){try{hlsInst.destroy();}catch(e){}hlsInst=null;}
+  // mp4 等直链：交给原生播放器，任何浏览器都支持
+  if(isDirectVideo(src)){
+    player.src=src;player.play().catch(function(){});
+    return;
+  }
+  player.pause();player.removeAttribute('src');try{player.load();}catch(e){}
+  // 原生支持 HLS（iOS Safari / 部分系统浏览器）优先
+  if(player.canPlayType('application/vnd.apple.mpegurl')){
+    player.src=src;player.play().catch(function(){});
+    return;
+  }
+  // 其余用 hls.js（多 CDN 兜底）
   loadHls(function(){
-    if(hlsInst){hlsInst.destroy();hlsInst=null;}
-    if(Hls.isSupported()){
+    if(Hls&&Hls.isSupported()){
       hlsInst=new Hls({enableWorker:true,
         xhrSetup:function(xhr){xhr.withCredentials=false;xhr.setRequestHeader('Origin',location.origin);}});
       hlsInst.loadSource(src);hlsInst.attachMedia(player);
+      player.play().catch(function(){});
     }else if(player.canPlayType('application/vnd.apple.mpegurl')){
       player.src=src;
-    }else{alert('当前浏览器不支持 HLS 播放');return;}
-    player.play().catch(function(){});
+    }else{alert('当前浏览器不支持 HLS 播放（已尝试自动加载播放组件）');return;}
   });
 }
 async function runReplace(){
@@ -2387,12 +2606,109 @@ func guard(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// detectDirectFormat 判断 url 是否为直链（m3u8 / mp4 等）而非视频页面
+func detectDirectFormat(raw string) string {
+	l := strings.ToLower(raw)
+	switch {
+	case strings.Contains(l, ".m3u8"):
+		return "m3u8"
+	case strings.Contains(l, ".mp4"), strings.Contains(l, ".mkv"), strings.Contains(l, ".flv"), strings.Contains(l, ".m3u8?"):
+		return "direct"
+	}
+	return ""
+}
+
+// handleJX JSON 通用兼容接口（供影视 / TVBox / 盒子等调用）
+//   GET /api/jx?url=<m3u8|mp4|官方视频页>&engine=basic|auto|ai
+//   返回 {code:0/1, success, msg, url(可播放/去广告地址), full, play, name, pic, header, format}
+//   url 用请求 Host 动态拼接，不硬编码；响应已带全局 CORS 头。
+func handleJX(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	raw := r.URL.Query().Get("url")
+	engine := r.URL.Query().Get("engine")
+	resp := map[string]interface{}{
+		"code": 0, "success": false, "msg": "参数缺失", "url": "",
+		"play": "", "full": "", "name": "", "pic": "", "header": "", "format": "",
+	}
+	if raw == "" {
+		writeJSON(w, resp)
+		return
+	}
+	f := detectDirectFormat(raw)
+	ok := false
+	msg := ""
+	switch f {
+	case "m3u8":
+		res := cleanOne(raw, false, engine)
+		if res.Success {
+			ad := playURL(r, "/api/clean", url.Values{"url": {raw}})
+			resp["url"], resp["full"], resp["play"], resp["format"] = ad, ad, raw, "m3u8"
+			resp["name"] = res.Message
+			ok = true
+		} else {
+			msg = res.Message
+		}
+	case "direct":
+		resp["url"], resp["full"], resp["play"], resp["format"] = raw, raw, raw, "direct"
+		ok, msg = true, "ok"
+	default:
+		// 官方视频页 → 官替链路（自动得到基于本机 Host 的无广告直链）
+		rr := replaceOne(r, raw)
+		if rr.Success && rr.ADSkipURL != "" {
+			resp["url"], resp["full"], resp["play"] = rr.ADSkipURL, rr.ADSkipURL, rr.M3U8URL
+			resp["format"], resp["name"], resp["pic"], resp["remarks"] = "m3u8", rr.VideoName, rr.VideoPic, rr.VideoRemarks
+			ok = true
+		} else {
+			msg = rr.Message
+		}
+	}
+	if ok {
+		resp["code"], resp["success"], resp["msg"] = 1, true, "ok"
+	} else {
+		resp["code"], resp["msg"] = 0, msg
+	}
+	recordCall("/api/jx", raw, ok, time.Since(start).Seconds()*1000, resp["msg"].(string))
+	writeJSON(w, resp)
+}
+
+// handleAIConfig 查看(GET)/更新(POST,需登录) AI 去广告配置
+func handleAIConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		if !isAuthed(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			writeJSON(w, map[string]interface{}{"success": false, "message": "请先登录"})
+			return
+		}
+		var in AIConfig
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "参数错误"})
+			return
+		}
+		if in.Version == "" {
+			in.Version = loadAIConfig().Version
+		}
+		if err := saveAIConfig(&in); err != nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+			return
+		}
+		recordCall("/api/ai/config", "POST", true, 0, "更新 AI 去广告配置")
+		writeJSON(w, map[string]interface{}{"success": true, "message": "AI 去广告配置已保存", "version": in.Version})
+		return
+	}
+	cfg := loadAIConfig()
+	masked := *cfg
+	if masked.APIKey != "" {
+		masked.APIKey = "<set>"
+	}
+	writeJSON(w, map[string]interface{}{"success": true, "ai_version": aiVersionText(), "config": masked})
+}
+
 func main() {
 	addr := flag.String("addr", ":8080", "监听地址")
 	flag.Parse()
 	if flag.NArg() > 0 {
 		// CLI 模式：go run main.go <m3u8_url>
-		res := cleanOne(flag.Arg(0), false)
+		res := cleanOne(flag.Arg(0), false, "")
 		if !res.Success {
 			fmt.Println("失败:", res.Message)
 			os.Exit(1)
@@ -2434,7 +2750,8 @@ func main() {
 	http.HandleFunc("/api/clean", func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
 		aggr := r.URL.Query().Get("opt") == "aggresive"
-		res := cleanOne(u, aggr)
+		eng := r.URL.Query().Get("engine")
+		res := cleanOne(u, aggr, eng)
 		recordClean(res, u)
 		if !res.Success {
 			writeJSON(w, map[string]interface{}{"success": false, "message": res.Message})
@@ -2453,12 +2770,17 @@ func main() {
 	http.HandleFunc("/api/clean/json", func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
 		aggr := r.URL.Query().Get("opt") == "aggresive"
-		res := cleanOne(u, aggr)
+		eng := r.URL.Query().Get("engine")
+		res := cleanOne(u, aggr, eng)
 		recordClean(res, u)
 		writeJSON(w, res)
 	})
+	// AI 去广告配置查看/更新
+	http.HandleFunc("/api/ai/config", handleAIConfig)
 	// 官替链路：官方视频页 → 资源站 → 无广告 m3u8
 	http.HandleFunc("/api/replace", handleReplace)
+	// JSON 通用兼容接口（影视 / TVBox / 盒子等调用）
+	http.HandleFunc("/api/jx", handleJX)
 	// 资源站管理（需登录）
 	http.HandleFunc("/api/sites", guard(handleSitesList))
 	http.HandleFunc("/api/sites/toggle", guard(handleSiteToggle))

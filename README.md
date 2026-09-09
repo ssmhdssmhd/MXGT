@@ -39,6 +39,8 @@ go run main.go "https://示例.com/playlist.m3u8"
 | `GET /api/clean/json?url=<m3u8>` | 返回 JSON：统计 + 过滤后文本 + 每个片段的广告标记/原因 |
 | `GET /api/clean?url=...&opt=aggresive` | 开启聚合聚类识别（同目录统一切片批量判广告，可能误伤统一节奏正片，默认关） |
 | `GET /api/replace?url=<官方视频页>` | **官替链路**：识别平台→抓标题→资源站搜索→智能匹配→取集→经 `/api/clean` 去广告，返回 `ad_skip_url` 无广告直链 |
+| `GET /api/jx?url=<m3u8/官方页/直链>&engine=basic/auto/ai` | **JSON 通用兼容接口**（供影视 / TVBox / 盒子等调用）：返回 `{code,success,msg,url(去广告可播),full,play,name,pic,header,format}`，已带跨域、URL 基于请求 Host 动态拼接不硬编码 |
+| `GET/POST /api/ai/config` | 查看(仅GET,key打码)/更新(POST需登录) AI 去广告配置，返回 `ai_version`（见 `ai/` 独立目录） |
 | `GET /api/sites` | 资源站列表（`resource_sites.json`，默认全部禁用，后台按需启用） |
 | `POST /api/sites/toggle?name=<站名>&enabled=1/0` | 启用/禁用某个采集站并持久化 |
 | `GET /api/sites/test?name=<站名>&kw=<词>` | 搜索测试单个资源站是否可用/命中 |
@@ -60,6 +62,31 @@ go run main.go "https://示例.com/playlist.m3u8"
 5. **智能匹配**：按基础剧名相似度（包含/公共字）+ 集数命中 + 季数一致性打分，阈值 65；
 6. **取集**：按 `episode_num` 从剧集列表精准取对应 m3u8，否则回退列表首项（相对地址自动补全为绝对地址）；
 7. **去广告**：把源 m3u8 交给 `/api/clean`（复用既有规则引擎），输出 `ad_skip_url` 无广告直链。
+
+### JSON 兼容接口（影视 / TVBox / 盒子）
+
+`GET /api/jx?url=<m3u8|mp4|官方视频页>&engine=basic|auto|ai`
+
+- 供影视 App / TVBox / 电视盒子等调用；返回 JSON：
+  ```json
+  {"code":1,"success":true,"msg":"ok","url":"<去广告可播地址>","full":"<同>","play":"<源地址>","name":"","pic":"","header":"","format":"m3u8|direct"}
+  ```
+- `url` 为可直接播放的去广告地址（m3u8 经 `/api/clean`，mp4 直链透传；官方页走官替链路），基于**请求 Host 动态拼接**，无硬编码；
+- 响应带全局 CORS 头（`Access-Control-Allow-Origin:*` 等）；
+- `engine=ai` 可强制 AI 去广告（需先启用 AI 模块）。
+
+### AI 去广告（独立模块 `ai/`）
+
+- 独立目录 [`ai/`](file:///workspace/ai/)：含 [`config.json`](file:///workspace/ai/config.json)、`VERSION`、`README.md`，**独立版本、可单独更新**（改配置/升级无需重编主程序）；
+- 配置文件控 `enabled`、`mode`（basic/ai/auto）、AI 服务商/接口/key/模型/提示词；主程序启动时读取可执行文件旁 `ai/config.json`（缺失用内置默认=基础规则去广告，行为不变）；
+- 使用：`/api/clean?engine=ai`、`/api/jx?engine=ai`，或在后台「解析测试」选择「去广告引擎=AI」；AI 调用失败自动回退基础规则；
+- 查看/更新：`GET /api/ai/config`（key 打码）、`POST /api/ai/config`（需登录）。
+
+### 播放器多浏览器兼容
+
+- mp4/mkv/webm/flv 直链用**原生播放器**（任意浏览器）；
+- iOS Safari 等原生支持 HLS 的直接用浏览器原生；
+- 其余用 **hls.js**（4 个 CDN 自动兜底加载 + 失败提示），后台与前台播放均覆盖。
 
 ### 资源站管理
 
@@ -117,6 +144,24 @@ chmod +x mxgt-go
 ---
 
 ## Go 版更新日志（branch `go`）
+
+## v0.4.4 (2026-09-09) — JSON 兼容接口 + AI 去广告独立模块 + 播放器多浏览器兼容
+
+> 供影视/TVBox/盒子调用的 JSON 通用接口（跨域、url 动态不硬编码）；AI 去广告做成独立 `ai/` 目录可单独更新、引擎可选；播放器兼容各种浏览器。
+
+### 更新内容（[main.go](file:///workspace/main.go) + [`ai/`](file:///workspace/ai/)）
+
+- **JSON 通用兼容接口 `GET /api/jx`**：支持 m3u8（去广告）、mp4 直链（透传）、官方视频页（官替链路），返回 TVBox 风格 `{code,success,msg,url,full,play,name,pic,header,format}`；已带跨域；`url` 用请求 Host 动态拼接不硬编码；
+- **AI 去广告独立模块**：新建 [`ai/`](file:///workspace/ai/)（`config.json`+`VERSION`+`README.md`），独立版本可单独更新；`enabled/mode(ai/auto/basic)`+服务商/接口/key/模型/提示词；主程序读可执行文件旁 `ai/config.json`，缺失用内置默认=基础规则；新增强制 `engine=ai`（`/api/clean`、`/api/jx`、后台「解析测试」可选），AI 失败自动回退规则；`GET/POST /api/ai/config` 查看/更新（key 打码）；
+- **播放器多浏览器兼容**：mp4/mkv/webm/flv 原生播放；iOS Safari 原生 HLS；其余 hls.js（4 CDN 兜底+失败提示）；后台/前台播放均覆盖；
+- 统计埋点到 `/api/jx`、`/api/ai/config`。
+- 版本升级 `v0.4.3 → v0.4.4`。
+
+### 验证
+
+- `go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过；实测 `/api/jx`：空参 code=0，mp4 直链返回 `format=direct/url=原地址/code=1`，m3u8（沙箱断网）失败分支返回结构化 code=0+msg；响应带 `Access-Control-Allow-Origin:*` 全套跨域头；`/api/ai/config` 返回 `ai_version=v0.1.0`、key 打码。
+
+---
 
 ## v0.4.3 (2026-09-09) — 前台显示接口调用详细信息
 

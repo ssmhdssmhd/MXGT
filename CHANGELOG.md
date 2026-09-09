@@ -1,5 +1,40 @@
 # 更新日志
 
+## Go 分支 v0.4.4 (2026-09-09) — JSON 兼容接口 + AI 去广告独立模块 + 播放器多浏览器兼容
+
+### TVBox/影视/盒子 JSON 接口 + AI 去广告可选（独立 ai/ 目录）+ 播放器多种浏览器兼容
+
+> 用户诉求：①要兼容各种浏览器，不然播放器；②新增返回 JSON 的接口（加跨域、url 不硬编码），支持影视/TVBox/盒子调用；③AI 去广告版本可选择，独立文件夹存放、可独立更新。
+
+#### 1. JSON 通用兼容接口 `GET /api/jx`（[main.go](file:///workspace/main.go) `handleJX`）
+
+- 入参 `url`：m3u8（去广告）、mp4 直链（透传）、官方视频页（官替链路）；
+- 返回 TVBox 风格 JSON：`{code,success,msg,url,full,play,name,pic,header,format}`，`url` 为可播放的去广告地址；
+- 已带全局垮域头（`Access-Control-Allow-Origin:*` 及全套）；`url` 基于**请求 Host 动态拼接**（`playURL`），不硬编码；
+- 支持 `engine=basic|auto|ai`。
+
+#### 2. AI 去广告独立模块 `ai/`（[ai/config.json](file:///workspace/ai/config.json) + `VERSION` + `README.md`）
+
+- 独立目录、独立版本（`ai/VERSION=v0.1.0`），**可单独更新**（改配置/升级不重编主程序）；
+- 配置 `enabled / mode(basic|ai|auto) / provider / api_url / api_key / model / prompt / max_segments / timeout`；
+- 主程序启动读可执行文件旁 `ai/config.json`（缺失用内置默认=基础规则去广告，行为完全不变）；
+- 新增强制引擎选择：`/api/clean?engine=ai`、`/api/jx?engine=ai`、后台「解析测试」下拉「去广告引擎=AI」；
+- `aiDetectAdIndexes`：调外部 AI（Chat Completions 兼容）识别广告片段索引并标记，失败自动回退基础规则；
+- `GET /api/ai/config`（key 打码）/ `POST /api/ai/config`（需登录）查看与更新。
+
+#### 3. 播放器多浏览器兼容（[main.go](file:///workspace/main.go) JS）
+
+- mp4/mkv/webm/flv 直链 → **原生播放器**；
+- iOS Safari 等原生态 HLS → 浏览器原生；
+- 其余 → **hls.js**（4 个 CDN 自动兜底 + 加载失败提示），后台/前台播放均覆盖。
+
+#### 4. 版本与验证
+
+- 版本升级 `v0.4.3 → v0.4.4`；统计埋点到 `/api/jx`、`/api/ai/config`；README/CHANGELOG 同步；
+- 验证：`go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过；实测 `/api/jx` 空参 code=0、mp4 直链返回 `format=direct/url=原地址/code=1`、m3u8 断网分支结构化失败、响应带全套跨域头；`/api/ai/config` 返回 `ai_version=v0.1.0` 且 key 打码。
+
+---
+
 ## Go 分支 v0.4.3 (2026-09-09) — 前台显示接口调用详细信息
 
 ### 首页（前台）展示接口调用详细信息
