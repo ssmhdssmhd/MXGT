@@ -39,6 +39,10 @@ go run main.go "https://示例.com/playlist.m3u8"
 | `GET /api/clean/json?url=<m3u8>` | 返回 JSON：统计 + 过滤后文本 + 每个片段的广告标记/原因 |
 | `GET /api/clean?url=...&opt=aggresive` | 开启聚合聚类识别（同目录统一切片批量判广告，可能误伤统一节奏正片，默认关） |
 | `GET /api/replace?url=<官方视频页>` | **官替链路**：识别平台→抓标题→资源站搜索→智能匹配→取集→经 `/api/clean` 去广告，返回 `ad_skip_url` 无广告直链 |
+| `GET /api/maps` | 官替映射列表（`title_maps.json`：官方剧名 ↔ 资源站标准剧名） |
+| `POST /api/maps/add` | 添加映射 `{from, to, platform?, note?}`（自动去重） |
+| `POST /api/maps/delete?from=&to=` | 删除映射 |
+| `GET /api/maps/fetch?url=<官方视频页>` | **从真实链接抓取官方平台/剧名/集数**，供一键填入映射表单 |
 | `GET /api/jx?url=<m3u8/官方页/直链>&engine=basic/auto/ai` | **JSON 通用兼容接口**（供影视 / TVBox / 盒子等调用）：返回 `{code,success,msg,url(去广告可播),full,play,name,pic,header,format}`，已带跨域、URL 基于请求 Host 动态拼接不硬编码 |
 | `GET/POST /api/ai/config` | 查看(仅GET,key打码)/更新(POST需登录) AI 去广告配置，返回 `ai_version`（见 `ai/` 独立目录） |
 | `GET /api/sites` | 资源站列表（`resource_sites.json`，默认全部禁用，后台按需启用） |
@@ -59,9 +63,15 @@ go run main.go "https://示例.com/playlist.m3u8"
 2. **抓标题**：抓取官方页 `og:title` / `<title>`，腾讯无标题时用 `getinfo` 兜底取正式片名；
 3. **解析剧名/集数**：`parseVideoTitle` 剥离「第X季/X集」、`S系E集`、画质词，得出 `base_title` 与 `episode_num`；
 4. **搜索资源站**：对已启用采集站调 AppleCMS/maccms `?ac=videolist&wd=关键词`，解析 `list[]` 的 `vod_play_url`（支持 `$$$` 多线路 / `集数$url` 格式）；
-5. **智能匹配**：按基础剧名相似度（包含/公共字）+ 集数命中 + 季数一致性打分，阈值 65；
+5. **智能匹配**：按基础剧名相似度（包含/公共字）+ 集数命中 + 季数一致性打分，阈值 65；匹配时**双向展开映射变体**（`title_maps.json`），官方剧名/剧集与资源站表述不同也能命中（可在后台「🗺️ 官替映射专区」从真实链接抓取并添加映射）；
 6. **取集**：按 `episode_num` 从剧集列表精准取对应 m3u8，否则回退列表首项（相对地址自动补全为绝对地址）；
 7. **去广告**：把源 m3u8 交给 `/api/clean`（复用既有规则引擎），输出 `ad_skip_url` 无广告直链。
+
+### 官替映射专区（Official Replace Mapping）
+
+- 后台「🗺️ 官替映射专区」：粘贴**真实官方视频页链接** →「🔍 从链接抓取」自动识别平台并抓取官方剧名/集数 →「📥 填入表单」→ 填**资源站标准剧名** →「➕ 添加映射」；
+- 映射持久化到可执行文件旁 `title_maps.json`，支持列表查看与逐条删除；
+- 官替搜索关键词自动含「剧名+第N集 / 剧名+N / 剧名」三档；集数解析兼容「第01集 / EP01 / E1 / 01 / 独剑九天01 / 1」等多种表述，超过 9 集的多位数集数也能正确解析匹配。
 
 ### JSON 兼容接口（影视 / TVBox / 盒子）
 
@@ -144,6 +154,26 @@ chmod +x mxgt-go
 ---
 
 ## Go 版更新日志（branch `go`）
+
+## v0.5.0 (2026-09-09) — 官替映射专区：解决官方剧名/剧集与资源站表述不同导致的匹配失败
+
+> 新增「官替映射专区」：从真实官方视频页链接抓取官方平台/剧名/集数，建立官方剧名 ↔ 资源站标准剧名映射；官替搜索与匹配自动双向展开映射变体，解决官方剧名/剧集与资源站表述不同导致「搜不到 / 匹配不到正确剧集」（如「独剑九天 01」）的问题；同时修复多位数集数解析错误（「第12集」被误解析为 2）。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **映射专区**（映射持久化到可执行文件旁 `title_maps.json`）：
+  - `GET /api/maps` 映射列表；`POST /api/maps/add` 添加 `{from, to, platform?, note?}`；`POST /api/maps/delete?from=&to=` 删除；
+  - `GET /api/maps/fetch?url=<真实官方视频页>` **从链接抓取官方平台/剧名/集数**（识别腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP，抓 `og:title`/`<title>`，腾讯 `getinfo` 兜底），一键填入映射表单；
+- **匹配增强**：`titleMapCandidates` 对官方剧名与资源站剧名双向展开映射变体；`findBestMatch` 变体两两比较取最高相似度；搜索关键词自动含「剧名+第N集 / 剧名+N / 剧名」三档；`episodeNumOfPlayItem` 兼容「第01集 / EP01 / E1 / 01 / 独剑九天01 / 1」；
+- **修复**：`cnToNum` 纯数字逐字解析缺陷（「第12集」误解析为 2），现按整数直接转换；
+- **后台 UI**：新增「🗺️ 官替映射专区」面板：粘贴链接→从链接抓取→填入表单→添加映射→列表管理（自动加载）；
+- 版本升级 `v0.4.9 → v0.5.0`。
+
+### 验证
+
+- `go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过。
+
+---
 
 ## v0.4.9 (2026-09-09) — 资源站支持编辑（接口/官网/备注/优先级/改名）
 

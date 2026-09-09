@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.4.9"
+	AppVersion = "v0.5.0"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -904,6 +904,29 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
+    <h2>🗺️ 官替映射专区 <span class="muted">（官方剧名 ↔ 资源站剧名，解决不同官方表述导致的匹配失败）</span></h2>
+    <div class="row" style="flex-wrap:wrap">
+      <input id="mapUrl" placeholder="粘贴真实官方视频页链接，如腾讯/爱奇艺/优酷…，自动抓取剧名与集数" style="flex:1;min-width:280px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="fetchMap()">🔍 从链接抓取</button>
+      <span class="muted" id="mapFetchInfo" style="width:100%"></span>
+    </div>
+    <div class="row" style="flex-wrap:wrap">
+      <span class="muted">官方剧名(from)</span>
+      <input id="mFrom" placeholder="官方剧名，如：独剑九天" style="width:170px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <span class="muted">→ 标准剧名(to)</span>
+      <input id="mTo" placeholder="资源站标准剧名，如：独剑九天" style="width:170px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <span class="muted">平台</span>
+      <input id="mPlat" placeholder="如：腾讯视频（可选）" style="width:140px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="addMap()">➕ 添加映射</button>
+      <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="loadMaps()">⟳ 刷新</button>
+    </div>
+    <table>
+      <thead><tr><th>平台</th><th>官方剧名 (from)</th><th>→ 标准剧名 (to)</th><th>备注</th><th>操作</th></tr></thead>
+      <tbody id="mapList"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
     <h2>🏢 资源站管理 <span class="muted">（默认全部禁用，按需启用；失效站自动隐藏）</span></h2>
     <div class="row" style="flex-wrap:wrap">
       <input id="nsName" placeholder="名称（必填）" style="width:150px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
@@ -1014,7 +1037,7 @@ function applyUpdate(){
     setTimeout(function(){location.reload();},4000);
   }).catch(function(e){el('updInfo').textContent='发起失败: '+e.message});
 }
-refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites();
+refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps();
 
 function buildCleanURL(url, aggr){
   const eng=el('engOpt')?el('engOpt').value:'';
@@ -1234,6 +1257,69 @@ async function checkSites(){
       }).catch(function(e){el('chkInfo').textContent='进度获取失败: '+esc(e.message);showProg(false);});
     })();
   }catch(e){el('siteList').innerHTML='<span class="muted">检测失败: '+esc(e.message)+'</span>';showProg(false);}
+}
+// —— 官替映射专区 ——
+async function loadMaps(){
+  try{
+    const r=await fetch('/api/maps');
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    const ms=(j&&j.name_maps)||[];
+    el('mapList').innerHTML=ms.length?ms.map(function(m){
+      return '<tr><td>'+(m.platform?esc(m.platform):'—')+'</td>'+
+        '<td><code>'+esc(m.from)+'</code></td>'+
+        '<td>→ <code>'+esc(m.to)+'</code></td>'+
+        '<td class="muted">'+esc(m.note||'')+'</td>'+
+        '<td><button class="btn gh" style="color:#dc2626;padding:3px 10px;font-size:12px" onclick="delMap(\''+m.from.replace(/'/g,"\\'")+'\',\''+m.to.replace(/'/g,"\\'")+'\')">🗑 删除</button></td></tr>';
+    }).join(''):'<tr><td colspan="5" class="muted">暂无映射，可从上方「从链接抓取」添加</td></tr>';
+  }catch(e){el('mapList').innerHTML='<tr><td colspan="5" class="muted">加载失败: '+esc(e.message)+'</td></tr>';}
+}
+async function fetchMap(){
+  const url=(el('mapUrl').value||'').trim();
+  if(!url){alert('请先粘贴真实官方视频页链接');return;}
+  el('mapFetchInfo').textContent='抓取中…';
+  try{
+    const r=await fetch('/api/maps/fetch?url='+encodeURIComponent(url));
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    if(!j.success){el('mapFetchInfo').textContent='抓取失败: '+(j.message||'');return;}
+    el('mapFetchInfo').innerHTML='抓取成功：<b>'+esc(j.platform)+'</b> · 剧名「<b>'+esc(j.base_title)+'</b>」'+(j.episode_num>0?' · 第'+j.episode_num+'集':'')+
+      '　<button class="btn" style="padding:3px 10px;font-size:12px" onclick="fillMap()">📥 填入下方表单</button>';
+    window._fetchedBase=j.base_title||'';
+    window._fetchedPlat=j.platform||'';
+  }catch(e){el('mapFetchInfo').textContent='抓取失败: '+esc(e.message);}
+}
+function fillMap(){
+  el('mFrom').value=window._fetchedBase||'';
+  el('mPlat').value=window._fetchedPlat||'';
+  el('mTo').focus();
+}
+async function addMap(){
+  const from=(el('mFrom').value||'').trim();
+  const to=(el('mTo').value||'').trim();
+  if(!from||!to){alert('官方剧名(from)和目标剧名(to)不能为空');return;}
+  showProg(true);
+  try{
+    const r=await fetch('/api/maps/add',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({from:from,to:to,platform:(el('mPlat').value||'').trim(),note:'后台添加'})});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    alert(j.message||(j.success?'映射添加成功':'添加失败'));
+    if(j.success){el('mFrom').value='';el('mTo').value='';el('mPlat').value='';await loadMaps();}
+  }catch(e){alert('网络错误: '+e.message);}
+  showProg(false);
+}
+async function delMap(from,to){
+  if(!confirm('确定删除映射「'+from+' → '+to+'」吗？'))return;
+  showProg(true);
+  try{
+    const r=await fetch('/api/maps/delete?from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to),{method:'POST'});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    alert(j.message||(j.success?'删除成功':'删除失败'));
+    if(j.success)await loadMaps();
+  }catch(e){alert('网络错误: '+e.message);}
+  showProg(false);
 }
 async function toggleSite(name,onValue){
   showProg(true);
@@ -1793,8 +1879,8 @@ func waitPortFree(addr string, timeout time.Duration) {
 
 // replaceAndRestart 用新二进制替换当前文件并重启进程。
 // 修复「更新后不自动重启」：
-//   1) 先关闭当前 HTTP 服务释放端口，再启动新进程，避免新进程绑定失败(Address already in use)直接退出；
-//   2) 新进程用 Setsid 脱离当前会话，避免老进程退出时 SIGHUP 把新进程一起带走（nohup/setsid 部署场景）。
+//  1. 先关闭当前 HTTP 服务释放端口，再启动新进程，避免新进程绑定失败(Address already in use)直接退出；
+//  2. 新进程用 Setsid 脱离当前会话，避免老进程退出时 SIGHUP 把新进程一起带走（nohup/setsid 部署场景）。
 func replaceAndRestart(newBin string) error {
 	exe, err := os.Executable()
 	if err != nil {
@@ -2019,7 +2105,11 @@ var qRe = regexp.MustCompile(`(?i)第[一-九零一二三四五六七八九十�
 var cleanTagRe = regexp.MustCompile(`[（(]?(第[一-九零一二三四五六七八九十百千0-9]+[季部篇卷番集期话]|S\d+E\d+|全集|完结)[）)]?`)
 
 func cnToNum(s string) int {
-	digits := map[rune]int{'零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
+	// 纯阿拉伯数字直接转换（"01"→1、"12"→12、"100"→100），避免逐字解析导致多位数错误
+	if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+		return n
+	}
+	digits := map[rune]int{'零': 0, '一': 1, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
 	units := map[rune]int{'十': 10, '百': 100, '千': 1000}
 	n, temp := 0, 0
 	for _, ch := range s {
@@ -2081,17 +2171,17 @@ type ResourceVideo struct {
 }
 
 type maccmsItem struct {
-	VodID        string `json:"vod_id"`
-	VodName      string `json:"vod_name"`
-	VodPic       string `json:"vod_pic"`
-	VodRemarks   string `json:"vod_remarks"`
-	VodPlayURL   string `json:"vod_play_url"`
-	VodPlayFrom  string `json:"vod_play_from"`
-	Name         string `json:"name"`
-	PlayURL      string `json:"play_url"`
-	Pic          string `json:"pic"`
-	Remarks      string `json:"remarks"`
-	VodID2       string `json:"id"`
+	VodID       string `json:"vod_id"`
+	VodName     string `json:"vod_name"`
+	VodPic      string `json:"vod_pic"`
+	VodRemarks  string `json:"vod_remarks"`
+	VodPlayURL  string `json:"vod_play_url"`
+	VodPlayFrom string `json:"vod_play_from"`
+	Name        string `json:"name"`
+	PlayURL     string `json:"play_url"`
+	Pic         string `json:"pic"`
+	Remarks     string `json:"remarks"`
+	VodID2      string `json:"id"`
 }
 
 type maccmsResp struct {
@@ -2148,10 +2238,31 @@ func stripFragment(u string) string {
 	return u
 }
 
+// episodeNumOfPlayItem 从播放项名称提取集数：兼容「第01集/EP01/E1/01/独剑九天01/1」等官方与资源站不同表述
 func episodeNumOfPlayItem(name string) int {
-	m := regexp.MustCompile(`第\s*(\d+)\s*[集期话]|EP?\s*(\d+)|E(\d+)\s*$`).FindStringSubmatch(name)
+	name = strings.TrimSpace(name)
+	if name == "" || strings.HasPrefix(name, "http") {
+		return 0
+	}
+	m := regexp.MustCompile(`第\s*0*(\d+)\s*[集期话]|EP?\s*0*(\d+)|E\s*0*(\d+)\s*$`).FindStringSubmatch(name)
 	for _, g := range m[1:] {
 		if n, err := strconv.Atoi(g); err == nil && n > 0 {
+			return n
+		}
+	}
+	// 整串为纯数字（含前导零，如 "01"、"1"）→ 视为集数
+	if regexp.MustCompile(`^\d{1,4}$`).MatchString(name) {
+		if n, err := strconv.Atoi(name); err == nil && n > 0 {
+			return n
+		}
+	}
+	// 中文数字「第X集」
+	if m2 := regexp.MustCompile(`第\s*([一二三四五六七八九十百千]+)\s*[集期话]`).FindStringSubmatch(name); len(m2) > 1 {
+		return cnToNum(m2[1])
+	}
+	// 末尾数字（如 "独剑九天01"）
+	if m3 := regexp.MustCompile(`0*(\d{1,3})$`).FindStringSubmatch(name); len(m3) > 1 {
+		if n, err := strconv.Atoi(m3[1]); err == nil && n > 0 && n <= 999 {
 			return n
 		}
 	}
@@ -2389,6 +2500,77 @@ func searchSites(cfg *SitesConfig, kw string, maxSites int) searchOut {
 
 // ============ 标题匹配 ============
 
+// ===== 官替映射专区：解决官方剧名/剧集与资源站表述不同导致匹配失败 =====
+
+// TitleMap 一条剧名映射：from（官方剧名/别名）→ to（资源站标准剧名）
+type TitleMap struct {
+	Platform string `json:"platform,omitempty"`
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Note     string `json:"note,omitempty"`
+}
+
+// TitleMaps 映射配置（title_maps.json，可执行文件旁持久化）
+type TitleMaps struct {
+	Version    string     `json:"version"`
+	UpdateDate string     `json:"update_date"`
+	NameMaps   []TitleMap `json:"name_maps"`
+}
+
+var titleMapsMu sync.Mutex
+
+func titleMapsPath() string {
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "title_maps.json")
+	}
+	return "title_maps.json"
+}
+
+func loadTitleMaps() *TitleMaps {
+	cfg := &TitleMaps{Version: "1.0", UpdateDate: time.Now().Format("2006-01-02")}
+	if b, err := os.ReadFile(titleMapsPath()); err == nil {
+		c2 := &TitleMaps{}
+		if json.Unmarshal(b, c2) == nil && len(c2.NameMaps) > 0 {
+			return c2
+		}
+	}
+	return cfg
+}
+
+func saveTitleMaps(c *TitleMaps) error {
+	c.UpdateDate = time.Now().Format("2006-01-02")
+	b, _ := json.MarshalIndent(c, "", "    ")
+	return os.WriteFile(titleMapsPath(), b, 0o644)
+}
+
+// titleMapCandidates 返回名称 + 所有映射变体（官方↔资源站双向），用于匹配时提高命中
+func titleMapCandidates(name string) []string {
+	seen := map[string]bool{}
+	out := []string{name}
+	seen[name] = true
+	titleMapsMu.Lock()
+	cfg := loadTitleMaps()
+	titleMapsMu.Unlock()
+	for _, m := range cfg.NameMaps {
+		for _, cand := range []string{m.From, m.To} {
+			if cand == "" {
+				continue
+			}
+			if strings.Contains(name, cand) || strings.Contains(cand, name) || name == cand {
+				other := m.To
+				if cand == m.To {
+					other = m.From
+				}
+				if other != "" && !seen[other] {
+					seen[other] = true
+					out = append(out, other)
+				}
+			}
+		}
+	}
+	return out
+}
+
 func compactTitle(s string) string {
 	s = strings.ToLower(s)
 	return regexp.MustCompile(`[\s·,，。.:：!！?？\-_/\\"'|【】\[\]()（）]`).ReplaceAllString(s, "")
@@ -2437,9 +2619,19 @@ type matchItem struct {
 func findBestMatch(vi VideoInfo, videos []ResourceVideo) (matchItem, bool) {
 	best := matchItem{}
 	ok := false
+	// 官方剧名的映射变体（含映射表双向展开），提高不同表述的命中
+	viNames := titleMapCandidates(vi.BaseTitle)
 	for _, v := range videos {
 		cand := parseVideoTitle(v.Name)
-		s := titleSim(vi.BaseTitle, cand.BaseTitle)
+		// 资源站剧名同样做映射展开，取最高相似度
+		s := 0.0
+		for _, a := range viNames {
+			for _, b := range titleMapCandidates(cand.BaseTitle) {
+				if sc := titleSim(a, b); sc > s {
+					s = sc
+				}
+			}
+		}
 		score := s * 0.8
 		epMatch := false
 		if vi.EpisodeNum > 0 {
@@ -2557,10 +2749,22 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 	steps = append(steps, replaceStep{"fetch_meta", "获取官方页面信息", "ok",
 		fmt.Sprintf("title=%s · base=%s · 第%d集", title, vi.BaseTitle, vi.EpisodeNum)})
 
-	// 生成搜索关键词：优先「基础剧名+集数」
-	kws := []string{vi.BaseTitle}
-	if vi.EpisodeNum > 0 {
-		kws = []string{vi.BaseTitle + " 第" + strconv.Itoa(vi.EpisodeNum) + "集", vi.BaseTitle}
+	// 生成搜索关键词：官方剧名 + 映射变体（兼容资源站不同表述），优先「基础剧名+集数」
+	kws := []string{}
+	seenKW := map[string]bool{}
+	addKW := func(k string) {
+		k = strings.TrimSpace(k)
+		if k != "" && !seenKW[k] {
+			seenKW[k] = true
+			kws = append(kws, k)
+		}
+	}
+	for _, n := range titleMapCandidates(vi.BaseTitle) {
+		if vi.EpisodeNum > 0 {
+			addKW(n + " 第" + strconv.Itoa(vi.EpisodeNum) + "集")
+			addKW(n + " " + strconv.Itoa(vi.EpisodeNum))
+		}
+		addKW(n)
 	}
 	res.SearchKeywords = kws
 
@@ -3091,6 +3295,121 @@ func handleSiteCheckProgress(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ============ 官替映射专区（官方剧名 ↔ 资源站剧名，从真实链接抓取添加） ============
+
+func handleMapsList(w http.ResponseWriter, r *http.Request) {
+	cfg := loadTitleMaps()
+	recordCall("/api/maps", "", true, 0, fmt.Sprintf("映射 %d 条", len(cfg.NameMaps)))
+	writeJSON(w, cfg)
+}
+
+func handleMapsAdd(w http.ResponseWriter, r *http.Request) {
+	var req TitleMap
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数解析失败: " + err.Error()})
+		return
+	}
+	req.From = strings.TrimSpace(req.From)
+	req.To = strings.TrimSpace(req.To)
+	req.Note = strings.TrimSpace(req.Note)
+	if req.From == "" || req.To == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "官方剧名(from)和目标剧名(to)不能为空"})
+		return
+	}
+	titleMapsMu.Lock()
+	defer titleMapsMu.Unlock()
+	cfg := loadTitleMaps()
+	for _, m := range cfg.NameMaps {
+		if m.From == req.From && m.To == req.To {
+			recordCall("/api/maps/add", req.From, false, 0, "映射已存在")
+			writeJSON(w, map[string]interface{}{"success": false, "message": "该映射已存在"})
+			return
+		}
+	}
+	cfg.NameMaps = append(cfg.NameMaps, req)
+	if err := saveTitleMaps(cfg); err != nil {
+		recordCall("/api/maps/add", req.From, false, 0, "保存失败: "+err.Error())
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/maps/add", req.From+"→"+req.To, true, 0, "添加成功")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "映射添加成功", "map": req})
+}
+
+func handleMapsDelete(w http.ResponseWriter, r *http.Request) {
+	from := strings.TrimSpace(r.URL.Query().Get("from"))
+	to := strings.TrimSpace(r.URL.Query().Get("to"))
+	if from == "" {
+		var req struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req)
+		from, to = strings.TrimSpace(req.From), strings.TrimSpace(req.To)
+	}
+	if from == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少映射来源剧名"})
+		return
+	}
+	titleMapsMu.Lock()
+	defer titleMapsMu.Unlock()
+	cfg := loadTitleMaps()
+	kept := []TitleMap{}
+	found := false
+	for _, m := range cfg.NameMaps {
+		if m.From == from && (to == "" || m.To == to) {
+			found = true
+			continue
+		}
+		kept = append(kept, m)
+	}
+	if !found {
+		recordCall("/api/maps/delete", from, false, 0, "映射不存在")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "映射不存在: " + from})
+		return
+	}
+	cfg.NameMaps = kept
+	if err := saveTitleMaps(cfg); err != nil {
+		recordCall("/api/maps/delete", from, false, 0, "保存失败: "+err.Error())
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/maps/delete", from, true, 0, "删除成功")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "映射删除成功"})
+}
+
+// handleMapsFetch POST /api/maps/fetch?url=<真实官方视频页> 抓取官方平台/剧名/集数，供添加映射
+func handleMapsFetch(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("url"))
+	if raw == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少 url 参数"})
+		return
+	}
+	platform := detectPlatform(raw)
+	if platform == "" {
+		recordCall("/api/maps/fetch", raw, false, 0, "不支持的平台")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "不支持的视频平台"})
+		return
+	}
+	vidHint := ""
+	if m := tencentVidRe.FindStringSubmatch(raw); len(m) > 1 {
+		vidHint = m[1]
+	}
+	title := fetchVideoTitle(raw, vidHint)
+	if title == "" {
+		recordCall("/api/maps/fetch", raw, false, 0, "无法获取视频信息")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "无法获取官方视频信息，请检查链接是否有效"})
+		return
+	}
+	vi := parseVideoTitle(title)
+	recordCall("/api/maps/fetch", raw, true, 0, fmt.Sprintf("%s · %s · 第%d集", platform, vi.BaseTitle, vi.EpisodeNum))
+	writeJSON(w, map[string]interface{}{
+		"success": true, "platform": platform,
+		"title": title, "base_title": vi.BaseTitle,
+		"episode_num": vi.EpisodeNum, "episode": vi.Episode,
+	})
+}
+
 // ============================================================
 // 后台登录鉴权：账号密码（默认 admin / admin123，后台可改，持久化 auth.json）
 // ============================================================
@@ -3298,9 +3617,10 @@ func detectDirectFormat(raw string) string {
 }
 
 // handleJX JSON 通用兼容接口（供影视 / TVBox / 盒子等调用）
-//   GET /api/jx?url=<m3u8|mp4|官方视频页>&engine=basic|auto|ai
-//   返回 {code:0/1, success, msg, url(可播放/去广告地址), full, play, name, pic, header, format}
-//   url 用请求 Host 动态拼接，不硬编码；响应已带全局 CORS 头。
+//
+//	GET /api/jx?url=<m3u8|mp4|官方视频页>&engine=basic|auto|ai
+//	返回 {code:0/1, success, msg, url(可播放/去广告地址), full, play, name, pic, header, format}
+//	url 用请求 Host 动态拼接，不硬编码；响应已带全局 CORS 头。
 func handleJX(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	raw := r.URL.Query().Get("url")
@@ -3474,6 +3794,11 @@ func main() {
 	http.HandleFunc("/api/sites/delete", guard(handleSiteDelete))
 	http.HandleFunc("/api/sites/check", guard(handleSiteCheck))
 	http.HandleFunc("/api/sites/check/progress", guard(handleSiteCheckProgress))
+	// 官替映射专区（需登录）
+	http.HandleFunc("/api/maps", guard(handleMapsList))
+	http.HandleFunc("/api/maps/add", guard(handleMapsAdd))
+	http.HandleFunc("/api/maps/delete", guard(handleMapsDelete))
+	http.HandleFunc("/api/maps/fetch", guard(handleMapsFetch))
 	log.Printf("MXGT-Go %s listening on %s (M3U8 去广告 + 官替链路服务)", AppVersion, *addr)
 	// 使用全局 httpServer 句柄：更新重启时可优雅关闭释放端口（修复更新后不自动重启）
 	httpServer = &http.Server{Addr: *addr, Handler: withCORS(http.DefaultServeMux)}
