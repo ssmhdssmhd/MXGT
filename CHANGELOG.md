@@ -1,5 +1,30 @@
 # 更新日志
 
+## Go 分支 v0.3.0 (2026-09-09) — 新增远程在线更新
+
+### 检查 GitHub Release → 下载 → 原子替换 → 自动重启
+
+> 用户诉求：Go 版也要支持像 PHP 版那样的远程在线更新。
+
+#### 1. 更新接口与清单（[main.go](file:///workspace/main.go) + [build-go.yml](file:///workspace/.github/workflows/build-go.yml)）
+
+- **接口**：`GET /api/update/check`（检查是否有新版本）、`POST /api/update/apply`（下载并替换重启）；
+- **版本清单 `latest.json`**：Actions 每次发布后自动写入并用 `git push` 回传 `go` 分支根目录（含最新版本号 + Release zip 文件名）；push 触发用 `paths-ignore: latest.json` 防止清单提交再次触发构建（死循环）；
+- **规避限流**：服务从 `raw.githubusercontent.com/ssmhdssmhd/MXGT/go/latest.json` 读取，**不调用 GitHub API**（API 未认证有 60 次/小时限流，实测会 403）；
+- **更新流程**：下载 Release zip → 解出与当前同名二进制 → 备份旧版为 `<exe>.bak` → 原子 `os.Rename` 替换 → 用 `exec.Command` 启动新进程（继承启动参数/端口/环境）→ 本进程 `os.Exit(0)`。
+
+#### 2. 后台 UI（[main.go](file:///workspace/main.go) admin）
+
+- 新增「🔄 远程在线更新」面板：「🔍 检查更新」「⬇ 下载并更新重启」按钮；
+- 刷新页面自动调用 `check` 显示当前→最新版本与是否有新版。
+
+#### 3. 版本与验证
+
+- 版本升级 `v0.2.1 → v0.3.0`；[README.md](file:///workspace/README.md) Go 章节同步接口表、新增「远程在线更新（Go 版）」章节与 v0.3.0 更新日志；新增 `latest.json`。
+- 验证：`go vet`/`go build` 通过；`/api/update/check` 在清单未发布时优雅返回 `manifest HTTP 404`（不崩溃）；后台更新面板正常渲染。
+
+---
+
 ## Go 分支 v0.2.1 (2026-09-09) — 前端跨域 + 直接播放 + 无硬编码
 
 ### 后台补全跨域、新增内嵌播放器、播放地址不写死

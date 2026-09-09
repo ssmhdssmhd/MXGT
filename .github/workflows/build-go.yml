@@ -3,6 +3,8 @@ name: build-go
 on:
   push:
     branches: [ go ]
+    paths-ignore:
+      - 'latest.json'
   workflow_dispatch:
 
 permissions:
@@ -13,6 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: 配置 git（供提交最新版本清单）
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
 
       - uses: actions/setup-go@v5
         with:
@@ -51,3 +58,14 @@ jobs:
           files: release/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 写入并提交最新版本清单 latest.json（供服务端远程更新检查）
+        run: |
+          printf '{"version":"%s","zip":"%s"}\n' "$VER" "$ZIP" > latest.json
+          git add latest.json
+          if git diff --cached --quiet; then
+            echo "latest.json 无变化，跳过提交"
+          else
+            git commit -m "自动更新版本清单 latest.json → ${VER}"
+            git push origin go
+          fi

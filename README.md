@@ -38,11 +38,24 @@ go run main.go "https://示例.com/playlist.m3u8"
 | `GET /api/clean/json?url=<m3u8>` | 返回 JSON：统计 + 过滤后文本 + 每个片段的广告标记/原因 |
 | `GET /api/clean?url=...&opt=aggresive` | 开启聚合聚类识别（同目录统一切片批量判广告，可能误伤统一节奏正片，默认关） |
 | `GET /api/stats` | 运行统计（JSON，后台展示） |
+| `GET /api/update/check` | 检查远程是否有新版本（读取线上 `latest.json`） |
+| `POST /api/update/apply` | 下载 GitHub Release 最新版并自动替换重启（远程在线更新） |
 | `GET /healthz` | 健康检查 |
 
-> 打开浏览器访问服务地址即进入后台：`http://<IP>:8080/`。后台展示运行统计（版本/运行时长/清洗请求数/累计片段/广告占比/最近结果），并提供 M3U8 一键解析去广告测试。
+> 打开浏览器访问服务地址即进入后台：`http://<IP>:8080/`。后台展示运行统计（版本/运行时长/清洗请求数/累计片段/广告占比/最近结果），并提供 M3U8 一键解析去广告测试、内嵌无广告播放器与**远程在线更新**。
 
-### 广告检测规则（保守防误删）
+### 远程在线更新（Go 版）
+
+服务内置远程自动更新：每次发布时 GitHub Actions 会把版本清单 `latest.json`（含最新版本号与 Release zip 文件名）自动提交到 `go` 分支根目录。
+
+- 服务从 `raw.githubusercontent.com/ssmhdssmhd/MXGT/go/latest.json`（**不走 GitHub API，无未认证限流问题**）读取最新版本；
+- 与当前 `AppVersion` 对比，若有新版（版本号更大且 zip 有效）→ 后台「远程在线更新」面板出现「检查更新 / 下载并更新重启」；
+- 点更新：下载对应 Release zip → 解出二进制 → 备份旧版为 `mxgt-go.bak` → 原子替换 → 自动重启新进程（继承原启动参数与端口）；
+- 运行目录需有写权限（能创建 `.bak` 并替换自身二进制）。
+
+
+
+## 广告检测规则（保守防误删）
 
 1. **URL 关键词**：`/ad/`、`_ad`、`ad0`、`ads`、`gdt`、`tvc`、`promo`、`300x250`、`600x90` 等；
 2. **广告标签区间**：`EXT-X-DATERANGE` / `EXT-X-CUE-OUT` / `EXT-X-AD` 声明；
@@ -81,6 +94,25 @@ chmod +x mxgt-go
 ---
 
 ## Go 版更新日志（branch `go`）
+
+## v0.3.0 (2026-09-09) — 新增远程在线更新
+
+> 服务内置远程自动更新：检查 GitHub Release → 下载 → 原子替换 → 自动重启，后台一键完成。
+
+### 新增内容（[main.go](file:///workspace/main.go) + [.github/workflows/build-go.yml](file:///workspace/.github/workflows/build-go.yml)）
+
+- **更新接口**：`GET /api/update/check`（检查最新版本）、`POST /api/update/apply`（下载并替换重启）；
+- **版本清单**：GitHub Actions 发布后自动写入并提交根目录 `latest.json`（含最新版本号 + Release zip 文件名），服务从 `raw.githubusercontent.com` 读取（**不走 GitHub API，规避未认证限流**）；
+- **更新流程**：下载 Release zip → 解出与当前同名二进制 → 备份旧版为 `mxgt-go.bak` → 原子 `rename` 替换 → 启动新进程（继承参数与端口）→ 本进程退出；
+- **后台 UI**：新增「🔄 远程在线更新」面板，一键「检查更新 / 下载更新重启」；
+- 版本升级 `v0.2.1 → v0.3.0`。
+
+### 验证
+
+- `go vet` / `CGO_ENABLED=0 go build` 通过；`/api/update/check`、`/api/update/apply` 正常注册；
+- 清单未发布时优雅返回「检查更新失败: manifest HTTP 404」，不崩溃；后台更新面板正常渲染。
+
+---
 
 ## v0.2.1 (2026-09-09) — 前端跨域 + 直接播放 + 无硬编码
 

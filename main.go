@@ -1,4 +1,4 @@
-// MXGT-Go v0.2.1 — M3U8 广告分析与去广告单文件服务
+// MXGT-Go v0.3.0 — M3U8 广告分析与去广告单文件服务
 //
 // 单文件、标准库零依赖：HTTP 服务接收 m3u8 链接，抓取-解析-保守广告检测-输出无广告 M3U8。
 //
@@ -23,6 +23,7 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -32,6 +33,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -41,7 +44,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.2.1"
+	AppVersion = "v0.3.0"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -607,6 +610,17 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
+    <h2>🔄 远程在线更新</h2>
+    <div class="row">
+      <div class="stat-line" id="updInfo" style="display:block"></div>
+    </div>
+    <div class="row">
+      <button class="btn" onclick="checkUpdate()">🔍 检查更新</button>
+      <button class="btn ghost" onclick="applyUpdate()">⬇ 下载并更新重启</button>
+    </div>
+  </div>
+
+  <div class="panel">
     <h2>📚 HTTP 接口说明</h2>
     <table>
       <tr><th>接口</th><th>说明</th></tr>
@@ -657,7 +671,24 @@ async function runClean(){
     refreshStats();
   }catch(e){el('resOut').textContent='解析失败: '+e.message}
 }
-refreshStats(); setInterval(refreshStats,5000);
+function checkUpdate(){
+  el('updInfo').textContent='正在检查更新…';
+  fetch('/api/update/check').then(function(r){return r.json()}).then(function(d){
+    let s='当前 '+d.current+' → 最新 '+d.latest;
+    if(d.has_update){ s+='　⚠️ 存在新版本'; }
+    if(d.message){ s+='　('+d.message+')'; }
+    el('updInfo').textContent=s;
+  }).catch(function(e){el('updInfo').textContent='检查失败: '+e.message});
+}
+function applyUpdate(){
+  if(!confirm('确定下载并替换为新版本并重启服务吗？')){return;}
+  el('updInfo').textContent='正在发起更新…';
+  fetch('/api/update/apply',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    el('updInfo').textContent=(d.message||'处理中，请稍候刷新（会短暂断连）')+' → '+(d.to||'');
+    setTimeout(function(){location.reload();},4000);
+  }).catch(function(e){el('updInfo').textContent='发起失败: '+e.message});
+}
+refreshStats(); setInterval(refreshStats,5000); checkUpdate();
 
 function buildCleanURL(url, aggr){
   return '/api/clean?url='+encodeURIComponent(url)+(aggr?'&opt=aggresive':'');
@@ -745,6 +776,232 @@ func playURL(r *http.Request, path string, query url.Values) string {
 	return u.String()
 }
 
+// ============================================================
+// 远程在线更新：检查 GitHub Releases → 下载替换 → 自动重启
+// ============================================================
+
+// 更新源配置。清单 latest.json 由 GitHub Actions 每次发布后自动写入并提交到 go 分支。
+const (
+	repoOwner      = "ssmhdssmhd"
+	repoName       = "MXGT"
+	repoBranch     = "go"
+	manifestRawURL = "https://raw.githubusercontent.com/" + repoOwner + "/" + repoName + "/" + repoBranch + "/latest.json"
+	releaseBaseURL = "https://github.com/" + repoOwner + "/" + repoName + "/releases/download"
+	updateTimeout  = 60 * time.Second
+)
+
+// UpdateManifest 线上版本清单
+type UpdateManifest struct {
+	Version string `json:"version"` // 最新版本，如 v0.3.0
+	Zip     string `json:"zip"`     // Release 资产文件名，如 MXGT_go_v0.3.0_202609091200.zip
+}
+
+var updateHTTP = &http.Client{Timeout: updateTimeout}
+
+// parseVersion 解析 a.b.c 为 [a,b,c]
+func parseVersion(v string) []int {
+	t := strings.TrimPrefix(strings.TrimSpace(v), "v")
+	parts := strings.Split(t, ".")
+	out := []int{}
+	for _, p := range parts {
+		n, _ := strconv.Atoi(strings.TrimSpace(p))
+		out = append(out, n)
+	}
+	for len(out) < 3 {
+		out = append(out, 0)
+	}
+	return out[:3]
+}
+
+// compareVersion 返回 -1/0/1（a<b / a==b / a>b）
+func compareVersion(a, b []int) int {
+	for i := 0; i < 3; i++ {
+		if a[i] != b[i] {
+			if a[i] < b[i] {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
+// fetchManifest 拉取线上版本清单（raw.githubusercontent，无 GitHub API 限流）
+func fetchManifest() (*UpdateManifest, error) {
+	resp, err := updateHTTP.Get(manifestRawURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("manifest HTTP %d", resp.StatusCode)
+	}
+	var m UpdateManifest
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&m); err != nil {
+		return nil, err
+	}
+	m.Version = strings.TrimPrefix(strings.TrimSpace(m.Version), "v")
+	m.Zip = strings.TrimSpace(m.Zip)
+	if m.Version == "" {
+		return nil, fmt.Errorf("manifest 版本为空")
+	}
+	return &m, nil
+}
+
+// updateInfo 组装检查信息
+func updateInfo() map[string]interface{} {
+	out := map[string]interface{}{
+		"current":      AppVersion,
+		"latest":       AppVersion,
+		"has_update":   false,
+		"download_url": "",
+		"message":      "",
+	}
+	m, err := fetchManifest()
+	if err != nil {
+		out["message"] = "检查更新失败: " + err.Error()
+		return out
+	}
+	out["latest"] = "v" + m.Version
+	out["download_url"] = releaseBaseURL + "/go-v" + m.Version + "/" + m.Zip
+	if compareVersion(parseVersion(AppVersion), parseVersion(m.Version)) < 0 && m.Zip != "" {
+		out["has_update"] = true
+	}
+	return out
+}
+
+// downloadZip 下载 Release 资产 zip 到本地临时文件
+func downloadZip(url string) (string, error) {
+	resp, err := updateHTTP.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("下载 HTTP %d (%s)", resp.StatusCode, url)
+	}
+	f, err := os.CreateTemp("", "mxgt-update-*.zip")
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", err
+	}
+	f.Close()
+	return f.Name(), nil
+}
+
+// extractBinary 从 zip 中提取与当前可执行文件同名的二进制到临时文件
+func extractBinary(zipPath, want string) (string, error) {
+	zr, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return "", err
+	}
+	defer zr.Close()
+	for _, f := range zr.File {
+		if filepath.Base(f.Name) != want {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return "", err
+		}
+		tmp, err := os.CreateTemp("", "mxgt-*.new")
+		if err != nil {
+			rc.Close()
+			return "", err
+		}
+		if _, err := io.Copy(tmp, rc); err != nil {
+			rc.Close()
+			tmp.Close()
+			os.Remove(tmp.Name())
+			return "", err
+		}
+		rc.Close()
+		tmp.Close()
+		if err := os.Chmod(tmp.Name(), 0o755); err != nil {
+			os.Remove(tmp.Name())
+			return "", err
+		}
+		return tmp.Name(), nil
+	}
+	return "", fmt.Errorf("zip 中未找到可执行文件 %s", want)
+}
+
+// replaceAndRestart 用新二进制替换当前文件并重启进程
+func replaceAndRestart(newBin string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	// 备份当前二进制
+	backup := exe + ".bak"
+	_ = os.Remove(backup)
+	if data, err := os.ReadFile(exe); err == nil {
+		_ = os.WriteFile(backup, data, 0o755)
+	}
+	// 原子替换
+	if err := os.Rename(newBin, exe); err != nil {
+		return err
+	}
+	// 启动新进程（继承参数与工作目录）
+	args := os.Args[1:]
+	cmd := exec.Command(exe, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Env = os.Environ()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	log.Printf("已启动新进程 pid=%d，本进程即将退出", cmd.Process.Pid)
+	time.Sleep(300 * time.Millisecond)
+	os.Exit(0)
+	return nil
+}
+
+// handleUpdateCheck GET /api/update/check
+func handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, updateInfo())
+}
+
+// handleUpdateApply POST /api/update/apply
+func handleUpdateApply(w http.ResponseWriter, r *http.Request) {
+	info := updateInfo()
+	if !info["has_update"].(bool) {
+		info["message"] = "当前已是最新版本"
+		writeJSON(w, info)
+		return
+	}
+	urlStr := info["download_url"].(string)
+	writeJSON(w, map[string]interface{}{
+		"success": true,
+		"message": "开始下载更新并重启，请稍候刷新页面…",
+		"from":    info["current"],
+		"to":      info["latest"],
+	})
+	go func() {
+		zipPath, err := downloadZip(urlStr)
+		if err != nil {
+			log.Printf("更新下载失败: %v", err)
+			return
+		}
+		defer os.Remove(zipPath)
+		exe, _ := os.Executable()
+		newBin, err := extractBinary(zipPath, filepath.Base(exe))
+		if err != nil {
+			log.Printf("更新解压失败: %v", err)
+			return
+		}
+		if err := replaceAndRestart(newBin); err != nil {
+			log.Printf("更新替换失败: %v", err)
+			os.Remove(newBin)
+		}
+	}()
+}
+
 func main() {
 	addr := flag.String("addr", ":8080", "监听地址")
 	flag.Parse()
@@ -776,6 +1033,8 @@ func main() {
 	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, stats.snapshot())
 	})
+	http.HandleFunc("/api/update/check", handleUpdateCheck)
+	http.HandleFunc("/api/update/apply", handleUpdateApply)
 	http.HandleFunc("/api/clean", func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
 		aggr := r.URL.Query().Get("opt") == "aggresive"
