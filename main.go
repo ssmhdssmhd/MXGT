@@ -1,9 +1,10 @@
-// MXGT-Go v0.3.1 — M3U8 广告分析与去广告单文件服务
+// MXGT-Go v0.3.2 — M3U8 广告分析与去广告单文件服务
 //
 // 单文件、标准库零依赖：HTTP 服务接收 m3u8 链接，抓取-解析-保守广告检测-输出无广告 M3U8。
 //
 // 页面：
-//   GET /            → 后台管理页（状态统计 + 解析测试 + 接口说明）
+//   GET /mxadmin → 后台管理页（状态统计 + 解析测试 + 内嵌播放 + 远程更新）
+//   GET /            → 简洁落地页（不进入后台，含通往 /mxadmin 的入口）
 //
 // 接口：
 //   GET /api/clean?url=<m3u8>       → 过滤后的无广告 M3U8 纯文本（绝对地址）
@@ -44,7 +45,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.3.1"
+	AppVersion = "v0.3.2"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -585,6 +586,10 @@ const adminPageHTML = `<!DOCTYPE html>
       <h1>🎬 MXGT-Go 后台</h1>
       <div class="ver">M3U8 广告分析与去广告 · 单文件服务 <span id="ver"></span></div>
     </div>
+    <div style="text-align:right">
+      <div style="font-size:14px;font-weight:700;color:#ffe4f1">开发者 · ssmhdssmhd</div>
+      <div class="ver" style="font-size:11px;margin-top:2px">品牌 MXGT</div>
+    </div>
     <button class="btn ghost" onclick="refreshStats()">⟳ 刷新</button>
   </div>
 
@@ -1019,13 +1024,18 @@ func main() {
 		return
 	}
 
+	// 首页固定进了后台；后台入口为 /mxadmin
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/", "/admin", "/admin/":
+		if r.URL.Path == "/mxadmin" || r.URL.Path == "/mxadmin/" {
 			handleAdmin(w, r)
-		default:
-			http.NotFound(w, r)
+			return
 		}
+		if r.URL.Path == "/" {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			io.WriteString(w, "<!DOCTYPE html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>MXGT-Go</title><style>body{font-family:-apple-system,PingFang SC,Microsoft YaHei,sans-serif;background:linear-gradient(135deg,#581c87,#7e22ce,#a21caf);color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0}.c{text-align:center;padding:24px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:18px;backdrop-filter:blur(14px)}h1{margin:0 0 8px;font-size:24px}a{display:inline-block;margin-top:16px;color:#fff;background:#c026d3;padding:10px 22px;border-radius:10px;text-decoration:none}.m{opacity:.85;font-size:13px}</style></head><body><div class='c'><h1>MXGT-Go 去广告服务</h1><div class='m'>M3U8 广告分析与去广告单文件服务 <b>"+AppVersion+"</b> · 开发者 ssmhdssmhd</div><a href='/mxadmin'>进入后台管理 →</a></div></body></html>")
+			return
+		}
+		http.NotFound(w, r)
 	})
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")

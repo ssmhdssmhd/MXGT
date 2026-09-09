@@ -1,5 +1,28 @@
 # 更新日志
 
+## Go 分支 v0.3.2 (2026-09-09) — 后台入口改为 /mxadmin + 页头标注开发者
+
+### 后台不再 / 直达，改为域名/mxadmin；后台显眼标注开发者
+
+> 用户诉求：后台必须 `域名/mxadmin` 才能进入，不能 `http://IP:8080/` 直接进后台；后台显眼处显示开发者 ssmhdssmhd。
+
+#### 1. 路由（[main.go](file:///workspace/main.go)）
+
+- **后台入口 `/mxadmin`**：仅 `/mxadmin`、`/mxadmin/` 进入后台；原 `/admin`、`/admin/` 入口已移除（返回 404）；
+- **首页 `/` 落地页**：`/` 不再进入后台，改为简洁落地页（品牌「MXGT-Go 去广告服务」+ 版本 + 开发者 ssmhdssmhd +「进入后台管理 →」链接）；
+- 其余未知路径保持 404。
+
+#### 2. 开发者署名片（[main.go](file:///workspace/main.go) admin）
+
+- 后台**页头右上角显眼标注**「开发者 · ssmhdssmhd」+「品牌 MXGT」。
+
+#### 3. 版本与验证
+
+- 版本升级 `v0.3.1 → v0.3.2`；[README.md](file:///workspace/README.md) 同步接口表、访问方式与 v0.3.2 更新日志。
+- 验证：`/` → 落地页(200，含开发者与后台入口)、`/mxadmin` → 后台(200，含「开发者 · ssmhdssmhd」)、`/admin` → 404；`go vet`/静态编译通过。
+
+---
+
 ## Go 分支 v0.3.1 (2026-09-09) — 修复远程更新下载地址（Release tag 双 v 对齐）
 
 ### 下载 404 根因与修复
