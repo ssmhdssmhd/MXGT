@@ -1,10 +1,14 @@
-// MXGT-Go v0.1.1 — M3U8 广告分析与去广告单文件服务
+// MXGT-Go v0.2.0 — M3U8 广告分析与去广告单文件服务
 //
 // 单文件、标准库零依赖：HTTP 服务接收 m3u8 链接，抓取-解析-保守广告检测-输出无广告 M3U8。
+//
+// 页面：
+//   GET /            → 后台管理页（状态统计 + 解析测试 + 接口说明）
 //
 // 接口：
 //   GET /api/clean?url=<m3u8>       → 过滤后的无广告 M3U8 纯文本（绝对地址）
 //   GET /api/clean/json?url=<m3u8>  → JSON：统计 + 过滤后文本 + 广告片段明细
+//   GET /api/stats                  → 运行统计（JSON，后台展示）
 //   GET /healthz                    → 健康检查
 //
 // 广告检测（保守防误删，命中即高置信才删）：
@@ -24,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -31,11 +36,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	AppVersion = "v0.1.1"
+	AppVersion = "v0.2.0"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -461,6 +467,201 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// ServerStats 服务运行统计（后台展示用，内存统计）
+type ServerStats struct {
+	mu        sync.Mutex
+	StartedAt time.Time
+	Requests  int64 // 清洗接口请求数
+	Errors    int64 // 失败请求数
+	TotalSegs int64 // 累计解析片段数
+	AdSegs    int64 // 累计标记广告片段数
+	KeptSegs  int64 // 累计保留片段数
+	LastMsg   string
+	LastAt    time.Time
+	LastURL   string
+}
+
+var stats = &ServerStats{StartedAt: time.Now()}
+
+func (s *ServerStats) snapshot() map[string]interface{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ratio := 0.0
+	if s.TotalSegs > 0 {
+		ratio = float64(s.AdSegs) / float64(s.TotalSegs) * 100
+	}
+	return map[string]interface{}{
+		"started_at": s.StartedAt.Format(time.RFC3339),
+		"uptime":     fmtDuration(time.Since(s.StartedAt)),
+		"version":    AppVersion,
+		"requests":   s.Requests,
+		"errors":     s.Errors,
+		"total_segs": s.TotalSegs,
+		"ad_segs":    s.AdSegs,
+		"kept_segs":  s.KeptSegs,
+		"ad_ratio":   math.Round(ratio*10) / 10,
+		"last_msg":   s.LastMsg,
+		"last_at":    s.LastAt.Format(time.RFC3339),
+		"last_url":   s.LastURL,
+	}
+}
+
+func fmtDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	sec := int(d.Seconds()) % 60
+	return fmt.Sprintf("%02d小时%02d分%02d秒", h, m, sec)
+}
+
+// recordClean 清洗一次解析结果，写入内存统计
+func recordClean(res ParseResult, rawURL string) {
+	stats.mu.Lock()
+	defer stats.mu.Unlock()
+	stats.Requests++
+	stats.TotalSegs += int64(res.TotalSegments)
+	stats.AdSegs += int64(res.AdCount)
+	stats.KeptSegs += int64(res.KeptSegments)
+	stats.LastURL = rawURL
+	stats.LastAt = time.Now()
+	if res.Success {
+		stats.LastMsg = res.Message
+	} else {
+		stats.Errors++
+		stats.LastMsg = "失败: " + res.Message
+	}
+}
+
+// adminPageHTML 内嵌单文件后台管理页面（玻璃拟态风格，与 PHP 版后台观感一致）
+const adminPageHTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MXGT-Go 后台</title>
+<style>
+  :root{--pri:#7e22ce;--pink:#c026d3;--card:rgba(255,255,255,.86);--line:rgba(255,255,255,.9)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{min-height:100vh;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:linear-gradient(135deg,#581c87,#7e22ce,#a21caf,#c026d3);color:#1f2937;padding:24px}
+  .wrap{max-width:980px;margin:0 auto}
+  .header{background:rgba(255,255,255,.18);backdrop-filter:blur(14px);border:1px solid var(--line);
+          border-radius:18px;padding:20px 24px;color:#fff;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+  .header h1{font-size:22px;font-weight:700}
+  .header .ver{font-size:13px;opacity:.9;margin-top:4px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px}
+  .card{background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--line);
+        border-radius:18px;padding:16px 18px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+  .card .lab{font-size:12px;color:#6b7280;margin-bottom:6px}
+  .card .val{font-size:22px;font-weight:700;color:#581c87}
+  .card .sub{font-size:12px;color:#9ca3af;margin-top:4px}
+  .panel{background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--line);
+         border-radius:18px;padding:22px 24px;box-shadow:0 8px 24px rgba(0,0,0,.12);margin-bottom:20px}
+  .panel h2{font-size:17px;color:#581c87;margin-bottom:16px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  input[type=url]{flex:1;min-width:240px;padding:11px 14px;border-radius:10px;border:1px solid #d1d5db;font-size:14px}
+  .btn{background:linear-gradient(135deg,#7e22ce,#c026d3);color:#fff;border:0;border-radius:10px;
+       padding:11px 18px;font-size:14px;cursor:pointer;box-shadow:0 4px 12px rgba(124,58,237,.35)}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:#fff;color:#581c87;border:1px solid #d1d5db;box-shadow:none}
+  label.sw{display:flex;align-items:center;gap:6px;font-size:13px;color:#4b5563;cursor:pointer}
+  pre{margin-top:14px;background:#111827;color:#7ee787;border-radius:12px;padding:16px;font-size:12.5px;
+      line-height:1.55;overflow:auto;max-height:430px;white-space:pre-wrap;word-break:break-all;display:none}
+  .stat-line{font-size:13px;color:#374151;margin-top:10px;padding:10px 14px;background:#f3f4f6;border-radius:10px;display:none}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid #eee}
+  th{color:#581c87;font-size:12.5px}
+  code{background:#f3f4f6;padding:2px 7px;border-radius:6px;color:#7e22ce;font-size:12px}
+  .muted{color:#9ca3af;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <h1>🎬 MXGT-Go 后台</h1>
+      <div class="ver">M3U8 广告分析与去广告 · 单文件服务 <span id="ver"></span></div>
+    </div>
+    <button class="btn ghost" onclick="refreshStats()">⟳ 刷新</button>
+  </div>
+
+  <div class="grid" id="statGrid"></div>
+
+  <div class="panel">
+    <h2>🔬 解析测试</h2>
+    <div class="row">
+      <input type="url" id="urlInput" placeholder="粘贴 M3U8 地址，如 https://example.com/playlist.m3u8"
+             onkeydown="if(event.key==='Enter')runClean()">
+      <label class="sw"><input type="checkbox" id="aggrOpt"> 聚合识别(opt=aggresive)</label>
+      <button class="btn" onclick="runClean()">⚡ 解析并去广告</button>
+    </div>
+    <div class="stat-line" id="resStats"></div>
+    <pre id="resOut"></pre>
+  </div>
+
+  <div class="panel">
+    <h2>📚 HTTP 接口说明</h2>
+    <table>
+      <tr><th>接口</th><th>说明</th></tr>
+      <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;</code></td><td>返回过滤后的无广告 M3U8 纯文本（绝对地址）</td></tr>
+      <tr><td><code>GET /api/clean/json?url=&lt;m3u8&gt;</code></td><td>返回 JSON：统计 + 过滤后文本 + 每个片段明细</td></tr>
+      <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;&amp;opt=aggresive</code></td><td>开启聚合聚类识别（可能误伤统一切片正片）</td></tr>
+      <tr><td><code>GET /api/stats</code></td><td>运行统计（JSON）</td></tr>
+      <tr><td><code>GET /healthz</code></td><td>健康检查</td></tr>
+    </table>
+    <p class="muted" style="margin-top:12px">命令行模式：<code>./mxgt-go "&lt;m3u8地址&gt;"</code></p>
+  </div>
+</div>
+
+<script>
+function el(id){return document.getElementById(id)}
+function statCard(lab,val,sub){
+  return '<div class="card"><div class="lab">'+lab+'</div><div class="val">'+val+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';
+}
+async function getJSON(u){
+  const r=await fetch(u); return r.json();
+}
+async function refreshStats(){
+  try{
+    const s=await getJSON('/api/stats');
+    el('ver').textContent=s.version;
+    const ratio=s.ad_ratio+'%';
+    el('statGrid').innerHTML=
+      statCard('版本',s.version,'运行 '+s.uptime)+
+      statCard('清洗请求',s.requests,s.errors+' 次失败')+
+      statCard('累计片段',s.total_segs,'广告 '+s.ad_segs)+
+      statCard('广告占比',ratio,'保留 '+s.kept_segs)+
+      statCard('最近',s.last_msg||'—',s.last_url||'');
+    if(s.last_at){document.querySelector('#statGrid .val').title=s.last_at}
+  }catch(e){el('statGrid').innerHTML=statCard('状态','ERR','统计加载失败')}
+}
+async function runClean(){
+  const url=el('urlInput').value.trim();
+  el('resStats').style.display='none'; el('resOut').style.display='none';
+  if(!url){alert('请先粘贴 M3U8 地址');return;}
+  el('resOut').style.display='block';el('resOut').textContent='请求中…';
+  try{
+    const opt=el('aggrOpt').checked?'&opt=aggresive':'';
+    const r=await fetch('/api/clean?url='+encodeURIComponent(url)+opt);
+    const ct=r.headers.get('content-type')||'';
+    let data=await r.text();
+    if(ct.indexOf('json')>=0){ const j=JSON.parse(data); el('resStats').style.display='block';el('resStats').textContent=(j.message||j.Message||'')+(j.success===false?'':'')+(j.filtered_m3u8?'  |  保留段 '+j.kept_segments+' / '+j.total_segments:''); data=j.filtered_m3u8||JSON.stringify(j,null,2); }
+    el('resOut').textContent=data;
+    refreshStats();
+  }catch(e){el('resOut').textContent='解析失败: '+e.message}
+}
+refreshStats(); setInterval(refreshStats,5000);
+</script>
+</body>
+</html>
+`
+
+// handleAdmin 渲染后台页面
+func handleAdmin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	io.WriteString(w, adminPageHTML)
+}
+
 func main() {
 	addr := flag.String("addr", ":8080", "监听地址")
 	flag.Parse()
@@ -477,14 +678,26 @@ func main() {
 		return
 	}
 
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/", "/admin", "/admin/":
+			handleAdmin(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "ok %s\n", AppVersion)
+	})
+	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, stats.snapshot())
 	})
 	http.HandleFunc("/api/clean", func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
 		aggr := r.URL.Query().Get("opt") == "aggresive"
 		res := cleanOne(u, aggr)
+		recordClean(res, u)
 		if !res.Success {
 			writeJSON(w, map[string]interface{}{"success": false, "message": res.Message})
 			return
@@ -503,6 +716,7 @@ func main() {
 		u := r.URL.Query().Get("url")
 		aggr := r.URL.Query().Get("opt") == "aggresive"
 		res := cleanOne(u, aggr)
+		recordClean(res, u)
 		writeJSON(w, res)
 	})
 	log.Printf("MXGT-Go %s listening on %s (单文件 M3U8 去广告服务)", AppVersion, *addr)
