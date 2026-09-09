@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.5.1"
+	AppVersion = "v0.5.2"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -904,7 +904,7 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
-    <h2>🗺️ 官替映射专区 <span class="muted">（官方剧名 ↔ 资源站剧名，解决不同官方表述导致的匹配失败）</span></h2>
+    <h2>🗺️ 官替映射专区 <span class="muted">（已内置 7 种官方平台字段提取：腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP，自动拆分剧名+剧集）</span></h2>
     <div class="row" style="flex-wrap:wrap">
       <input id="mapUrl" placeholder="粘贴真实官方视频页链接，如腾讯/爱奇艺/优酷…，自动抓取剧名与集数" style="flex:1;min-width:280px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
       <button class="btn" style="padding:7px 14px;font-size:12px" onclick="fetchMap()">🔍 从链接抓取</button>
@@ -2187,6 +2187,16 @@ var sxxexxRe = regexp.MustCompile(`(?i)S(\d+)\s*E(\d+)`)
 var qRe = regexp.MustCompile(`(?i)第[一-九零一二三四五六七八九十百千0-9]+[季部篇卷番集期话]|S\d+E\d+|全集|完结|高清|蓝光|4K|1080P|720P`)
 var cleanTagRe = regexp.MustCompile(`[（(]?(第[一-九零一二三四五六七八九十百千0-9]+[季部篇卷番集期话]|S\d+E\d+|全集|完结)[）)]?`)
 
+// platformTagRe 内置 7 种官方平台（腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP）的剧名标签与后缀清理规则，
+// 用于从官方标题中提取真实剧名字段（如「【腾讯视频】 独剑九天 01」「独剑九天_爱奇艺」→ 剧名「独剑九天」）
+var platformTagRe = regexp.MustCompile(`(?i)(【[^】]{1,20}】|〔[^〕]{1,20}〕|\[[^\]]{1,20}\])|[-—_·\s]*(腾讯视频|爱奇艺|优酷视频|优酷|芒果TV|芒果tv|哔哩哔哩|bilibili|搜狐视频|搜狐|PP视频|pptv|PPTV)\s*$`)
+
+// epTailSpaceRe 剧名 + 空格/分隔符 + 数字（如「独剑九天 01」「独剑九天-1」）→ 末尾数字为集数
+var epTailSpaceRe = regexp.MustCompile(`^(.+?)[\s·\-_]+(\d{1,4})$`)
+
+// epTailAttachRe 剧名直接跟 2 位数字（如「独剑九天01」「独剑九天25」）→ 末尾数字为集数（限 2 位，避免误拆「流浪地球2」类续作剧名）
+var epTailAttachRe = regexp.MustCompile(`^(.{3,}?)(\d{2})$`)
+
 func cnToNum(s string) int {
 	// 纯阿拉伯数字直接转换（"01"→1、"12"→12、"100"→100），避免逐字解析导致多位数错误
 	if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
@@ -2211,6 +2221,9 @@ func cnToNum(s string) int {
 }
 
 func parseVideoTitle(title string) VideoInfo {
+	// 内置 7 种官方平台标签/后缀清理：先从原始标题提取真实剧名（如「【腾讯视频】 独剑九天 01」「独剑九天_爱奇艺」）
+	title = platformTagRe.ReplaceAllString(strings.TrimSpace(title), "")
+	title = strings.TrimSpace(title)
 	vi := VideoInfo{Title: title}
 	if m := seasonCNRe.FindStringSubmatch(title); len(m) > 1 {
 		vi.SeasonNum = cnToNum(m[1])
@@ -2231,6 +2244,24 @@ func parseVideoTitle(title string) VideoInfo {
 	// 去掉开头/结尾的【标签】/〔标签〕 类包围块（如【腾讯视频】）
 	base = regexp.MustCompile(`(?:^|^[\s·])(?:【[^】]{1,16}】|〔[^〕]{1,16}〕|\[[^\]]{1,16}\])\s*`).ReplaceAllString(strings.TrimSpace(base), " ")
 	base = regexp.MustCompile(`\s*(?:【[^】]{1,16}】|〔[^〕]{1,16}〕)$`).ReplaceAllString(base, "")
+	base = strings.TrimSpace(base)
+	// 剧名 + 末尾数字 → 拆分集数字段（官方标题直接包含当前剧集，如「独剑九天 01」「独剑九天01」）
+	if vi.EpisodeNum == 0 {
+		if m := epTailSpaceRe.FindStringSubmatch(base); len(m) > 2 {
+			if n, err := strconv.Atoi(m[2]); err == nil && n > 0 && n <= 9999 {
+				vi.EpisodeNum, vi.Episode = n, m[2]
+				base = strings.TrimSpace(m[1])
+			}
+		} else if m := epTailAttachRe.FindStringSubmatch(base); len(m) > 2 {
+			// 剧名直接跟数字：剧名部分不能以数字开头（排除纯数字串）
+			if !regexp.MustCompile(`^\d`).MatchString(m[1]) {
+				if n, err := strconv.Atoi(m[2]); err == nil && n > 0 && n <= 99 {
+					vi.EpisodeNum, vi.Episode = n, m[2]
+					base = strings.TrimSpace(m[1])
+				}
+			}
+		}
+	}
 	vi.BaseTitle = strings.TrimSpace(base)
 	return vi
 }
@@ -2602,6 +2633,13 @@ type TitleMaps struct {
 
 var titleMapsMu sync.Mutex
 
+// defaultTitleMaps 内置默认官替映射：7 种官方平台（腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP）的
+// 剧名/集数字段提取规则已内置在代码中（platformTagRe 平台标签后缀清理 + parseVideoTitle 剧名集数拆分 +
+// episodeNumOfPlayItem 集数表述兼容），此处为 title_maps.json 首次创建时的示例映射（用户可改/删）
+var defaultTitleMaps = []TitleMap{
+	{Platform: "腾讯视频", From: "独剑九天", To: "独剑九天", Note: "内置示例：官方剧名→资源站标准剧名"},
+}
+
 func titleMapsPath() string {
 	if exe, err := os.Executable(); err == nil {
 		return filepath.Join(filepath.Dir(exe), "title_maps.json")
@@ -2617,6 +2655,9 @@ func loadTitleMaps() *TitleMaps {
 			return c2
 		}
 	}
+	// 首次运行/文件缺失：落盘内置默认映射
+	cfg.NameMaps = append([]TitleMap(nil), defaultTitleMaps...)
+	_ = saveTitleMaps(cfg)
 	return cfg
 }
 
