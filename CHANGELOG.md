@@ -1,5 +1,16 @@
 # 更新日志
 
+## Go 分支 v0.3.1 (2026-09-09) — 修复远程更新下载地址（Release tag 双 v 对齐）
+
+### 下载 404 根因与修复
+
+- **根因**：GitHub Actions 的 Release tag 形如 `go-vvX.Y.Z`（`VER` 变量本身含前导 `v`，`tag_name: go-v${{ env.VER }}` 得到 `go-vv0.3.0`）；而 [main.go](file:///workspace/main.go) 的 `updateInfo()` 下载地址拼的是单 v `go-vX.Y.Z` → 远程更新下载 **404**；
+- **修复**：下载地址改为 `releaseBaseURL + "/go-vv" + version + "/" + zip`，与实际 tag 对齐；
+- **验证**：`go vet`/静态编译通过；`/api/update/check` 返回 `download_url` 指向 `…/download/go-vv0.3.0/…zip`，`HEAD` 200（修复前 404）；
+- 版本升级 `v0.3.0 → v0.3.1`；[README.md](file:///workspace/README.md) Go 章节同步 v0.3.1 更新日志。
+
+---
+
 ## Go 分支 v0.3.0 (2026-09-09) — 新增远程在线更新
 
 ### 检查 GitHub Release → 下载 → 原子替换 → 自动重启

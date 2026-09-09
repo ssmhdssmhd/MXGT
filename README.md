@@ -95,6 +95,21 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.3.1 (2026-09-09) — 修复远程更新下载地址（Release tag 双 v 对齐）
+
+> 远程更新时间步检查到下载 404：GitHub Actions 的 Release tag 形如 `go-vvX.Y.Z`（`VER` 本身含前导 `v`），而 `updateInfo()` 下载地址拼的是单 v `go-vX.Y.Z`，导致 404 无法下载。已改为 `go-vv…`，下载地址实测返回 200。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- `updateInfo()` 下载地址 `releaseBaseURL + "/go-vv" + version + "/" + zip`（对齐实际 tag `go-vvX.Y.Z`）；
+- 版本升级 `v0.3.0 → v0.3.1`。
+
+### 验证
+
+- `go vet` / 静态编译通过；`/api/update/check` 返回的 `download_url` 已正确指向 `…/release/download/go-vv0.3.0/…zip`，该地址 `HEAD` 返回 **HTTP 200**（修复前为 404）。
+
+---
+
 ## v0.3.0 (2026-09-09) — 新增远程在线更新
 
 > 服务内置远程自动更新：检查 GitHub Release → 下载 → 原子替换 → 自动重启，后台一键完成。

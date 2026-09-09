@@ -1,4 +1,4 @@
-// MXGT-Go v0.3.0 — M3U8 广告分析与去广告单文件服务
+// MXGT-Go v0.3.1 — M3U8 广告分析与去广告单文件服务
 //
 // 单文件、标准库零依赖：HTTP 服务接收 m3u8 链接，抓取-解析-保守广告检测-输出无广告 M3U8。
 //
@@ -44,7 +44,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.3.0"
+	AppVersion = "v0.3.1"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -863,7 +863,8 @@ func updateInfo() map[string]interface{} {
 		return out
 	}
 	out["latest"] = "v" + m.Version
-	out["download_url"] = releaseBaseURL + "/go-v" + m.Version + "/" + m.Zip
+	// 注意：Release tag 为 go-vvX.Y.Z（VER 本身含前导 v），下载地址必须用双 v 才能命中
+	out["download_url"] = releaseBaseURL + "/go-vv" + m.Version + "/" + m.Zip
 	if compareVersion(parseVersion(AppVersion), parseVersion(m.Version)) < 0 && m.Zip != "" {
 		out["has_update"] = true
 	}
