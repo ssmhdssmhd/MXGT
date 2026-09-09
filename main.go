@@ -52,7 +52,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.4.2"
+	AppVersion = "v0.4.3"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -482,17 +482,29 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 type ServerStats struct {
 	mu        sync.Mutex
 	StartedAt time.Time
-	Requests  int64 // 清洗接口请求数
-	Errors    int64 // 失败请求数
-	TotalSegs int64 // 累计解析片段数
-	AdSegs    int64 // 累计标记广告片段数
-	KeptSegs  int64 // 累计保留片段数
+	Requests  int64            // 接口调用总数
+	Errors    int64            // 失败请求数
+	TotalSegs int64            // 累计解析片段数
+	AdSegs    int64            // 累计标记广告片段数
+	KeptSegs  int64            // 累计保留片段数
+	Calls     map[string]int64 // 按接口累计调用次数
+	Recent    []CallRecord     // 最近调用记录（环形，最多 30 条）
 	LastMsg   string
 	LastAt    time.Time
 	LastURL   string
 }
 
-var stats = &ServerStats{StartedAt: time.Now()}
+// CallRecord 一次接口调用明细
+type CallRecord struct {
+	Time string  `json:"time"`
+	API  string  `json:"api"`
+	URL  string  `json:"url"`
+	OK   bool    `json:"ok"`
+	Ms   float64 `json:"ms"`
+	Msg  string  `json:"msg,omitempty"`
+}
+
+var stats = &ServerStats{StartedAt: time.Now(), Calls: map[string]int64{}}
 
 func (s *ServerStats) snapshot() map[string]interface{} {
 	s.mu.Lock()
@@ -500,6 +512,13 @@ func (s *ServerStats) snapshot() map[string]interface{} {
 	ratio := 0.0
 	if s.TotalSegs > 0 {
 		ratio = float64(s.AdSegs) / float64(s.TotalSegs) * 100
+	}
+	// 拷贝，避免调用方持有内部切片指针
+	recent := make([]CallRecord, len(s.Recent))
+	copy(recent, s.Recent)
+	calls := make(map[string]int64, len(s.Calls))
+	for k, v := range s.Calls {
+		calls[k] = v
 	}
 	return map[string]interface{}{
 		"started_at": s.StartedAt.Format(time.RFC3339),
@@ -511,6 +530,8 @@ func (s *ServerStats) snapshot() map[string]interface{} {
 		"ad_segs":    s.AdSegs,
 		"kept_segs":  s.KeptSegs,
 		"ad_ratio":   math.Round(ratio*10) / 10,
+		"calls":      calls,
+		"recent":     recent,
 		"last_msg":   s.LastMsg,
 		"last_at":    s.LastAt.Format(time.RFC3339),
 		"last_url":   s.LastURL,
@@ -525,11 +546,12 @@ func fmtDuration(d time.Duration) string {
 	return fmt.Sprintf("%02d小时%02d分%02d秒", h, m, sec)
 }
 
-// recordClean 清洗一次解析结果，写入内存统计
+// recordClean 清洗一次解析结果，写入片段统计 + 调用明细
 func recordClean(res ParseResult, rawURL string) {
 	stats.mu.Lock()
 	defer stats.mu.Unlock()
 	stats.Requests++
+	stats.Calls["/api/clean"]++
 	stats.TotalSegs += int64(res.TotalSegments)
 	stats.AdSegs += int64(res.AdCount)
 	stats.KeptSegs += int64(res.KeptSegments)
@@ -540,6 +562,34 @@ func recordClean(res ParseResult, rawURL string) {
 	} else {
 		stats.Errors++
 		stats.LastMsg = "失败: " + res.Message
+	}
+	stats.Recent = append(stats.Recent, CallRecord{
+		Time: time.Now().Format("15:04:05"), API: "/api/clean", URL: rawURL,
+		OK: res.Success, Ms: math.Round(res.DurationSec * 1000), Msg: stats.LastMsg,
+	})
+	if len(stats.Recent) > 30 {
+		stats.Recent = stats.Recent[len(stats.Recent)-30:]
+	}
+}
+
+// recordCall 记录一次通用接口调用明细（用于官替 / 资源站管理 / 统计等）
+func recordCall(api, reqURL string, ok bool, ms float64, msg string) {
+	stats.mu.Lock()
+	defer stats.mu.Unlock()
+	stats.Requests++
+	stats.Calls[api]++
+	stats.LastURL = reqURL
+	stats.LastAt = time.Now()
+	stats.LastMsg = msg
+	if !ok {
+		stats.Errors++
+	}
+	stats.Recent = append(stats.Recent, CallRecord{
+		Time: time.Now().Format("15:04:05"), API: api, URL: reqURL,
+		OK: ok, Ms: math.Round(ms), Msg: msg,
+	})
+	if len(stats.Recent) > 30 {
+		stats.Recent = stats.Recent[len(stats.Recent)-30:]
 	}
 }
 
@@ -1031,6 +1081,114 @@ async function doLogin(){
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	io.WriteString(w, loginPageHTML)
+}
+
+// frontPageHTML 前台：展示接口调用详细信息（开放，无需登录）
+const frontPageHTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MXGT-Go 接口调用详情</title>
+<style>
+  :root{--pri:#7e22ce;--pink:#c026d3;--card:rgba(255,255,255,.86);--line:rgba(255,255,255,.9)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{min-height:100vh;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:linear-gradient(135deg,#581c87,#7e22ce,#a21caf,#c026d3);color:#1f2937;padding:24px}
+  .wrap{max-width:1000px;margin:0 auto}
+  .header{background:rgba(255,255,255,.18);backdrop-filter:blur(14px);border:1px solid var(--line);
+          border-radius:18px;padding:20px 24px;color:#fff;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:10px;flex-wrap:wrap}
+  .header h1{font-size:22px;font-weight:700}
+  .header .ver{font-size:13px;opacity:.9;margin-top:4px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px}
+  .card{background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--line);
+        border-radius:18px;padding:16px 18px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+  .card .lab{font-size:12px;color:#6b7280;margin-bottom:6px}
+  .card .val{font-size:22px;font-weight:700;color:#581c87}
+  .card .sub{font-size:12px;color:#9ca3af;margin-top:4px}
+  .panel{background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--line);
+         border-radius:18px;padding:22px 24px;box-shadow:0 8px 24px rgba(0,0,0,.12);margin-bottom:20px}
+  .panel h2{font-size:17px;color:#581c87;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #eee}
+  th{color:#581c87;font-size:12.5px}
+  code{background:#f3f4f6;padding:2px 7px;border-radius:6px;color:#7e22ce;font-size:12px}
+  .ok{color:#16a34a;font-weight:700}.fail{color:#dc2626;font-weight:700}
+  .muted{color:#9ca3af;font-size:12px}
+  .url{max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
+  a{color:#fff;background:#c026d3;padding:9px 18px;border-radius:10px;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <h1>🎬 MXGT-Go 接口调用详情</h1>
+      <div class="ver">M3U8 去广告 + 官替链路服务 <span id="ver"></span> · 开发者 ssmhdssmhd</div>
+    </div>
+    <a href="/mxadmin">进入后台管理 →</a>
+  </div>
+
+  <div class="grid" id="statGrid"></div>
+
+  <div class="panel">
+    <h2>📊 接口调用次数明细</h2>
+    <table><thead><tr><th>接口</th><th>调用次数</th></tr></thead><tbody id="calls"></tbody></table>
+  </div>
+
+  <div class="panel">
+    <h2>🕒 最近接口调用记录 <span class="muted" id="recentHint"></span></h2>
+    <table>
+      <thead><tr><th>时间</th><th>接口</th><th>请求地址/参数</th><th>耗时</th><th>结果</th><th>说明</th></tr></thead>
+      <tbody id="recent"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function el(id){return document.getElementById(id)}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function card(lab,val,sub){return '<div class="card"><div class="lab">'+lab+'</div><div class="val">'+val+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';}
+async function refresh(){
+  try{
+    const r=await fetch('/api/stats');
+    const j=await r.json();
+    el('ver').textContent=j.version;
+    el('statGrid').innerHTML=
+      card('接口调用',j.requests,j.errors+' 次失败')+
+      card('累计片段',j.total_segs,'广告 '+j.ad_segs)+
+      card('广告占比',j.ad_ratio+'%','保留 '+j.kept_segs)+
+      card('运行时长',j.uptime,(j.last_msg||''));
+  
+    // 接口调用次数
+    const cl=j.calls||{};
+    const keys=Object.keys(cl);
+    el('calls').innerHTML=keys.length?keys.map(function(k){return '<tr><td><code>'+esc(k)+'</code></td><td>'+cl[k]+'</td></tr>';}).join('')
+      :'<tr><td colspan="2" class="muted">暂无接口调用</td></tr>';
+    
+    // 最近调用
+    const rc=j.recent||[];
+    el('recentHint').textContent='（最近 '+rc.length+' 条，每 3 秒自动刷新）';
+    el('recent').innerHTML=rc.slice().reverse().map(function(c){
+      return '<tr><td class="muted">'+esc(c.time)+'</td>'+
+        '<td><code>'+esc(c.api)+'</code></td>'+
+        '<td><span class="url" title="'+esc(c.url)+'">'+esc(c.url||'—')+'</span></td>'+
+        '<td>'+(c.ms>0?(Math.round(c.ms)+'ms'):'—')+'</td>'+
+        '<td class="'+(c.ok?'ok':'fail')+'">'+(c.ok?'✓ 成功':'✗ 失败')+'</td>'+
+        '<td class="muted">'+esc(c.msg||'')+'</td></tr>';
+    }).join('')||'<tr><td colspan="6" class="muted">暂无调用记录</td></tr>';
+  }catch(e){el('recent').innerHTML='<tr><td colspan="6" class="muted">加载失败: '+esc(e.message)+'</td></tr>';}
+}
+refresh(); setInterval(refresh,3000);
+</script>
+</body>
+</html>
+`
+
+// handleFront 渲染前台接口调用详情页
+func handleFront(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	io.WriteString(w, frontPageHTML)
 }
 
 // withCORS 全局跨域中间件：所有响应补 CORS 头（含播放分片所需的 Range 头放行），并处理 OPTIONS 预检
@@ -1977,13 +2135,17 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 // ============ 官替 / 资源站 HTTP 处理器 ============
 
 func handleReplace(w http.ResponseWriter, r *http.Request) {
-	res := replaceOne(r, r.URL.Query().Get("url"))
+	raw := r.URL.Query().Get("url")
+	res := replaceOne(r, raw)
+	recordCall("/api/replace", raw, res.Success, res.TotalMS, res.Message)
 	res.Steps = nil // 减小返回体积
 	writeJSON(w, res)
 }
 
 func handleSitesList(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, loadSites())
+	cfg := loadSites()
+	recordCall("/api/sites", "", true, 0, fmt.Sprintf("站点列表 %d 个", len(cfg.Sites)))
+	writeJSON(w, cfg)
 }
 
 func handleSiteToggle(w http.ResponseWriter, r *http.Request) {
@@ -1996,13 +2158,16 @@ func handleSiteToggle(w http.ResponseWriter, r *http.Request) {
 		if cfg.Sites[i].Name == name {
 			cfg.Sites[i].Enabled = en
 			if err := saveSites(cfg); err != nil {
+				recordCall("/api/sites/toggle", name, false, 0, "保存失败: "+err.Error())
 				writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
 				return
 			}
+			recordCall("/api/sites/toggle", name, true, 0, fmt.Sprintf("站点 %s -> %v", name, en))
 			writeJSON(w, map[string]interface{}{"success": true, "name": name, "enabled": en})
 			return
 		}
 	}
+	recordCall("/api/sites/toggle", name, false, 0, "站点不存在: "+name)
 	writeJSON(w, map[string]interface{}{"success": false, "message": "站点不存在"})
 }
 
@@ -2020,6 +2185,7 @@ func handleSiteTest(w http.ResponseWriter, r *http.Request) {
 			vs = append(vs, v)
 		}
 	}
+	recordCall("/api/sites/test", name+" wd="+kw, len(vs) > 0, 0, fmt.Sprintf("命中 %d 条", len(vs)))
 	writeJSON(w, map[string]interface{}{
 		"success": len(vs) > 0, "site": name, "keyword": kw,
 		"count": len(vs), "videos": vs,
@@ -2246,8 +2412,7 @@ func main() {
 			return
 		}
 		if r.URL.Path == "/" {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			io.WriteString(w, "<!DOCTYPE html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>MXGT-Go</title><style>body{font-family:-apple-system,PingFang SC,Microsoft YaHei,sans-serif;background:linear-gradient(135deg,#581c87,#7e22ce,#a21caf);color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0}.c{text-align:center;padding:24px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:18px;backdrop-filter:blur(14px)}h1{margin:0 0 8px;font-size:24px}a{display:inline-block;margin-top:16px;color:#fff;background:#c026d3;padding:10px 22px;border-radius:10px;text-decoration:none}.m{opacity:.85;font-size:13px}</style></head><body><div class='c'><h1>MXGT-Go 去广告服务</h1><div class='m'>M3U8 广告分析与去广告单文件服务 <b>"+AppVersion+"</b> · 开发者 ssmhdssmhd</div><a href='/mxadmin'>进入后台管理 →</a></div></body></html>")
+			handleFront(w, r)
 			return
 		}
 		http.NotFound(w, r)

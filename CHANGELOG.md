@@ -1,5 +1,31 @@
 # 更新日志
 
+## Go 分支 v0.4.3 (2026-09-09) — 前台显示接口调用详细信息
+
+### 首页（前台）展示接口调用详细信息
+
+> 用户诉求：前台要显示接口调用的详细信息。
+
+#### 1. 前台 `/` 页面（[main.go](file:///workspace/main.go) `frontPageHTML` + `handleFront`）
+
+- 首页由原落地页升级为「接口调用详情」页（开放、无需登录）；
+- 顶部统计卡片：接口调用总数 / 失败数、累计片段、广告占比、运行时长；
+- **接口调用次数明细**表：`/api/clean`、`/api/replace`、`/api/sites*` 等各自累计次数；
+- **最近接口调用记录**表：时间、接口、请求地址/参数、耗时、成功/失败、说明；每 3 秒自动刷新。
+
+#### 2. 统计埋点（[main.go](file:///workspace/main.go) `ServerStats`）
+
+- 新增按接口计数 `Calls map[string]int64` 与最近调用队列 `Recent []CallRecord`（最多 30 条）；`/api/stats` 新增返回 `calls`、`recent`；
+- `recordClean`（/api/clean）与新增 `recordCall`（replace / sites / sites/toggle / sites/test）统一记录：时间、接口、地址、成功与否、耗时、说明；
+- 失败与耗时均记录；对外解析接口行为不变，后台复用同一 `/api/stats`。
+
+#### 3. 版本与验证
+
+- 版本升级 `v0.4.2 → v0.4.3`；[README.md](file:///workspace/README.md) 同步 v0.4.3 更新日志；
+- 验证：`go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过；实测 `GET /` 返回「接口调用详情」；触发 clean/replace 后 `/api/stats` 返回 `calls`（`/api/clean`、`/api/replace`）与 `recent` 明细。
+
+---
+
 ## Go 分支 v0.4.2 (2026-09-09) — 后台登录鉴权 + 资源站折叠/搜索/详情/复制
 
 ### 新增后台登录（admin/admin123，可改密码）；资源站长列表体验优化
