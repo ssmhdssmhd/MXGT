@@ -145,6 +145,30 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.4.7 (2026-09-09) — 资源站管理：添加/删除/批量检测屏蔽失效站 + 西瓜 XML 接口
+
+> 参考 PHP 版资源站管理：支持前台添加、删除资源站；批量检测可用性，失败站点自动标记为失效并在列表隐藏（不显示失败的）；新增西瓜资源站（XML 采集接口）并支持 XML 格式解析。
+
+### 更新内容（[main.go](file:///workspace/main.go) + [sites_static.go](file:///workspace/sites_static.go)）
+
+- **新增接口**：
+  - `POST /api/sites/add`：添加资源站（名称+接口必填、重名拒绝、落盘持久化）；
+  - `POST /api/sites/delete?name=`：删除资源站（精确 + 忽略大小写兜底）；
+  - `GET /api/sites/check?kw=`：批量检测已启用站点（参考 PHP `verifySearchCapability`），探测词搜索失败/无结果自动置 `status=paused` 屏蔽并在备注记录原因，成功恢复 `active`；
+- **列表过滤（不显示失败的）**：`GET /api/sites` 默认只返回 `status=active` 的可用站点（隐藏失效站），`?show=all` 显示全部；返回 `stats{total,active,failed,enabled,shown}`；
+- **XML 采集接口支持**：`searchSiteOne` 兼容三种格式——maccms JSON、标准 AppleCMS XML（`vod_` 前缀）、自定义 XML（`<id>/<name>/<pic>/<dl><dd flag=>`，如西瓜）；
+- **资源站客户端支持环境代理**：`siteHTTP` 增加 `ProxyFromEnvironment`，部署在需要代理的服务器也能采集；
+- **新增/更新资源站**：西瓜接口更新为 `https://caiji.xgzyapi.com/api.php/provide/vod/at/xml/`（XML，实测搜索「庆余年」命中 7 条）；
+- **后台 UI**：资源站面板新增「添加资源站」表单（名称/接口/官网/备注）、每行「🗑 删除」按钮、「隐藏失效站」开关（默认开）、「🧹 检测并屏蔽失效站」按钮与检测结果展示；
+- 版本升级 `v0.4.6 → v0.4.7`。
+
+### 验证
+
+- `go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过；
+- 实测：西瓜 XML 搜索命中 7 条（庆余年）；列表默认隐藏 24 个失效站（显示 98/122）；添加/重名拒绝/空参拒绝/删除/删除不存在均符合预期；批量检测：西瓜→可用、失效站→自动 `paused` 屏蔽并记录原因；后台浏览器实测表单渲染、隐藏失效过滤、详情、删除按钮均正常。
+
+---
+
 ## v0.4.6 (2026-09-09) — 前台显示 API 接口调用方式（支持一键复制）
 
 > 前台（首页 `/`）新增「🔌 API 调用方式」面板：展示全部对外接口的调用地址（基于当前访问域名自动生成）与 curl 命令，每条可一键复制，方便接入影视 / TVBox / 盒子或脚本调用。

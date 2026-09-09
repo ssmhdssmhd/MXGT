@@ -360,11 +360,11 @@ const defaultSitesJSON = `{
         {
             "name": "西瓜",
             "site_url": "https://xgzy.tv",
-            "api_url": "https://xgzy.tv/api.php/provide/vod/?ac=list",
+            "api_url": "https://caiji.xgzyapi.com/api.php/provide/vod/at/xml/",
             "type": "maccms",
             "status": "active",
             "enabled": false,
-            "note": "",
+            "note": "XML采集接口",
             "priority": 100
         },
         {

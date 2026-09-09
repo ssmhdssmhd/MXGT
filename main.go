@@ -32,6 +32,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"flag"
 	"fmt"
 	"io"
@@ -53,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.4.6"
+	AppVersion = "v0.4.7"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -901,17 +902,26 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
-    <h2>🏢 资源站管理 <span class="muted">（默认全部禁用，按需启用）</span></h2>
-    <div class="row">
+    <h2>🏢 资源站管理 <span class="muted">（默认全部禁用，按需启用；失效站自动隐藏）</span></h2>
+    <div class="row" style="flex-wrap:wrap">
+      <input id="nsName" placeholder="名称（必填）" style="width:150px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <input id="nsApi" placeholder="采集接口 https://…/api.php/provide/vod/（必填）" style="flex:1;min-width:260px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <input id="nsSite" placeholder="官网（可选）" style="width:190px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <input id="nsNote" placeholder="备注（可选）" style="width:150px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="addSite()">➕ 添加资源站</button>
+    </div>
+    <div class="row" style="flex-wrap:wrap">
       <input id="siteSearch" placeholder="🔍 搜索站点/备注/接口…" style="flex:0 0 260px;padding:9px 12px;border-radius:10px;border:1px solid #d1d5db" onkeyup="renderSites()">
       <span class="muted" id="siteCount"></span>
     </div>
-    <div class="row">
+    <div class="row" style="flex-wrap:wrap">
       <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="loadSites()">⟳ 刷新</button>
       <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="setAllSites(false)">全部折叠</button>
       <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="setAllSites(true)">全部展开</button>
+      <label class="muted" style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="hideFail" checked onchange="loadSites()"> 隐藏失效站</label>
       <span class="muted">测试词</span>
       <input id="siteKw" value="庆余年" style="width:110px;padding:6px;border-radius:8px;border:1px solid #d1d5db">
+      <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="checkSites()">🧹 检测并屏蔽失效站</button>
     </div>
     <div class="prog-wrap" id="siteProg" style="display:none"><div class="prog-bar"></div></div>
     <div id="siteList"></div>
@@ -936,7 +946,8 @@ const adminPageHTML = `<!DOCTYPE html>
       <tr><td><code>GET /api/clean/json?url=&lt;m3u8&gt;</code></td><td>返回 JSON：统计 + 过滤后文本 + 每个片段明细</td></tr>
       <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;&amp;opt=aggresive</code></td><td>开启聚合聚类识别（可能误伤统一切片正片）</td></tr>
       <tr><td><code>GET /api/replace?url=&lt;官方视频页&gt;</code></td><td>官替链路：资源站匹配后返回无广告直链 ad_skip_url</td></tr>
-      <tr><td><code>GET /api/sites</code> / <code>/toggle</code> / <code>/test</code></td><td>资源站列表 / 启停 / 搜索测试（默认全部禁用）</td></tr>
+      <tr><td><code>GET /api/sites</code> / <code>/toggle</code> / <code>/test</code></td><td>资源站列表（默认隐藏失效）/ 启停 / 搜索测试</td></tr>
+      <tr><td><code>POST /api/sites/add</code> / <code>/delete</code> / <code>/check</code></td><td>添加 / 删除资源站 / 批量检测并屏蔽失效站</td></tr>
       <tr><td><code>GET /api/stats</code></td><td>运行统计（JSON）</td></tr>
       <tr><td><code>GET /healthz</code></td><td>健康检查</td></tr>
     </table>
@@ -1081,10 +1092,12 @@ function showProg(on){el('siteProg').style.display=on?'block':'none';}
 async function loadSites(){
   showProg(true);
   try{
-    const r=await fetch('/api/sites');
+    const hide=el('hideFail')?el('hideFail').checked:true;
+    const r=await fetch('/api/sites'+(hide?'':'?show=all'));
     if(r.status===401){location.href='/mxadmin/login';return;}
     const j=await r.json();
     sitesData=(j&&j.sites)?j.sites:[];
+    sitesStats=j.stats||null;
     renderSites();
   }catch(e){el('siteList').innerHTML='<span class="muted">加载失败: '+esc(e.message)+'</span>';}
   showProg(false);
@@ -1097,7 +1110,9 @@ function renderSites(){
     return (x.name+((x.note)||'')+((x.api_url)||'')).toLowerCase().indexOf(q)>=0;
   });
   const en=s2.filter(function(x){return x.enabled}).length;
-  el('siteCount').innerHTML='已启用 '+en+' / 共 '+s2.length+' 个站点'+(q?'（筛选：'+esc(q)+'）':'');
+  const st=sitesStats||{};
+  el('siteCount').innerHTML='已启用 '+en+' / 显示 '+s2.length+' 个站点'+(q?'（筛选：'+esc(q)+'）':'')+
+    (st.total?'　<span class="muted">共 '+st.total+' · 可用 '+st.active+' · 失效 '+st.failed+'</span>':'');
   const groups=[[esc('🟢 已启用'),s2.filter(x=>x.enabled)],[esc('⚪ 未启用'),s2.filter(x=>!x.enabled)]];
   let html='';
   groups.forEach(function(g){
@@ -1110,11 +1125,61 @@ function renderSites(){
         '<b>'+esc(x.name)+'</b>'+
         '<span class="muted" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.note)+'</span>'+
         '<button class="btn gh" onclick="siteDetail(\''+x.name.replace(/'/g,"\\'")+'\')">详情</button>'+
+        '<button class="btn gh" style="color:#dc2626" onclick="deleteSite(\''+x.name.replace(/'/g,"\\'")+'\')">🗑 删除</button>'+
         '</div><div class="sitedtl" id="dtl_'+esc(x.name)+'"></div>';
     }).join('');
     html+='</details>';
   });
   el('siteList').innerHTML=html||'<span class="muted">无匹配站点</span>';
+}
+async function addSite(){
+  const name=(el('nsName').value||'').trim();
+  const api=(el('nsApi').value||'').trim();
+  if(!name||!api){alert('名称和采集接口不能为空');return;}
+  showProg(true);
+  try{
+    const r=await fetch('/api/sites/add',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:name,api_url:api,site_url:(el('nsSite').value||'').trim(),note:(el('nsNote').value||'').trim()})});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    alert(j.message||(j.success?'添加成功':'添加失败'));
+    if(j.success){el('nsName').value='';el('nsApi').value='';el('nsSite').value='';el('nsNote').value='';await loadSites();}
+  }catch(e){alert('网络错误: '+e.message);}
+  showProg(false);
+}
+async function deleteSite(name){
+  if(!confirm('确定删除资源站「'+name+'」吗？'))return;
+  showProg(true);
+  try{
+    const r=await fetch('/api/sites/delete?name='+encodeURIComponent(name),{method:'POST'});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    alert(j.message||(j.success?'删除成功':'删除失败'));
+    if(j.success)await loadSites();
+  }catch(e){alert('网络错误: '+e.message);}
+  showProg(false);
+}
+async function checkSites(){
+  const kw=el('siteKw')?el('siteKw').value:'爱情';
+  if(!confirm('将对可用资源站逐站搜索「'+kw+'」探测，失败站点将自动标记为失效并隐藏。确定执行？'))return;
+  showProg(true);
+  el('siteList').innerHTML='<span class="muted">正在逐站检测，请稍候（每个站点最多约 12 秒）…</span>';
+  try{
+    const r=await fetch('/api/sites/check?kw='+encodeURIComponent(kw));
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    let html='<div>检测完成：共 '+j.checked+' 个 · ✅ 可用 '+j.usable+' · ⛔ 屏蔽失效 '+j.blocked+'</div>';
+    if(j.results){
+      html+='<div style="margin-top:8px">'+j.results.map(function(x){
+        return '<div class="siterow"><b>'+esc(x.name)+'</b>'+
+          '<span style="'+(x.usable?'color:#16a34a':'color:#dc2626')+';font-weight:700">'+(x.usable?'✓ 可用':'✗ 失效')+'</span>'+
+          '<span class="muted" style="flex:1">'+esc(x.message)+' · '+x.response_ms+'ms</span></div>';
+      }).join('')+'</div>';
+    }
+    el('siteList').innerHTML=html;
+    await loadSites();
+  }catch(e){el('siteList').innerHTML='<span class="muted">检测失败: '+esc(e.message)+'</span>';}
+  showProg(false);
 }
 async function toggleSite(name,onValue){
   showProg(true);
@@ -1981,9 +2046,10 @@ type maccmsResp struct {
 	Msg  string       `json:"msg"`
 }
 
-// siteHTTP 资源站专用客户端：短超时 + 关闭证书校验（多数采集站自签/http）
+// siteHTTP 资源站专用客户端：短超时 + 关闭证书校验（多数采集站自签/http）+ 支持环境代理（HTTP(S)_PROXY）
 var siteHTTP = &http.Client{Timeout: 12 * time.Second, Transport: &http.Transport{
 	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	Proxy:           http.ProxyFromEnvironment,
 }}
 
 func httpGetBody(u string) ([]byte, error) {
@@ -2077,10 +2143,160 @@ func parsePlayURL(full string) []PlayItem {
 }
 
 type searchOut struct {
-	Videos    []ResourceVideo
-	SiteOK    []string
-	SiteFail  []string
-	Searched  int
+	Videos   []ResourceVideo
+	SiteOK   []string
+	SiteFail []string
+	Searched int
+}
+
+// maccms 响应若为 JSON 返回 json 解析，否则按 AppleCMS XML（at/xml/）解析
+type xmlVideoItem struct {
+	VodID       string `xml:"vod_id"`
+	VodName     string `xml:"vod_name"`
+	VodPic      string `xml:"vod_pic"`
+	VodRemarks  string `xml:"vod_remarks"`
+	VodPlayURL  string `xml:"vod_play_url"`
+	VodPlayFrom string `xml:"vod_play_from"`
+}
+
+type xmlVideoList struct {
+	Videos []xmlVideoItem `xml:"video"`
+}
+
+type xmlMaccmsResp struct {
+	List xmlVideoList `xml:"list"`
+}
+
+// 西瓜等站点自定义 XML：<id>/<name>/<pic>/<note>/<dl><dd flag="...">
+type xgVideoItem struct {
+	ID   string `xml:"id"`
+	Name string `xml:"name"`
+	Pic  string `xml:"pic"`
+	Note string `xml:"note"`
+	DL   struct {
+		DD []struct {
+			Flag string `xml:"flag,attr"`
+			URL  string `xml:",chardata"`
+		} `xml:"dd"`
+	} `xml:"dl"`
+}
+
+type xgMaccmsResp struct {
+	List struct {
+		Videos []xgVideoItem `xml:"video"`
+	} `xml:"list"`
+}
+
+// parseStdXMLItems 尝试按标准 AppleCMS XML（vod_ 前缀）解析；字段无效返回 nil
+func parseStdXMLItems(b []byte) []maccmsItem {
+	var x xmlMaccmsResp
+	if err := xml.Unmarshal(b, &x); err != nil || len(x.List.Videos) == 0 {
+		return nil
+	}
+	var items []maccmsItem
+	for _, v := range x.List.Videos {
+		if v.VodName == "" && v.VodPlayURL == "" {
+			continue // 非标准 XML（如西瓜 <id>/<name>），跳过
+		}
+		items = append(items, maccmsItem{
+			VodID: v.VodID, VodName: v.VodName, VodPic: v.VodPic,
+			VodRemarks: v.VodRemarks, VodPlayURL: v.VodPlayURL, VodPlayFrom: v.VodPlayFrom,
+		})
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	return items
+}
+
+// parseXgXMLItems 尝试按西瓜等自定义 XML（<id>/<name>/<pic>/<dl><dd flag=..>）解析
+func parseXgXMLItems(b []byte) []maccmsItem {
+	var xg xgMaccmsResp
+	if err := xml.Unmarshal(b, &xg); err != nil || len(xg.List.Videos) == 0 {
+		return nil
+	}
+	var items []maccmsItem
+	for _, v := range xg.List.Videos {
+		playURL := ""
+		playFrom := ""
+		for _, dd := range v.DL.DD {
+			if strings.TrimSpace(dd.URL) != "" {
+				playURL = strings.TrimSpace(dd.URL)
+				playFrom = dd.Flag
+				break
+			}
+		}
+		if v.Name == "" && playURL == "" {
+			continue
+		}
+		items = append(items, maccmsItem{
+			VodID: v.ID, VodName: v.Name, VodPic: v.Pic,
+			VodRemarks: v.Note, VodPlayURL: playURL, VodPlayFrom: playFrom,
+		})
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	return items
+}
+
+// searchSiteOne 在单个资源站搜索关键词，返回该站命中的视频列表。
+// 兼容三种采集接口格式：maccms JSON、标准 AppleCMS XML（vod_ 前缀）、自定义 XML（id/name/pic/dl）。
+func searchSiteOne(s Site, kw string) ([]ResourceVideo, error) {
+	b, err := httpGetBody(buildSearchURL(s.APIURL, kw, 1, 20))
+	if err != nil {
+		return nil, err
+	}
+	items := []maccmsItem{}
+	var r maccmsResp
+	if err := json.Unmarshal(b, &r); err == nil && (len(r.List) > 0 || len(r.Data) > 0) {
+		items = append(items, r.List...)
+		items = append(items, r.Data...)
+	} else if x := parseStdXMLItems(b); x != nil {
+		items = x
+	} else if x := parseXgXMLItems(b); x != nil {
+		items = x
+	} else {
+		return nil, fmt.Errorf("响应解析失败（非 JSON/XML）")
+	}
+	var vs []ResourceVideo
+	for _, it := range items {
+		playURL := it.VodPlayURL
+		if playURL == "" {
+			playURL = it.PlayURL
+		}
+		if playURL == "" {
+			continue
+		}
+		urls := parsePlayURL(playURL)
+		if len(urls) == 0 {
+			continue
+		}
+		name := it.VodName
+		if name == "" {
+			name = it.Name
+		}
+		id := it.VodID
+		if id == "" {
+			id = it.VodID2
+		}
+		pic := it.VodPic
+		if pic == "" {
+			pic = it.Pic
+		}
+		remarks := it.VodRemarks
+		if remarks == "" {
+			remarks = it.Remarks
+		}
+		vs = append(vs, ResourceVideo{
+			ID: id, Name: name, Pic: pic, Remarks: remarks,
+			Site: s.Name, PlayFrom: it.VodPlayFrom, URLs: urls, FirstURL: urls[0].URL,
+		})
+	}
+	if len(vs) == 0 {
+		return nil, fmt.Errorf("无有效视频")
+	}
+	return vs, nil
 }
 
 // searchSites 在所有已启用站点搜索关键词，汇总返回
@@ -2091,60 +2307,13 @@ func searchSites(cfg *SitesConfig, kw string, maxSites int) searchOut {
 	}
 	out := searchOut{Searched: len(sites)}
 	for _, s := range sites {
-		b, err := httpGetBody(buildSearchURL(s.APIURL, kw, 1, 20))
+		vs, err := searchSiteOne(s, kw)
 		if err != nil {
 			out.SiteFail = append(out.SiteFail, s.Name)
 			continue
 		}
-		var r maccmsResp
-		if err := json.Unmarshal(b, &r); err != nil {
-			out.SiteFail = append(out.SiteFail, s.Name)
-			continue
-		}
-		list := r.List
-		if len(list) == 0 {
-			list = r.Data
-		}
-		got := false
-		for _, it := range list {
-			playURL := it.VodPlayURL
-			if playURL == "" {
-				playURL = it.PlayURL
-			}
-			if playURL == "" {
-				continue
-			}
-			urls := parsePlayURL(playURL)
-			if len(urls) == 0 {
-				continue
-			}
-			got = true
-			name := it.VodName
-			if name == "" {
-				name = it.Name
-			}
-			id := it.VodID
-			if id == "" {
-				id = it.VodID2
-			}
-			pic := it.VodPic
-			if pic == "" {
-				pic = it.Pic
-			}
-			remarks := it.VodRemarks
-			if remarks == "" {
-				remarks = it.Remarks
-			}
-			out.Videos = append(out.Videos, ResourceVideo{
-				ID: id, Name: name, Pic: pic, Remarks: remarks,
-				Site: s.Name, PlayFrom: it.VodPlayFrom, URLs: urls, FirstURL: urls[0].URL,
-			})
-		}
-		if got {
-			out.SiteOK = append(out.SiteOK, s.Name)
-		} else {
-			out.SiteFail = append(out.SiteFail, s.Name)
-		}
+		out.Videos = append(out.Videos, vs...)
+		out.SiteOK = append(out.SiteOK, s.Name)
 	}
 	return out
 }
@@ -2418,8 +2587,34 @@ func handleReplace(w http.ResponseWriter, r *http.Request) {
 
 func handleSitesList(w http.ResponseWriter, r *http.Request) {
 	cfg := loadSites()
-	recordCall("/api/sites", "", true, 0, fmt.Sprintf("站点列表 %d 个", len(cfg.Sites)))
-	writeJSON(w, cfg)
+	showAll := r.URL.Query().Get("show") == "all"
+	sites := cfg.Sites
+	if !showAll {
+		// 参考 PHP getAllSites(false)：默认不显示失败的（status != active 的暂停/失效站）
+		kept := []Site{}
+		for _, s := range sites {
+			if s.Status == "active" {
+				kept = append(kept, s)
+			}
+		}
+		sites = kept
+	}
+	stats := map[string]int{"total": len(cfg.Sites), "shown": len(sites), "active": 0, "failed": 0, "enabled": 0}
+	for _, s := range cfg.Sites {
+		if s.Status == "active" {
+			stats["active"]++
+		} else {
+			stats["failed"]++
+		}
+		if s.Enabled {
+			stats["enabled"]++
+		}
+	}
+	recordCall("/api/sites", "", true, 0, fmt.Sprintf("站点 %d 个（显示 %d，隐藏失效 %d）", stats["total"], len(sites), stats["failed"]))
+	writeJSON(w, map[string]interface{}{
+		"version": cfg.Version, "update_date": cfg.UpdateDate,
+		"sites": sites, "stats": stats, "hiding_failed": !showAll,
+	})
 }
 
 func handleSiteToggle(w http.ResponseWriter, r *http.Request) {
@@ -2464,6 +2659,158 @@ func handleSiteTest(w http.ResponseWriter, r *http.Request) {
 		"success": len(vs) > 0, "site": name, "keyword": kw,
 		"count": len(vs), "videos": vs,
 		"site_ok": sr.SiteOK, "site_fail": sr.SiteFail, "searched": sr.Searched,
+	})
+}
+
+// handleSiteAdd 添加资源站（参考 PHP addSite：名称+接口必填、重名拒绝）
+func handleSiteAdd(w http.ResponseWriter, r *http.Request) {
+	var req Site
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数解析失败: " + err.Error()})
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.APIURL = strings.TrimSpace(req.APIURL)
+	req.SiteURL = strings.TrimSpace(req.SiteURL)
+	if req.Name == "" || req.APIURL == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "名称和采集接口不能为空"})
+		return
+	}
+	if !strings.HasPrefix(req.APIURL, "http://") && !strings.HasPrefix(req.APIURL, "https://") {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "采集接口需以 http(s):// 开头"})
+		return
+	}
+	if req.Type == "" {
+		req.Type = "maccms"
+	}
+	if req.Status == "" {
+		req.Status = "active"
+	}
+	if req.Priority == 0 {
+		req.Priority = 100
+	}
+	sitesMu.Lock()
+	defer sitesMu.Unlock()
+	cfg := loadSites()
+	for _, s := range cfg.Sites {
+		if s.Name == req.Name {
+			recordCall("/api/sites/add", req.Name, false, 0, "资源站名称已存在")
+			writeJSON(w, map[string]interface{}{"success": false, "message": "资源站名称已存在"})
+			return
+		}
+	}
+	cfg.Sites = append(cfg.Sites, req)
+	if err := saveSites(cfg); err != nil {
+		recordCall("/api/sites/add", req.Name, false, 0, "保存失败: "+err.Error())
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/sites/add", req.Name, true, 0, "添加成功")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "添加成功", "site": req})
+}
+
+// handleSiteDelete 删除资源站（参考 PHP deleteSite：精确 + 忽略大小写兜底）
+func handleSiteDelete(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	if name == "" {
+		var req struct {
+			Name string `json:"name"`
+		}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req)
+		name = strings.TrimSpace(req.Name)
+	}
+	if name == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少站点名称"})
+		return
+	}
+	sitesMu.Lock()
+	defer sitesMu.Unlock()
+	cfg := loadSites()
+	kept := []Site{}
+	found := false
+	for _, s := range cfg.Sites {
+		if s.Name == name || strings.EqualFold(strings.TrimSpace(s.Name), name) {
+			found = true
+			continue
+		}
+		kept = append(kept, s)
+	}
+	if !found {
+		recordCall("/api/sites/delete", name, false, 0, "资源站不存在")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "资源站不存在: " + name})
+		return
+	}
+	cfg.Sites = kept
+	if err := saveSites(cfg); err != nil {
+		recordCall("/api/sites/delete", name, false, 0, "保存失败: "+err.Error())
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/sites/delete", name, true, 0, "删除成功")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "删除成功"})
+}
+
+// handleSiteCheck 批量检测已启用站点可用性（参考 PHP verifySearchCapability）：
+// 探测词搜索失败/无结果 → 自动标记 status=paused（屏蔽）+ note 记录原因；成功 → status=active
+func handleSiteCheck(w http.ResponseWriter, r *http.Request) {
+	kw := strings.TrimSpace(r.URL.Query().Get("kw"))
+	if kw == "" {
+		kw = "爱情"
+	}
+	sitesMu.Lock()
+	defer sitesMu.Unlock()
+	cfg := loadSites()
+	type chkResult struct {
+		Name      string `json:"name"`
+		SiteURL   string `json:"site_url"`
+		Usable    bool   `json:"usable"`
+		Message   string `json:"message"`
+		Response  int64  `json:"response_ms"`
+		Blocked   bool   `json:"blocked"`
+	}
+	results := []chkResult{}
+	usable, blocked, checked := 0, 0, 0
+	for i := range cfg.Sites {
+		s := &cfg.Sites[i]
+		if !s.Enabled && s.Status != "active" {
+			continue
+		}
+		checked++
+		t0 := time.Now()
+		vs, err := searchSiteOne(*s, kw)
+		ms := time.Since(t0).Milliseconds()
+		ok := err == nil && len(vs) > 0
+		if ok {
+			usable++
+			if s.Status != "active" {
+				s.Status = "active"
+				if !strings.Contains(s.Note, "自动屏蔽") {
+					s.Note = strings.TrimSpace(s.Note)
+				} else {
+					s.Note = ""
+				}
+			}
+			results = append(results, chkResult{Name: s.Name, SiteURL: s.SiteURL, Usable: true, Message: "正常", Response: ms})
+		} else {
+			blocked++
+			reason := "自动屏蔽·不可搜索: " + err.Error()
+			if len(reason) > 80 {
+				reason = reason[:80]
+			}
+			s.Status = "paused"
+			s.Note = reason
+			results = append(results, chkResult{Name: s.Name, SiteURL: s.SiteURL, Usable: false, Message: err.Error(), Response: ms, Blocked: true})
+		}
+	}
+	if err := saveSites(cfg); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/sites/check", "wd="+kw, usable > 0, 0, fmt.Sprintf("检测 %d 个：可用 %d / 屏蔽 %d", checked, usable, blocked))
+	writeJSON(w, map[string]interface{}{
+		"success": true, "probe_keyword": kw,
+		"checked": checked, "usable": usable, "blocked": blocked,
+		"results": results,
 	})
 }
 
@@ -2840,6 +3187,9 @@ func main() {
 	http.HandleFunc("/api/sites", guard(handleSitesList))
 	http.HandleFunc("/api/sites/toggle", guard(handleSiteToggle))
 	http.HandleFunc("/api/sites/test", guard(handleSiteTest))
+	http.HandleFunc("/api/sites/add", guard(handleSiteAdd))
+	http.HandleFunc("/api/sites/delete", guard(handleSiteDelete))
+	http.HandleFunc("/api/sites/check", guard(handleSiteCheck))
 	log.Printf("MXGT-Go %s listening on %s (M3U8 去广告 + 官替链路服务)", AppVersion, *addr)
 	// 使用全局 httpServer 句柄：更新重启时可优雅关闭释放端口（修复更新后不自动重启）
 	httpServer = &http.Server{Addr: *addr, Handler: withCORS(http.DefaultServeMux)}

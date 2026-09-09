@@ -1,5 +1,37 @@
 # 更新日志
 
+## Go 分支 v0.4.7 (2026-09-09) — 资源站管理：添加/删除/批量检测屏蔽失效站 + 西瓜 XML 接口
+
+### 添加资源站、删除、过滤（不显示失败的），参考 PHP
+
+> 用户诉求：帮我添加资源站，支持增加添加、删除等等过滤，参考 PHP 中的，不显示失败的；西瓜 `https://caiji.xgzyapi.com/api.php/provide/vod/at/xml/`。
+
+#### 1. 新增资源站管理接口（[main.go](file:///workspace/main.go)）
+
+- `POST /api/sites/add`：添加资源站（JSON body：name/api_url/site_url/note 等）；名称+接口必填、接口须 http(s):// 开头、重名拒绝，落盘 `resource_sites.json`；
+- `POST /api/sites/delete?name=`：删除资源站，参考 PHP `deleteSite` 精确匹配 + 忽略大小写兜底；
+- `GET /api/sites/check?kw=`：批量检测（参考 PHP `verifySearchCapability`）——对已启用/活跃站点逐站搜索探测词，失败/无结果自动 `status=paused` 屏蔽并在备注记录原因，成功恢复 `active`；返回 checked/usable/blocked + 明细（含响应耗时）；
+- `GET /api/sites` 默认只返回 `status=active` 可用站点（隐藏失效站），`?show=all` 显示全部，附 `stats{total,active,failed,enabled,shown}`。
+
+#### 2. 西瓜资源站 + XML 采集接口支持（[sites_static.go](file:///workspace/sites_static.go) + main.go）
+
+- 西瓜接口更新为 `https://caiji.xgzyapi.com/api.php/provide/vod/at/xml/`（XML，实测「庆余年」命中 7 条）；
+- `searchSiteOne` 兼容三种采集格式：maccms JSON、标准 AppleCMS XML（`vod_` 前缀）、自定义 XML（`<id>/<name>/<pic>/<note>/<dl><dd flag=>`，播放地址从 dd 提取）；
+- `siteHTTP` 增加 `Proxy: http.ProxyFromEnvironment`，支持部署在代理环境下的采集。
+
+#### 3. 后台 UI
+
+- 资源站面板新增「添加资源站」表单（名称/采集接口/官网/备注）；
+- 每行新增「🗑 删除」按钮（带确认）；「隐藏失效站」开关（默认勾选，取消显示全部）；
+- 「🧹 检测并屏蔽失效站」按钮：逐站探测，展示「可用/失效」结果并自动刷新列表。
+
+#### 4. 版本与验证
+
+- 版本升级 `v0.4.6 → v0.4.7`；[README.md](file:///workspace/README.md) 同步 v0.4.7 更新日志；
+- 验证：`go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过；接口实测：西瓜 XML 搜索命中 7 条；列表默认隐藏 24 失效站（显示 98/122）；添加/重名/空参/删除/删除不存在全部符合预期；批量检测西瓜→可用、失效测试站→自动 paused 屏蔽并记录「自动屏蔽·不可搜索」原因；后台浏览器实测：添加表单渲染、隐藏失效勾选/取消切换站点显示、详情展开显示接口与命中、删除按钮可见，无布局错位。
+
+---
+
 ## Go 分支 v0.4.6 (2026-09-09) — 前台显示 API 接口调用方式（支持一键复制）
 
 ### 前台展示调用方式 + 复制调用
