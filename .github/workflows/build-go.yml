@@ -30,7 +30,8 @@ jobs:
         run: |
           VER=$(grep -oP 'AppVersion\s*=\s*"\K[^"]+' main.go)
           # CGO_ENABLED=0 静态编译：不依赖宿主 glibc，旧系统（CentOS 7 等）也能直接运行
-          CGO_ENABLED=0 go build -ldflags "-s -w" -o mxgt-go main.go
+          # 构建整个包（.）：包含内置资源站配置 sites_static.go
+          CGO_ENABLED=0 go build -ldflags "-s -w" -o mxgt-go .
           # 单文件静态可执行（零依赖），并复制 README 说明
           TS=$(TZ=Asia/Shanghai date +%Y%m%d%H%M)
           mkdir -p release
@@ -52,7 +53,10 @@ jobs:
             - 接口：
               - GET /api/clean?url=<m3u8>  → 过滤后无广告 M3U8（绝对地址）
               - GET /api/clean/json?url=   → JSON 统计 + 过滤后文本
+              - GET /api/replace?url=<官方视频页> → 官替链路：资源站匹配后返回无广告直链
+              - GET /api/sites & /toggle & /test → 资源站列表/启停/搜索测试（默认全部禁用）
               - GET /healthz               → 健康检查
+            - 官替链路：复用 PHP 版资源站列表（resource_sites.json），后台按需启用采集站后即可解析官方视频页
             - 用法：./mxgt-go -addr :8080
             - 部署：见 README-go.md
           files: release/*.zip

@@ -25,6 +25,7 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -45,7 +46,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.3.3"
+	AppVersion = "v0.4.0"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -615,6 +616,23 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
+    <h2>🔁 官替链路（官方视频页 → 资源站 → 无广告）</h2>
+    <div class="row">
+      <input type="url" id="repInput" placeholder="粘贴官方视频页，如 https://m.v.qq.com/x/m/play?cid=..&vid=.."
+             onkeydown="if(event.key==='Enter')runReplace()">
+      <button class="btn" onclick="runReplace()">⚡ 官替解析</button>
+    </div>
+    <div class="stat-line" id="repStats" style="display:block"></div>
+    <pre id="repOut"></pre>
+  </div>
+
+  <div class="panel">
+    <h2>🏢 资源站管理 <span class="muted">（默认全部禁用，按需启用）</span></h2>
+    <button class="btn" onclick="loadSites()" style="padding:6px 12px;font-size:12px">⟳ 刷新</button>
+    <div id="siteList"></div>
+  </div>
+
+  <div class="panel">
     <h2>🔄 远程在线更新</h2>
     <div class="row">
       <div class="stat-line" id="updInfo" style="display:block"><!--UPD_BLOCK--></div>
@@ -632,6 +650,8 @@ const adminPageHTML = `<!DOCTYPE html>
       <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;</code></td><td>返回过滤后的无广告 M3U8 纯文本（绝对地址）</td></tr>
       <tr><td><code>GET /api/clean/json?url=&lt;m3u8&gt;</code></td><td>返回 JSON：统计 + 过滤后文本 + 每个片段明细</td></tr>
       <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;&amp;opt=aggresive</code></td><td>开启聚合聚类识别（可能误伤统一切片正片）</td></tr>
+      <tr><td><code>GET /api/replace?url=&lt;官方视频页&gt;</code></td><td>官替链路：资源站匹配后返回无广告直链 ad_skip_url</td></tr>
+      <tr><td><code>GET /api/sites</code> / <code>/toggle</code> / <code>/test</code></td><td>资源站列表 / 启停 / 搜索测试（默认全部禁用）</td></tr>
       <tr><td><code>GET /api/stats</code></td><td>运行统计（JSON）</td></tr>
       <tr><td><code>GET /healthz</code></td><td>健康检查</td></tr>
     </table>
@@ -695,7 +715,7 @@ function applyUpdate(){
     setTimeout(function(){location.reload();},4000);
   }).catch(function(e){el('updInfo').textContent='发起失败: '+e.message});
 }
-refreshStats(); setInterval(refreshStats,5000); checkUpdate();
+refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites();
 
 function buildCleanURL(url, aggr){
   return '/api/clean?url='+encodeURIComponent(url)+(aggr?'&opt=aggresive':'');
@@ -714,6 +734,75 @@ function loadHls(cb){
   })();
 }
 let hlsInst=null;
+function playURL(src){
+  const player=el('player');
+  el('playSrc').textContent='播放源: '+src;
+  el('playPanel').style.display='block';
+  loadHls(function(){
+    if(hlsInst){hlsInst.destroy();hlsInst=null;}
+    if(Hls.isSupported()){
+      hlsInst=new Hls({enableWorker:true,
+        xhrSetup:function(xhr){xhr.withCredentials=false;xhr.setRequestHeader('Origin',location.origin);}});
+      hlsInst.loadSource(src);hlsInst.attachMedia(player);
+    }else if(player.canPlayType('application/vnd.apple.mpegurl')){
+      player.src=src;
+    }else{alert('当前浏览器不支持 HLS 播放');return;}
+    player.play().catch(function(){});
+  });
+}
+async function runReplace(){
+  const url=el('repInput').value.trim();
+  el('repOut').style.display='block';el('repOut').textContent='请求中…';
+  el('repStats').style.display='none';
+  if(!url){alert('请先粘贴官方视频页');return;}
+  try{
+    const r=await fetch('/api/replace?url='+encodeURIComponent(url));
+    const j=await r.json();
+    let s=j.message||'';
+    if(j.success){
+      s+=' | '+ (j.site||'?') +' · 第'+(j.episode_num||'?')+'集 · score='+Math.round(j.match_score||0);
+      s+=' <a href="'+j.m3u8_url+'" target="_blank">源 m3u8 ↗</a>';
+    }
+    if(j.ad_skip_url){
+      s+=' <a href="'+j.ad_skip_url+'" target="_blank">无广告直链 ↗</a>';
+      s+=' <button class="btn" style="padding:4px 10px;font-size:12px" onclick="playURL(\''+j.ad_skip_url+'\')">▶ 播放</button>';
+    }
+    el('repStats').style.display='block';el('repStats').innerHTML=s;
+    el('repOut').textContent=JSON.stringify(j,null,2);
+    refreshStats();
+  }catch(e){el('repOut').textContent='官替失败: '+e.message}
+}
+async function loadSites(){
+  try{
+    const j=await getJSON('/api/sites');
+    if(!j||!j.sites){el('siteList').innerHTML='<span class="muted">无配置</span>';return;}
+    let en=0,total=j.sites.length;
+    j.sites.forEach(function(s){if(s.enabled)en++;});
+    let html='<span class="muted" style="margin-right:14px">已启用 '+en+'/'+total+'</span> ';
+    html+='<span class="muted">测试词: <input id="siteKw" value="庆余年" style="width:120px;padding:6px;border-radius:8px;border:1px solid #d1d5db"></span>';
+    html+='<table style="margin-top:12px"><thead><tr><th>站点</th><th>状态</th><th>测试</th></tr></thead><tbody>';
+    for(var i=0;i<j.sites.length;i++){
+      var s=j.sites[i];
+      html+='<tr><td>'+s.name+'<div class="muted">'+s.note+'</div></td>'+
+            '<td><label class="sw"><input type="checkbox" '+(s.enabled?'checked':'')+' onchange="toggleSite(\''+s.name.replace(/'/g,"\\'")+'\',this.checked)"> '+((s.enabled)?'已启用':'已禁用')+'</label></td>'+
+            '<td><button class="btn ghost" style="padding:4px 10px;font-size:12px" onclick="siteTest(\''+s.name.replace(/'/g,"\\'")+'\')">测试</button></td></tr>';
+    }
+    html+='</tbody></table>';
+    el('siteList').innerHTML=html;
+  }catch(e){el('siteList').textContent='加载失败: '+e.message}
+}
+async function toggleSite(name,on){
+  await fetch('/api/sites/toggle?name='+encodeURIComponent(name)+'&enabled='+(on?1:0)).then(r=>r.json());
+  loadSites();
+}
+async function siteTest(name){
+  const kw=el('siteKw')?el('siteKw').value:'庆余年';
+  try{
+    const r=await fetch('/api/sites/test?name='+encodeURIComponent(name)+'&kw='+encodeURIComponent(kw));
+    const j=await r.json();
+    alert(name+'：命中 '+j.count+' 条'+(j.count>0?('（'+j.videos[0].name+'）'):'  —— 无结果或站点失效，可在测试词里换关键词'));
+  }catch(e){alert('测试失败: '+e.message)}
+}
 function playClean(){
   const url=(el('urlInput').value||'').trim();
   if(!url){alert('请先粘贴 M3U8 地址');return;}
@@ -1028,6 +1117,706 @@ func handleUpdateApply(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+// ============================================================
+// 官替链路（Official Replace）：官方视频页 → 资源站搜索 → 匹配 → 取集 → 去广告
+// 参照 PHP gz/OfficialReplaceManager：识别平台→抓标题→搜索→匹配→取集 m3u8→清广输出
+// ============================================================
+
+// Site 一个采集资源站（resource_sites.json，与 PHP 版同一份列表，默认全部禁用）
+type Site struct {
+	Name     string `json:"name"`
+	SiteURL  string `json:"site_url"`
+	APIURL   string `json:"api_url"`
+	Type     string `json:"type"`
+	Status   string `json:"status"`
+	Enabled  bool   `json:"enabled"`
+	Note     string `json:"note"`
+	Priority int    `json:"priority"`
+}
+
+// SitesConfig 资源站配置
+type SitesConfig struct {
+	Version    string `json:"version"`
+	UpdateDate string `json:"update_date"`
+	Sites      []Site `json:"sites"`
+}
+
+var sitesMu sync.Mutex
+
+// sitesConfigPath 配置落盘位置（与可执行文件同目录，便于后台启停后持久化）
+func sitesConfigPath() string {
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "resource_sites.json")
+	}
+	return "resource_sites.json"
+}
+
+// loadSites 读取资源站配置：优先磁盘文件（保留用户启停），否则用内置常量并落盘
+func loadSites() *SitesConfig {
+	cfg := &SitesConfig{}
+	_ = json.Unmarshal([]byte(defaultSitesJSON), cfg)
+	p := sitesConfigPath()
+	if b, err := os.ReadFile(p); err == nil {
+		c2 := &SitesConfig{}
+		if json.Unmarshal(b, c2) == nil && len(c2.Sites) > 0 {
+			return c2
+		}
+	}
+	// 首次运行：内置配置落盘
+	_ = os.WriteFile(p, []byte(defaultSitesJSON), 0o644)
+	return cfg
+}
+
+func saveSites(cfg *SitesConfig) error {
+	b, _ := json.MarshalIndent(cfg, "", "    ")
+	return os.WriteFile(sitesConfigPath(), b, 0o644)
+}
+
+// enabledSites 返回已启用的站点（按优先级）
+func enabledSites(cfg *SitesConfig) []Site {
+	out := []Site{}
+	for _, s := range cfg.Sites {
+		if s.Enabled && strings.TrimSpace(s.APIURL) != "" {
+			out = append(out, s)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Priority < out[j].Priority })
+	return out
+}
+
+// ============ 官方平台识别 ============
+
+type platformHint struct{ Name, Hint string }
+
+var platformHints = []platformHint{
+	{"腾讯视频", "v.qq.com"}, {"腾讯视频", "m.v.qq.com"},
+	{"爱奇艺", "iqiyi.com"}, {"优酷", "youku.com"},
+	{"芒果TV", "mgtv.com"}, {"哔哩哔哩", "bilibili.com"},
+	{"搜狐视频", "sohu.com"}, {"PP视频", "pptv.com"},
+}
+
+func detectPlatform(raw string) string {
+	host := ""
+	if u, err := url.Parse(raw); err == nil {
+		host = strings.ToLower(u.Host)
+	}
+	for _, p := range platformHints {
+		if strings.Contains(host, p.Hint) {
+			return p.Name
+		}
+	}
+	return ""
+}
+
+// ============ 标题抓取与解析 ============
+
+type VideoInfo struct {
+	Title      string
+	BaseTitle  string
+	SeasonNum  int
+	EpisodeNum int
+	Episode    string
+}
+
+var ogTitleRe = regexp.MustCompile(`(?i)<meta[^>]+(?:property|name)=["'](?:og:title|twitter:title)["'][^>]+content=["']([^"']+)["']`)
+var titleTagRe = regexp.MustCompile(`(?i)<title[^>]*>([^<]+)</title>`)
+var tencentVidRe = regexp.MustCompile(`(?i)[?&]vid=([A-Za-z0-9]+)`)
+
+func fetchVideoTitle(raw, vidHint string) string {
+	title := ""
+	if body, err := newClient().fetch(raw); err == nil {
+		if m := ogTitleRe.FindStringSubmatch(body); len(m) > 1 {
+			title = strings.TrimSpace(m[1])
+		}
+		if title == "" {
+			if m := titleTagRe.FindStringSubmatch(body); len(m) > 1 {
+				title = strings.TrimSpace(m[1])
+				// 去掉 "xxx_腾讯视频" 类冗余后缀
+				if i := strings.LastIndex(title, "_"); i > 0 {
+					title = title[:i]
+				}
+			}
+		}
+	}
+	// 腾讯无标题时用 getinfo 兜底取正式片名
+	if title == "" && vidHint != "" {
+		gURL := "https://vv.video.qq.com/getinfo?vid=" + url.QueryEscape(vidHint) +
+			"&platform=101001&charge=0&otype=json&defn=shd&sdtfrom=v1010&host=v.qq.com"
+		if body, err := newClient().fetch(gURL); err == nil {
+			if m := regexp.MustCompile(`"ti"\s*:\s*"([^"]+)"`).FindStringSubmatch(body); len(m) > 1 {
+				title = m[1]
+			}
+		}
+	}
+	return title
+}
+
+var epCNRe = regexp.MustCompile(`第\s*([0-9]+|[一二三四五六七八九十百千]+)\s*(集|期|话)`)
+var seasonCNRe = regexp.MustCompile(`第\s*([0-9]+|[一二三四五六七八九十百千]+)\s*(季|部|篇|卷|番)`)
+var sxxexxRe = regexp.MustCompile(`(?i)S(\d+)\s*E(\d+)`)
+var qRe = regexp.MustCompile(`(?i)第[一-九零一二三四五六七八九十百千0-9]+[季部篇卷番集期话]|S\d+E\d+|全集|完结|高清|蓝光|4K|1080P|720P`)
+var cleanTagRe = regexp.MustCompile(`[（(]?(第[一-九零一二三四五六七八九十百千0-9]+[季部篇卷番集期话]|S\d+E\d+|全集|完结)[）)]?`)
+
+func cnToNum(s string) int {
+	digits := map[rune]int{'零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
+	units := map[rune]int{'十': 10, '百': 100, '千': 1000}
+	n, temp := 0, 0
+	for _, ch := range s {
+		if v, ok := digits[ch]; ok {
+			temp = v
+		} else if u, ok2 := units[ch]; ok2 {
+			if temp == 0 && u == 10 {
+				temp = 1
+			}
+			n += temp * u
+			temp = 0
+		}
+	}
+	n += temp
+	return n
+}
+
+func parseVideoTitle(title string) VideoInfo {
+	vi := VideoInfo{Title: title}
+	if m := seasonCNRe.FindStringSubmatch(title); len(m) > 1 {
+		vi.SeasonNum = cnToNum(m[1])
+	}
+	if m := epCNRe.FindStringSubmatch(title); len(m) > 1 {
+		vi.EpisodeNum = cnToNum(m[1])
+		vi.Episode = m[0]
+	}
+	if m := sxxexxRe.FindStringSubmatch(title); len(m) > 2 {
+		if vi.SeasonNum == 0 {
+			vi.SeasonNum, _ = strconv.Atoi(m[1])
+		}
+		vi.EpisodeNum, _ = strconv.Atoi(m[2])
+		vi.Episode = m[0]
+	}
+	base := cleanTagRe.ReplaceAllString(title, "")
+	base = qRe.ReplaceAllString(base, "")
+	// 去掉开头/结尾的【标签】/〔标签〕 类包围块（如【腾讯视频】）
+	base = regexp.MustCompile(`(?:^|^[\s·])(?:【[^】]{1,16}】|〔[^〕]{1,16}〕|\[[^\]]{1,16}\])\s*`).ReplaceAllString(strings.TrimSpace(base), " ")
+	base = regexp.MustCompile(`\s*(?:【[^】]{1,16}】|〔[^〕]{1,16}〕)$`).ReplaceAllString(base, "")
+	vi.BaseTitle = strings.TrimSpace(base)
+	return vi
+}
+
+// ============ 资源站搜索（AppleCMS / maccms） ============
+
+type PlayItem struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type ResourceVideo struct {
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	Pic      string     `json:"pic"`
+	Remarks  string     `json:"remarks"`
+	Site     string     `json:"site_name"`
+	PlayFrom string     `json:"play_from"`
+	URLs     []PlayItem `json:"urls"`
+	FirstURL string     `json:"first_url"`
+}
+
+type maccmsItem struct {
+	VodID        string `json:"vod_id"`
+	VodName      string `json:"vod_name"`
+	VodPic       string `json:"vod_pic"`
+	VodRemarks   string `json:"vod_remarks"`
+	VodPlayURL   string `json:"vod_play_url"`
+	VodPlayFrom  string `json:"vod_play_from"`
+	Name         string `json:"name"`
+	PlayURL      string `json:"play_url"`
+	Pic          string `json:"pic"`
+	Remarks      string `json:"remarks"`
+	VodID2       string `json:"id"`
+}
+
+type maccmsResp struct {
+	List []maccmsItem `json:"list"`
+	Data []maccmsItem `json:"data"`
+	Msg  string       `json:"msg"`
+}
+
+// siteHTTP 资源站专用客户端：短超时 + 关闭证书校验（多数采集站自签/http）
+var siteHTTP = &http.Client{Timeout: 12 * time.Second, Transport: &http.Transport{
+	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+}}
+
+func httpGetBody(u string) ([]byte, error) {
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("Referer", u)
+	resp, err := siteHTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+}
+
+func buildSearchURL(apiURL, kw string, pg, limit int) string {
+	u, err := url.Parse(apiURL)
+	if err != nil {
+		return apiURL
+	}
+	q := u.Query()
+	q.Set("ac", "videolist")
+	q.Set("wd", kw)
+	q.Set("pg", strconv.Itoa(pg))
+	q.Set("limit", strconv.Itoa(limit))
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+func stripFragment(u string) string {
+	if i := strings.Index(u, "#"); i >= 0 {
+		return u[:i]
+	}
+	return u
+}
+
+func episodeNumOfPlayItem(name string) int {
+	m := regexp.MustCompile(`第\s*(\d+)\s*[集期话]|EP?\s*(\d+)|E(\d+)\s*$`).FindStringSubmatch(name)
+	for _, g := range m[1:] {
+		if n, err := strconv.Atoi(g); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 0
+}
+
+// parsePlayURL 解析 vod_play_url（支持 $$$ 多线路、多行、name$url 集数格式）
+func parsePlayURL(full string) []PlayItem {
+	body := strings.ReplaceAll(strings.ReplaceAll(full, "\r\n", "\n"), "$$$", "\n")
+	var items []PlayItem
+	seen := map[string]bool{}
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if !strings.Contains(line, "$") {
+			if !seen[stripFragment(line)] {
+				seen[stripFragment(line)] = true
+				items = append(items, PlayItem{Name: "第1集", URL: stripFragment(line)})
+			}
+			continue
+		}
+		prev := ""
+		for _, p := range strings.Split(line, "$") {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if strings.HasPrefix(p, "http") {
+				u := stripFragment(p)
+				name := prev
+				if name == "" {
+					name = "第" + strconv.Itoa(len(items)+1) + "集"
+				}
+				if !seen[u] {
+					seen[u] = true
+					items = append(items, PlayItem{Name: name, URL: u})
+				}
+			} else {
+				prev = p
+			}
+		}
+	}
+	return items
+}
+
+type searchOut struct {
+	Videos    []ResourceVideo
+	SiteOK    []string
+	SiteFail  []string
+	Searched  int
+}
+
+// searchSites 在所有已启用站点搜索关键词，汇总返回
+func searchSites(cfg *SitesConfig, kw string, maxSites int) searchOut {
+	sites := enabledSites(cfg)
+	if maxSites > 0 && len(sites) > maxSites {
+		sites = sites[:maxSites]
+	}
+	out := searchOut{Searched: len(sites)}
+	for _, s := range sites {
+		b, err := httpGetBody(buildSearchURL(s.APIURL, kw, 1, 20))
+		if err != nil {
+			out.SiteFail = append(out.SiteFail, s.Name)
+			continue
+		}
+		var r maccmsResp
+		if err := json.Unmarshal(b, &r); err != nil {
+			out.SiteFail = append(out.SiteFail, s.Name)
+			continue
+		}
+		list := r.List
+		if len(list) == 0 {
+			list = r.Data
+		}
+		got := false
+		for _, it := range list {
+			playURL := it.VodPlayURL
+			if playURL == "" {
+				playURL = it.PlayURL
+			}
+			if playURL == "" {
+				continue
+			}
+			urls := parsePlayURL(playURL)
+			if len(urls) == 0 {
+				continue
+			}
+			got = true
+			name := it.VodName
+			if name == "" {
+				name = it.Name
+			}
+			id := it.VodID
+			if id == "" {
+				id = it.VodID2
+			}
+			pic := it.VodPic
+			if pic == "" {
+				pic = it.Pic
+			}
+			remarks := it.VodRemarks
+			if remarks == "" {
+				remarks = it.Remarks
+			}
+			out.Videos = append(out.Videos, ResourceVideo{
+				ID: id, Name: name, Pic: pic, Remarks: remarks,
+				Site: s.Name, PlayFrom: it.VodPlayFrom, URLs: urls, FirstURL: urls[0].URL,
+			})
+		}
+		if got {
+			out.SiteOK = append(out.SiteOK, s.Name)
+		} else {
+			out.SiteFail = append(out.SiteFail, s.Name)
+		}
+	}
+	return out
+}
+
+// ============ 标题匹配 ============
+
+func compactTitle(s string) string {
+	s = strings.ToLower(s)
+	return regexp.MustCompile(`[\s·,，。.:：!！?？\-_/\\"'|【】\[\]()（）]`).ReplaceAllString(s, "")
+}
+
+func titleSim(a, b string) float64 {
+	ca, cb := compactTitle(a), compactTitle(b)
+	if ca == "" || cb == "" {
+		return 0
+	}
+	if strings.Contains(ca, cb) || strings.Contains(cb, ca) {
+		sh, lg := len(ca), len(cb)
+		if sh > lg {
+			sh, lg = lg, sh
+		}
+		return 60 + float64(sh)/float64(lg)*40
+	}
+	ra := map[rune]bool{}
+	for _, c := range []rune(ca) {
+		ra[c] = true
+	}
+	rc := map[rune]bool{}
+	for _, c := range []rune(cb) {
+		rc[c] = true
+	}
+	inter, union := 0, 0
+	for c := range rc {
+		if ra[c] {
+			inter++
+		}
+		if ra[c] || rc[c] {
+			union++
+		}
+	}
+	if union == 0 {
+		return 0
+	}
+	return float64(inter) / float64(union) * 100 * 0.5
+}
+
+type matchItem struct {
+	Video ResourceVideo
+	Score float64
+}
+
+func findBestMatch(vi VideoInfo, videos []ResourceVideo) (matchItem, bool) {
+	best := matchItem{}
+	ok := false
+	for _, v := range videos {
+		cand := parseVideoTitle(v.Name)
+		s := titleSim(vi.BaseTitle, cand.BaseTitle)
+		score := s * 0.8
+		epMatch := false
+		if vi.EpisodeNum > 0 {
+			if cand.EpisodeNum > 0 && vi.EpisodeNum == cand.EpisodeNum {
+				epMatch = true
+			}
+			for _, it := range v.URLs {
+				if episodeNumOfPlayItem(it.Name) == vi.EpisodeNum {
+					epMatch = true
+					break
+				}
+			}
+		}
+		if epMatch {
+			score += 20
+		}
+		// 季数不一致扣分
+		if vi.SeasonNum > 0 && cand.SeasonNum > 0 && vi.SeasonNum != cand.SeasonNum {
+			score -= 30
+		}
+		if score > best.Score {
+			best = matchItem{Video: v, Score: score}
+			ok = true
+		}
+	}
+	return best, ok
+}
+
+func pickEpisodeURL(v ResourceVideo, ep int) (string, string) {
+	if ep > 0 {
+		for _, it := range v.URLs {
+			if episodeNumOfPlayItem(it.Name) == ep {
+				return it.URL, it.Name
+			}
+		}
+	}
+	if len(v.URLs) > 0 {
+		return v.URLs[0].URL, v.URLs[0].Name
+	}
+	return "", ""
+}
+
+// ============ 官替返回结构 ============
+
+type replaceStep struct {
+	Name    string `json:"name"`
+	Title   string `json:"title"`
+	Status  string `json:"status"`
+	Summary string `json:"summary"`
+}
+
+type ReplaceResult struct {
+	Success        bool          `json:"success"`
+	Message        string        `json:"message,omitempty"`
+	Channel        string        `json:"channel"`
+	Platform       string        `json:"platform,omitempty"`
+	OriginalURL    string        `json:"original_url,omitempty"`
+	VideoTitle     string        `json:"video_title,omitempty"`
+	BaseTitle      string        `json:"base_title,omitempty"`
+	EpisodeNum     int           `json:"episode_num,omitempty"`
+	Episode        string        `json:"episode,omitempty"`
+	MatchScore     float64       `json:"match_score,omitempty"`
+	Site           string        `json:"site,omitempty"`
+	VideoName      string        `json:"video_name,omitempty"`
+	VideoPic       string        `json:"video_pic,omitempty"`
+	VideoRemarks   string        `json:"video_remarks,omitempty"`
+	M3U8URL        string        `json:"m3u8_url,omitempty"`
+	ADSkipURL      string        `json:"ad_skip_url,omitempty"`
+	UsedKeyword    string        `json:"used_keyword,omitempty"`
+	SearchKeywords []string      `json:"search_keywords,omitempty"`
+	SearchedSites  int           `json:"searched_sites"`
+	SiteOK         []string      `json:"site_ok,omitempty"`
+	SiteFail       []string      `json:"site_fail,omitempty"`
+	Steps          []replaceStep `json:"steps,omitempty"`
+	TotalMS        float64       `json:"total_ms"`
+}
+
+// replaceOne 官替主流程
+func replaceOne(r *http.Request, raw string) ReplaceResult {
+	res := ReplaceResult{Channel: "official_replace"}
+	t0 := time.Now()
+
+	if raw == "" {
+		res.Message = "缺少 url 参数"
+		return res
+	}
+	platform := detectPlatform(raw)
+	if platform == "" {
+		res.Message = "不支持的视频平台"
+		res.Steps = []replaceStep{{"detect", "识别视频平台", "fail", "域名未匹配到支持的平台"}}
+		res.TotalMS = time.Since(t0).Seconds() * 1000
+		return res
+	}
+	res.Platform = platform
+	res.OriginalURL = raw
+	steps := []replaceStep{{"detect", "识别视频平台", "ok", "识别为 " + platform}}
+
+	vidHint := ""
+	if m := tencentVidRe.FindStringSubmatch(raw); len(m) > 1 {
+		vidHint = m[1]
+	}
+	title := fetchVideoTitle(raw, vidHint)
+	if title == "" {
+		res.Message = "无法获取视频信息"
+		steps = append(steps, replaceStep{"fetch_meta", "获取官方页面信息", "fail", "未能从页面/Meta获取标题"})
+		res.Steps = steps
+		res.TotalMS = time.Since(t0).Seconds() * 1000
+		return res
+	}
+	vi := parseVideoTitle(title)
+	res.VideoTitle = title
+	res.BaseTitle = vi.BaseTitle
+	res.EpisodeNum = vi.EpisodeNum
+	res.Episode = vi.Episode
+	steps = append(steps, replaceStep{"fetch_meta", "获取官方页面信息", "ok",
+		fmt.Sprintf("title=%s · base=%s · 第%d集", title, vi.BaseTitle, vi.EpisodeNum)})
+
+	// 生成搜索关键词：优先「基础剧名+集数」
+	kws := []string{vi.BaseTitle}
+	if vi.EpisodeNum > 0 {
+		kws = []string{vi.BaseTitle + " 第" + strconv.Itoa(vi.EpisodeNum) + "集", vi.BaseTitle}
+	}
+	res.SearchKeywords = kws
+
+	cfg := loadSites()
+	var allVideos []ResourceVideo
+	used := ""
+	seenOK, seenFail := map[string]bool{}, map[string]bool{}
+	best := matchItem{}
+	matched := false
+
+	for _, kw := range kws {
+		if kw == "" {
+			continue
+		}
+		sr := searchSites(cfg, kw, 8)
+		res.SearchedSites = sr.Searched
+		for _, s := range sr.SiteOK {
+			if !seenOK[s] {
+				seenOK[s] = true
+				res.SiteOK = append(res.SiteOK, s)
+			}
+		}
+		for _, s := range sr.SiteFail {
+			if !seenFail[s] {
+				seenFail[s] = true
+				res.SiteFail = append(res.SiteFail, s)
+			}
+		}
+		allVideos = append(allVideos, sr.Videos...)
+		if len(sr.Videos) > 0 {
+			if m, ok := findBestMatch(vi, sr.Videos); ok && m.Score >= 65 {
+				best, matched, used = m, true, kw
+				break
+			}
+		}
+	}
+	if !matched && len(allVideos) > 0 {
+		if m, ok := findBestMatch(vi, allVideos); ok && m.Score >= 65 {
+			best, matched = m, true
+			used = kws[0]
+		}
+	}
+	if !matched {
+		res.Message = "未找到匹配度足够的资源（可能未启用该资源站，请在后台启用后再试）"
+		steps = append(steps, replaceStep{"match", "资源站匹配", "fail", "所有候选分数低于阈值 65"})
+		res.Steps = steps
+		res.TotalMS = time.Since(t0).Seconds() * 1000
+		return res
+	}
+
+	res.VideoName = best.Video.Name
+	res.VideoPic = best.Video.Pic
+	res.VideoRemarks = best.Video.Remarks
+	res.Site = best.Video.Site
+	res.MatchScore = best.Score
+	res.UsedKeyword = used
+	steps = append(steps, replaceStep{"search", "资源站搜索", "ok",
+		fmt.Sprintf("命中站点 %s · score=%.1f · 关键词 %s", best.Video.Site, best.Score, used)})
+
+	m3u8, _ := pickEpisodeURL(best.Video, vi.EpisodeNum)
+	if m3u8 == "" {
+		res.Message = "匹配到的视频没有可用播放地址"
+		res.Steps = steps
+		res.TotalMS = time.Since(t0).Seconds() * 1000
+		return res
+	}
+	if !strings.HasPrefix(m3u8, "http") {
+		// 相对地址兜底：用官方页 host 补全
+		if u, err := url.Parse(raw); err == nil {
+			m3u8 = u.Scheme + "://" + u.Host + "/" + strings.TrimLeft(m3u8, "/")
+		}
+	}
+	res.M3U8URL = m3u8
+	res.ADSkipURL = playURL(r, "/api/clean", url.Values{"url": {m3u8}})
+	steps = append(steps, replaceStep{"output", "组装输出", "ok", "ad_skip_url 已生成（经 /api/clean 去广告）"})
+
+	res.Success = true
+	res.Message = "官替解析成功，请播放 ad_skip_url（无广告）"
+	res.Steps = steps
+	res.TotalMS = time.Since(t0).Seconds() * 1000
+	return res
+}
+
+// ============ 官替 / 资源站 HTTP 处理器 ============
+
+func handleReplace(w http.ResponseWriter, r *http.Request) {
+	res := replaceOne(r, r.URL.Query().Get("url"))
+	res.Steps = nil // 减小返回体积
+	writeJSON(w, res)
+}
+
+func handleSitesList(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, loadSites())
+}
+
+func handleSiteToggle(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	en := r.URL.Query().Get("enabled") == "1"
+	sitesMu.Lock()
+	defer sitesMu.Unlock()
+	cfg := loadSites()
+	for i := range cfg.Sites {
+		if cfg.Sites[i].Name == name {
+			cfg.Sites[i].Enabled = en
+			if err := saveSites(cfg); err != nil {
+				writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+				return
+			}
+			writeJSON(w, map[string]interface{}{"success": true, "name": name, "enabled": en})
+			return
+		}
+	}
+	writeJSON(w, map[string]interface{}{"success": false, "message": "站点不存在"})
+}
+
+func handleSiteTest(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	kw := r.URL.Query().Get("kw")
+	if kw == "" {
+		kw = "庆余年"
+	}
+	cfg := loadSites()
+	sr := searchSites(cfg, kw, 40)
+	var vs []ResourceVideo
+	for _, v := range sr.Videos {
+		if v.Site == name {
+			vs = append(vs, v)
+		}
+	}
+	writeJSON(w, map[string]interface{}{
+		"success": len(vs) > 0, "site": name, "keyword": kw,
+		"count": len(vs), "videos": vs,
+		"site_ok": sr.SiteOK, "site_fail": sr.SiteFail, "searched": sr.Searched,
+	})
+}
+
 func main() {
 	addr := flag.String("addr", ":8080", "监听地址")
 	flag.Parse()
@@ -1092,7 +1881,13 @@ func main() {
 		recordClean(res, u)
 		writeJSON(w, res)
 	})
-	log.Printf("MXGT-Go %s listening on %s (单文件 M3U8 去广告服务)", AppVersion, *addr)
+	// 官替链路：官方视频页 → 资源站 → 无广告 m3u8
+	http.HandleFunc("/api/replace", handleReplace)
+	// 资源站管理
+	http.HandleFunc("/api/sites", handleSitesList)
+	http.HandleFunc("/api/sites/toggle", handleSiteToggle)
+	http.HandleFunc("/api/sites/test", handleSiteTest)
+	log.Printf("MXGT-Go %s listening on %s (M3U8 去广告 + 官替链路服务)", AppVersion, *addr)
 	if err := http.ListenAndServe(*addr, withCORS(http.DefaultServeMux)); err != nil {
 		log.Fatal(err)
 	}

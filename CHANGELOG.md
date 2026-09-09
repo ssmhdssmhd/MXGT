@@ -1,5 +1,35 @@
 # 更新日志
 
+## Go 分支 v0.4.0 (2026-09-09) — 官替链路（官方视频页→资源站→无广告）
+
+### 回退到 v0.3.3 后，对照 PHP 版补齐 Go 版缺失的「官替」核心链路
+
+> 用户诉求：先回退代码到 v0.3.3，再按 PHP 版补齐 Go 缺失部分（重点官替链路：输入官方视频页→提取片名集数→资源站搜索→匹配无广告源→返回可播无广告直链）。资源站列表复用 PHP 版，默认全部禁用，需要时后台启用。
+
+#### 1. 官替链路 `GET /api/replace?url=<官方视频页>`（[main.go](file:///workspace/main.go)）
+
+- **识别平台**：按域名识别腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP 视频；
+- **抓标题**：抓取 `og:title`/`<title>`，腾讯无标题时调 `vv.video.qq.com/getinfo` 兜底取正式片名；
+- **解析剧名/集数**：`parseVideoTitle` 剥离「第X季/集」「S系E集」、画质词与 `【腾讯视频】` 类标签，得出 `base_title` 与 `episode_num`；
+- **搜索关键词**：优先「基础剧名 第X集」，无结果回退「基础剧名」；
+- **智能匹配**：基础剧名相似度（包含/公共字）+ 集数命中 +20 + 季数不一致 −30，阈值 65；
+- **取集**：按 `episode_num` 从剧集列表精准取 m3u8，否则回退首项，相对地址自动补全为绝对地址；
+- **去广告**：源 m3u8 交给既有 `/api/clean` 规则引擎，返回 `ad_skip_url` 无广告直链。
+
+#### 2. 资源站配置与管理（[resource_sites.json](file:///workspace/resource_sites.json) + [sites_static.go](file:///workspace/sites_static.go)）
+
+- 用 PHP 脚本从 `gz/sites_config.php` 导出 **122 个采集站**到 `resource_sites.json`，**默认全部 `enabled=false`**（复用列表但默认禁用，后台按需启用）；
+- 内置配置以常量打入二进制（`sites_static.go`），首次运行自动落盘到可执行文件旁，供后台启停持久化；
+- 后台 `/mxadmin` 新增「**官替链路**」解析面板与「**资源站管理**」面板（列表 / 启停 / 搜索测试）；
+- 接口：`GET /api/sites`、`POST /api/sites/toggle?name=&enabled=`、`GET /api/sites/test?name=&kw=`。
+
+#### 3. 版本与验证
+
+- 版本升级 `v0.3.3 → v0.4.0`；`build-go.yml` 改为 `go build -o mxgt-go .`（构建整个包以包含 sites_static.go），Release 说明补充官替接口；
+- 验证：`go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过（静态 7MB 零依赖）；`/api/sites` 返回 122 站且全禁用；`/api/sites/toggle` 持久化生效；`/api/replace?url=...m.v.qq.com...` 识别为腾讯视频并抓到 `base_title="独剑九天"`；沙箱网络受限时搜索走失败分支返回结构化错误，不崩溃。
+
+---
+
 ## Go 分支 v0.3.3 (2026-09-09) — 更新面板显示当前/最新版本 + 修复 Failed to fetch
 
 ### 更新面板直接显示版本；修复检查更新远程连通慢导致的 Failed to fetch

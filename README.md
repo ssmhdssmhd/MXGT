@@ -20,7 +20,7 @@
 
 ```bash
 # 本地编译（Linux amd64，CGO_ENABLED=0 静态编译，旧系统 glibc 也能直接运行）
-CGO_ENABLED=0 go build -o mxgt-go main.go
+CGO_ENABLED=0 go build -o mxgt-go .
 
 # 运行
 ./mxgt-go -addr :8080
@@ -38,12 +38,34 @@ go run main.go "https://示例.com/playlist.m3u8"
 | `GET /api/clean?url=<m3u8>` | 返回过滤后的无广告 M3U8 纯文本（绝对地址，保留 KEY/MAP/不连续标签） |
 | `GET /api/clean/json?url=<m3u8>` | 返回 JSON：统计 + 过滤后文本 + 每个片段的广告标记/原因 |
 | `GET /api/clean?url=...&opt=aggresive` | 开启聚合聚类识别（同目录统一切片批量判广告，可能误伤统一节奏正片，默认关） |
+| `GET /api/replace?url=<官方视频页>` | **官替链路**：识别平台→抓标题→资源站搜索→智能匹配→取集→经 `/api/clean` 去广告，返回 `ad_skip_url` 无广告直链 |
+| `GET /api/sites` | 资源站列表（`resource_sites.json`，默认全部禁用，后台按需启用） |
+| `POST /api/sites/toggle?name=<站名>&enabled=1/0` | 启用/禁用某个采集站并持久化 |
+| `GET /api/sites/test?name=<站名>&kw=<词>` | 搜索测试单个资源站是否可用/命中 |
 | `GET /api/stats` | 运行统计（JSON，后台展示） |
 | `GET /api/update/check` | 检查远程是否有新版本（读取线上 `latest.json`） |
 | `POST /api/update/apply` | 下载 GitHub Release 最新版并自动替换重启（远程在线更新） |
 | `GET /healthz` | 健康检查 |
 
 > 打开浏览器访问 `http://<IP>:8080/mxadmin` 进入后台（`/` 仅为落地页，不再直达后台）。后台展示运行统计、M3U8 解析去广告测试、内嵌无广告播放器与**远程在线更新**，页头显眼标注「开发者 · ssmhdssmhd」。
+
+### 官替链路（Official Replace）
+
+官替即“官方视频页 → 资源站无广告源替换”，参照 PHP 版 `gz/OfficialReplaceManager` 移植，流程：
+
+1. **识别平台**：按域名识别腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP 视频；
+2. **抓标题**：抓取官方页 `og:title` / `<title>`，腾讯无标题时用 `getinfo` 兜底取正式片名；
+3. **解析剧名/集数**：`parseVideoTitle` 剥离「第X季/X集」、`S系E集`、画质词，得出 `base_title` 与 `episode_num`；
+4. **搜索资源站**：对已启用采集站调 AppleCMS/maccms `?ac=videolist&wd=关键词`，解析 `list[]` 的 `vod_play_url`（支持 `$$$` 多线路 / `集数$url` 格式）；
+5. **智能匹配**：按基础剧名相似度（包含/公共字）+ 集数命中 + 季数一致性打分，阈值 65；
+6. **取集**：按 `episode_num` 从剧集列表精准取对应 m3u8，否则回退列表首项（相对地址自动补全为绝对地址）；
+7. **去广告**：把源 m3u8 交给 `/api/clean`（复用既有规则引擎），输出 `ad_skip_url` 无广告直链。
+
+### 资源站管理
+
+- 复用 PHP 版资源站列表（`sites_config.php` → [`resource_sites.json`](file:///workspace/resource_sites.json)，**默认全部禁用**，后台按需启用后再生效，避免误用失效源）；
+- 后台 `/mxadmin` → **官替链路** 面板可一键解析官方视频页；**资源站管理** 面板可启用/禁用采集站并做搜索测试（启停持久化到可执行文件旁的 `resource_sites.json`）；
+- 内置配置以常量打入二进制（`sites_static.go`），首次运行自动落盘供后台修改。
 
 ### 远程在线更新（Go 版）
 
@@ -95,6 +117,27 @@ chmod +x mxgt-go
 ---
 
 ## Go 版更新日志（branch `go`）
+
+## v0.4.0 (2026-09-09) — 官替链路（官方视频页→资源站→无广告）
+
+> 回退到 v0.3.3 后，对照 PHP 版补齐 Go 版缺失的**官替（官方替换）核心链路**：识别平台→抓标题→资源站搜索→智能匹配→取集→去广告输出可播直链。
+
+### 更新内容（[main.go](file:///workspace/main.go) + [`resource_sites.json`](file:///workspace/resource_sites.json) + [`sites_static.go`](file:///workspace/sites_static.go)）
+
+- **官替链路 `GET /api/replace?url=<官方视频页>`**：域名识别平台（腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP）、抓取 `og:title`/`<title>`（腾讯 `getinfo` 兜底）、`parseVideoTitle` 剥离季/集/画质得出基础剧名与集数、生成搜索关键词；
+- **资源站搜索**：复用 PHP 版 122 个采集站列表（`resource_sites.json`，**默认全部禁用**），调 AppleCMS `?ac=videolist&wd=` 解析 `list[]`，支持 `$$$` 多线路与 `集数$url` 集数格式（`parsePlayURL`）；
+- **智能匹配**：按基础剧名相似度（包含/公共字）+ 集数命中 + 季数一致性打分（阈值 65），按 `episode_num` 精准取集、相对地址自动补全；
+- **去广告输出**：源 m3u8 交给既有 `/api/clean` 规则引擎，返回 `ad_skip_url` 无广告直链；后台「官替链路」面板一键解析 + 直连播放；
+- **资源站管理**：`GET /api/sites`、`POST /api/sites/toggle`、`GET /api/sites/test`；后台「资源站管理」面板启停采集站并做搜索测试，启停持久化到可执行文件旁的 `resource_sites.json`；
+- 内置配置以常量打入二进制（`sites_static.go`），首次运行自动落盘供后台修改；`build-go.yml` 改为构建整个包（`.`）。
+- 版本升级 `v0.3.3 → v0.4.0`。
+
+### 验证
+
+- `go vet` / `CGO_ENABLED=0 go build -o mxgt-go .` 通过（静态 7MB 零依赖）；
+- 实测：`/api/sites` 返回 122 个站点且全部禁用；`/api/sites/toggle?name=量子&enabled=1` 持久化生效；`/api/replace?url=...m.v.qq.com...` 识别为「腾讯视频」并抓到 `base_title`；沙箱网络受限时搜索走失败分支返回结构化错误，不崩溃。
+
+---
 
 ## v0.3.3 (2026-09-09) — 更新面板显示当前/最新版本 + 修复 Failed to fetch
 
