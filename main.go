@@ -53,7 +53,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.4.4"
+	AppVersion = "v0.4.5"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -2788,7 +2788,19 @@ func main() {
 	log.Printf("MXGT-Go %s listening on %s (M3U8 去广告 + 官替链路服务)", AppVersion, *addr)
 	// 使用全局 httpServer 句柄：更新重启时可优雅关闭释放端口（修复更新后不自动重启）
 	httpServer = &http.Server{Addr: *addr, Handler: withCORS(http.DefaultServeMux)}
-	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	// 端口占用自动重试：避免「更新/重启后不能启动」（旧进程未退出 / TIME_WAIT / 端口被其它程序占用）
+	const maxBindRetry = 30
+	for i := 0; i < maxBindRetry; i++ {
+		err := httpServer.ListenAndServe()
+		if err == nil || err == http.ErrServerClosed {
+			return // 被优雅关闭（如更新重启），退出
+		}
+		if strings.Contains(err.Error(), "address already in use") {
+			log.Printf("端口 %s 被占用，2s 后重试(%d/%d)...", *addr, i+1, maxBindRetry)
+			time.Sleep(2 * time.Second)
+			continue
+		}
 		log.Fatal(err)
 	}
+	log.Fatalf("启动失败：端口 %s 在 %d 次重试后仍被占用，请先释放端口", *addr, maxBindRetry)
 }
