@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.3"
+	AppVersion = "v0.6.4"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -2676,15 +2676,46 @@ type VideoInfo struct {
 var ogTitleRe = regexp.MustCompile(`(?i)<meta[^>]+(?:property|name)=["'](?:og:title|twitter:title)["'][^>]+content=["']([^"']+)["']`)
 var titleTagRe = regexp.MustCompile(`(?i)<title[^>]*>([^<]+)</title>`)
 var tencentVidRe = regexp.MustCompile(`(?i)[?&]vid=([A-Za-z0-9]+)`)
+var tencentVidJSONRe = regexp.MustCompile(`(?i)"vid"\s*:\s*"([A-Za-z0-9]+)"`)
+
+// fetchTencentVid 提取腾讯视频 vid：优先 URL 参数 vid=，其次页面 JSON "vid":"xxx"（cover 页为 JS 壳时靠它兜底）
+func fetchTencentVid(raw, body string) string {
+	if m := tencentVidRe.FindStringSubmatch(raw); len(m) > 1 {
+		return m[1]
+	}
+	if body != "" {
+		if m := tencentVidJSONRe.FindStringSubmatch(body); len(m) > 1 {
+			return m[1]
+		}
+	}
+	return ""
+}
+
+// fetchTencentTitleByVid 用腾讯 getinfo 接口按 vid 取正式片名（返回空=无有效 ti，如视频审核中/需登录）
+func fetchTencentTitleByVid(vid string) string {
+	if vid == "" {
+		return ""
+	}
+	gURL := "https://vv.video.qq.com/getinfo?vid=" + url.QueryEscape(vid) +
+		"&platform=101001&charge=0&otype=json&defn=shd&sdtfrom=v1010&host=v.qq.com"
+	if body, err := newClient().fetch(gURL); err == nil {
+		if m := regexp.MustCompile(`"ti"\s*:\s*"([^"]+)"`).FindStringSubmatch(body); len(m) > 1 {
+			return m[1]
+		}
+	}
+	return ""
+}
 
 func fetchVideoTitle(raw, vidHint string) string {
 	title := ""
-	if body, err := newClient().fetch(raw); err == nil {
-		if m := ogTitleRe.FindStringSubmatch(body); len(m) > 1 {
+	body := ""
+	if b, err := newClient().fetch(raw); err == nil {
+		body = b
+		if m := ogTitleRe.FindStringSubmatch(b); len(m) > 1 {
 			title = strings.TrimSpace(m[1])
 		}
 		if title == "" {
-			if m := titleTagRe.FindStringSubmatch(body); len(m) > 1 {
+			if m := titleTagRe.FindStringSubmatch(b); len(m) > 1 {
 				title = strings.TrimSpace(m[1])
 				// 去掉 "xxx_腾讯视频" 类冗余后缀
 				if i := strings.LastIndex(title, "_"); i > 0 {
@@ -2693,14 +2724,13 @@ func fetchVideoTitle(raw, vidHint string) string {
 			}
 		}
 	}
-	// 腾讯无标题时用 getinfo 兜底取正式片名
+	// 腾讯无标题时用 getinfo 兜底取正式片名：优先调用方传入 vid，其次自动从 URL/页面 JSON 提取
 	if title == "" && vidHint != "" {
-		gURL := "https://vv.video.qq.com/getinfo?vid=" + url.QueryEscape(vidHint) +
-			"&platform=101001&charge=0&otype=json&defn=shd&sdtfrom=v1010&host=v.qq.com"
-		if body, err := newClient().fetch(gURL); err == nil {
-			if m := regexp.MustCompile(`"ti"\s*:\s*"([^"]+)"`).FindStringSubmatch(body); len(m) > 1 {
-				title = m[1]
-			}
+		title = fetchTencentTitleByVid(vidHint)
+	}
+	if title == "" && (strings.Contains(raw, "v.qq.com") || strings.Contains(raw, "m.v.qq.com")) {
+		if vid := fetchTencentVid(raw, body); vid != "" {
+			title = fetchTencentTitleByVid(vid)
 		}
 	}
 	return title
@@ -3467,13 +3497,13 @@ type builtinOfficialLink struct {
 // builtinOfficialLinks 各大官方平台默认链接清单，用于自动更新官方「无脑映射」
 // 这些链接在选择渲染（render-title/）启用时能解析出「真实剧名」；若未启用渲染则回退静态抓取（部分平台是 JS 壳）。
 var builtinOfficialLinks = []builtinOfficialLink{
-	{Key: "tencent", Platform: "腾讯视频", Label: "腾讯视频", URL: "https://v.qq.com/x/cover/mzc00200jtsx0ds.html"},
+	{Key: "tencent", Platform: "腾讯视频", Label: "腾讯视频", URL: "https://v.qq.com/x/cover/mzc002001tyxcdm.html"},
 	{Key: "iqiyi", Platform: "爱奇艺", Label: "爱奇艺", URL: "https://www.iqiyi.com/v_2bkbhy2gi2w.html"},
 	{Key: "youku", Platform: "优酷", Label: "优酷", URL: "https://v.youku.com/v_show/id_XNTA3MjQ5NDY4NA="},
 	{Key: "mgtv", Platform: "芒果TV", Label: "芒果TV", URL: "https://www.mgtv.com/b/781917.html"},
 	{Key: "bilibili", Platform: "哔哩哔哩", Label: "哔哩哔哩", URL: "https://www.bilibili.com/video/BV1GJ411x7h7"},
 	{Key: "sohu", Platform: "搜狐视频", Label: "搜狐视频", URL: "https://tv.sohu.com/"},
-	{Key: "pptv", Platform: "PP视频", Label: "PP视频", URL: "https://v.pptv.com/"},
+	{Key: "pptv", Platform: "PP视频", Label: "PP视频", URL: "http://v.pptv.com/show/xBv0ctpAsO5Rzzc.html"},
 }
 
 func builtinLinkByKey(key string) *builtinOfficialLink {
@@ -4750,6 +4780,11 @@ func handlePlatformsFetch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vi := parseVideoTitle(title)
+	if strings.TrimSpace(vi.BaseTitle) == "" {
+		recordCall("/api/platforms/fetch", raw, false, 0, "JS壳页未解析出剧名")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未能从标题解析出剧名: " + title + "。该页面为 JS 渲染壳（静态抓取只有平台标题），建议部署 render-title/（Node+Chromium 无头渲染）或配置该平台标题选择器"})
+		return
+	}
 	recordCall("/api/platforms/fetch", raw, true, 0, fmt.Sprintf("%s · %s · 第%d集", p.Platform, vi.BaseTitle, vi.EpisodeNum))
 	writeJSON(w, map[string]interface{}{
 		"success": true, "platform": p.Platform, "domain": p.Domain,
@@ -4790,7 +4825,7 @@ func handlePlatformsOneClick(w http.ResponseWriter, r *http.Request) {
 	}
 	if title == "" {
 		recordCall("/api/platforms/oneclick", link.URL, false, 0, "无法获取视频信息")
-		writeJSON(w, map[string]interface{}{"success": false, "message": "该官方页面未能获取到视频信息（可能被反爬，可换链接或配标题选择器）"})
+		writeJSON(w, map[string]interface{}{"success": false, "message": "该官方页面未能获取到视频信息（可能被反爬或为 JS 渲染页，可部署 render-title/ 无头渲染、换链接或配标题选择器）"})
 		return
 	}
 	if suspiciousTitle(title) {
@@ -4801,7 +4836,8 @@ func handlePlatformsOneClick(w http.ResponseWriter, r *http.Request) {
 	vi := parseVideoTitle(title)
 	official := strings.TrimSpace(vi.BaseTitle)
 	if official == "" {
-		writeJSON(w, map[string]interface{}{"success": false, "message": "未能从标题解析出剧名: " + title})
+		recordCall("/api/platforms/oneclick", link.URL, false, 0, "JS壳页未解析出剧名")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未能从标题解析出剧名: " + title + "。平台「" + p.Platform + "」页面为 JS 渲染壳，静态抓取只有平台标题。解决办法：① 部署 render-title/（Node+Chromium 无头渲染，自动取真实剧名）；② 在「官替映射专区」手动添加官方剧名 → 资源站剧名；③ 配置该平台标题选择器后重试"})
 		return
 	}
 	added := addOfficialOneClickMap(p.Platform, official)
