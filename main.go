@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.2"
+	AppVersion = "v0.6.3"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1460,7 +1460,7 @@ function renderSites(){
         '<label class="sw"><input type="checkbox" '+(x.enabled?'checked':'')+' onchange="toggleSite(\''+x.name.replace(/'/g,"\\'")+'\',this.checked)"></label>'+
         '<b>'+esc(x.name)+'</b>'+
         '<span class="muted" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.note)+'</span>'+
-        '<button class="btn gh" onclick="siteDetail(\''+x.name.replace(/'/g,"\\'")+'\')">详情</button>'+
+        '<button class="btn gh" onclick="siteDetail(\''+x.name.replace(/'/g,"\\'")+'\')">🔍 测试采集</button>'+
         '<button class="btn gh" onclick="editSite(\''+x.name.replace(/'/g,"\\'")+'\')">✏️ 编辑</button>'+
         '<button class="btn gh" style="color:#dc2626" onclick="deleteSite(\''+x.name.replace(/'/g,"\\'")+'\')">🗑 删除</button>'+
         '</div><div class="sitedtl" id="dtl_'+esc(x.name)+'"></div>'+
@@ -1816,26 +1816,45 @@ async function siteDetail(name){
           '<div><b>接口：</b><code>'+esc(s.api_url||'')+'</code></div>'+
           '<div class="muted">状态：'+(s.enabled?'已启用':'已禁用')+(s.note?(' · '+esc(s.note)):'')+'</div>';
     if(j.count>0){
-      const v0=j.videos[0];
-      v+='<div class="muted" style="margin-top:6px">搜索「'+esc(kw)+'」命中 '+j.count+' 条，示例：'+esc(v0.name)+'</div>'+
-         '<div style="margin-top:4px"><code>'+esc(v0.first_url)+'</code></div>'+
-         '<button class="btn mini" onclick="copyText(this,decodeURIComponent(\''+encodeURIComponent(v0.first_url)+'\'))">复制播放链接</button>';
+      v+='<div class="muted" style="margin-top:8px;margin-bottom:4px">搜索「'+esc(kw)+'」命中 '+j.count+' 条：</div>'+
+         '<div style="display:flex;flex-direction:column;gap:6px">'+
+         (j.videos||[]).map(function(x){
+           const pic=x.pic?'<img src="'+esc(x.pic)+'" alt="" style="width:52px;height:72px;object-fit:cover;border-radius:6px;flex:0 0 auto" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">':'';
+           return '<div style="display:flex;gap:8px;align-items:flex-start;border:1px solid #e5e7eb;border-radius:8px;padding:6px 8px;background:#fff">'+
+             pic+
+             '<div style="flex:1;min-width:0">'+
+               '<div><b>'+esc(x.name)+'</b> <span class="muted" style="color:#16a34a">'+esc(x.remarks||'')+'</span>'+
+               '<span class="muted" style="margin-left:6px;font-size:12px">来源：'+esc(x.play_from||'')+'</span></div>'+
+               '<div class="muted" style="font-size:12px;word-break:break-all;margin-top:2px"><code>'+esc(x.first_url)+'</code></div>'+
+               '<div style="margin-top:4px">'+
+                 '<button class="btn mini" onclick="copyText(this,decodeURIComponent(\''+encodeURIComponent(x.first_url)+'\'),\'📋 复制播放链接\')">📋 复制播放链接</button> '+
+                 '<button class="btn mini" onclick="playTest(\''+encodeURIComponent(x.first_url)+'\',\''+encodeURIComponent(x.name)+'\')">▶ 测试播放</button>'+
+               '</div></div></div>';
+         }).join('')+
+         '</div>';
     }else{
-      v+='<div class="muted" style="margin-top:6px">未命中：该站点无结果或已失效，可换测试词再点详情</div>';
+      v+='<div class="muted" style="margin-top:6px">未命中：该站点无结果或已失效，可换测试词（资源站面板右上输入框）再点测试采集</div>';
     }
     box.innerHTML=v;
   }catch(e){box.innerHTML='<span class="muted">查询失败: '+esc(e.message)+'</span>';}
 }
-function copyText(btn,text){
+// playTest 用采集站返回的播放地址打开独立外置播放页（新窗口）
+function playTest(urlEnc,titleEnc){
+  const u=decodeURIComponent(urlEnc),t=decodeURIComponent(titleEnc);
+  window.open('/player?url='+encodeURIComponent(u)+'&title='+encodeURIComponent(t),'_blank');
+}
+function copyText(btn,text,label){
+  label=label||'复制播放链接';
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(function(){
-      btn.textContent='已复制 ✓';setTimeout(function(){btn.textContent='复制播放链接';},1500);
-    }).catch(function(){fallbackCopy(text,btn);});
-  }else{fallbackCopy(text,btn);}
+      btn.textContent='已复制 ✓';setTimeout(function(){btn.textContent=label;},1500);
+    }).catch(function(){fallbackCopy(text,btn,label);});
+  }else{fallbackCopy(text,btn,label);}
 }
-function fallbackCopy(text,btn){
+function fallbackCopy(text,btn,label){
+  label=label||'复制播放链接';
   const t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();
-  try{document.execCommand('copy');btn.textContent='已复制 ✓';setTimeout(function(){btn.textContent='复制播放链接';},1500);}catch(e){}
+  try{document.execCommand('copy');btn.textContent='已复制 ✓';setTimeout(function(){btn.textContent=label;},1500);}catch(e){}
   document.body.removeChild(t);
 }
 function setAllSites(openState){
@@ -4024,18 +4043,32 @@ func handleSiteTest(w http.ResponseWriter, r *http.Request) {
 		kw = "庆余年"
 	}
 	cfg := loadSites()
-	sr := searchSites(cfg, kw, 40)
-	var vs []ResourceVideo
-	for _, v := range sr.Videos {
-		if v.Site == name {
-			vs = append(vs, v)
+	// 单站直测：只请求目标站点的采集接口，避免全量搜索 40+ 站再过滤导致慢/误判
+	var target *Site
+	for i := range cfg.Sites {
+		if cfg.Sites[i].Name == name {
+			target = &cfg.Sites[i]
+			break
 		}
 	}
-	recordCall("/api/sites/test", name+" wd="+kw, len(vs) > 0, 0, fmt.Sprintf("命中 %d 条", len(vs)))
+	if target == nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未找到资源站: " + name})
+		return
+	}
+	vs, err := searchSiteOne(*target, kw)
+	count := len(vs)
+	ok := err == nil && count > 0
+	recordCall("/api/sites/test", name+" wd="+kw, ok, 0, fmt.Sprintf("命中 %d 条", count))
 	writeJSON(w, map[string]interface{}{
-		"success": len(vs) > 0, "site": name, "keyword": kw,
-		"count": len(vs), "videos": vs,
-		"site_ok": sr.SiteOK, "site_fail": sr.SiteFail, "searched": sr.Searched,
+		"success": ok, "site": name, "keyword": kw,
+		"count": count, "videos": vs,
+		"site_ok": err == nil, "searched": 1,
+		"message": func() string {
+			if err != nil {
+				return "采集接口请求失败: " + err.Error()
+			}
+			return ""
+		}(),
 	})
 }
 
