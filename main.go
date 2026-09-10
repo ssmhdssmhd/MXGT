@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.4"
+	AppVersion = "v0.6.5"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1258,19 +1258,33 @@ async function playEnhanced(){
   el('enhPlaySrc').textContent='播放地址: '+src;
   playURLWith(src, function(){ el('playSrc').textContent='（新版增强）已尝试播放'; });
 }
+// 播放走本服务代理 /api/play（分片同源 + 服务端 UA/Referer/超时），解决第三方 m3u8 跨域/限速卡顿
+function proxyPlayURL(u){return '/api/play?url='+encodeURIComponent(u);}
+function isDirectURL(u){return /\.(mp4|mkv|webm|flv)(\?|$)/i.test(u);}
+// hls.js 抗卡顿配置：加大缓冲 + 分片/清单失败重试（指数退避）+ 软件解密兜底
+function hlsConfig(){return {
+  enableWorker:true,
+  maxBufferLength:60,maxMaxBufferLength:180,backBufferLength:30,startLevel:-1,maxBufferSize:60*1000*1000,
+  fragLoadPolicy:{default:{maxNumRetry:5,retryDelay:400,backoff:'exponential',maxRetryDelay:4000}},
+  manifestLoadPolicy:{default:{maxNumRetry:3,retryDelay:300}},
+  levelLoadPolicy:{default:{maxNumRetry:3,retryDelay:300}},
+  enableSoftwareAES:true,
+  xhrSetup:function(xhr){xhr.withCredentials=false;xhr.setRequestHeader('Origin',location.origin);}
+};}
 function playURLWith(url, cb){
   const v=el('player');
   const panel=el('playPanel'); if(panel)panel.style.display='block';
   const srcEl=el('playSrc'); if(srcEl){srcEl.style.display='block';srcEl.textContent='播放源: '+url;}
+  const src=isDirectURL(url)?url:proxyPlayURL(url);
   function destroy(){ if(window.__hls){window.__hls.destroy();window.__hls=null;} }
   destroy();
   if(navigator.userAgent.indexOf('Safari')>=0 && window.Hls===undefined){
-    v.src=url; v.play().catch(function(){});
+    v.src=src; v.play().catch(function(){});
   } else {
     loadHls(function(){
-      if(!window.Hls.isSupported()){v.src=url;v.play().catch(function(){});return;}
-      const hls=new Hls(); window.__hls=hls;
-      hls.loadSource(url); hls.attachMedia(v);
+      if(!window.Hls.isSupported()){v.src=src;v.play().catch(function(){});return;}
+      const hls=new Hls(hlsConfig()); window.__hls=hls;
+      hls.loadSource(src); hls.attachMedia(v);
       hls.on(Hls.Events.MANIFEST_PARSED,function(){v.play().catch(function(){});});
     });
   }
@@ -1371,20 +1385,19 @@ function playURL(src){
     return;
   }
   player.pause();player.removeAttribute('src');try{player.load();}catch(e){}
-  // 原生支持 HLS（iOS Safari / 部分系统浏览器）优先
+  // 原生支持 HLS（iOS Safari / 部分系统浏览器）优先，走代理同源
   if(player.canPlayType('application/vnd.apple.mpegurl')){
-    player.src=src;player.play().catch(function(){});
+    player.src=proxyPlayURL(src);player.play().catch(function(){});
     return;
   }
-  // 其余用 hls.js（多 CDN 兜底）
+  // 其余用 hls.js（多 CDN 兜底），走本服务播放代理 + 抗卡顿配置
   loadHls(function(){
     if(Hls&&Hls.isSupported()){
-      hlsInst=new Hls({enableWorker:true,
-        xhrSetup:function(xhr){xhr.withCredentials=false;xhr.setRequestHeader('Origin',location.origin);}});
-      hlsInst.loadSource(src);hlsInst.attachMedia(player);
+      hlsInst=new Hls(hlsConfig());
+      hlsInst.loadSource(proxyPlayURL(src));hlsInst.attachMedia(player);
       player.play().catch(function(){});
     }else if(player.canPlayType('application/vnd.apple.mpegurl')){
-      player.src=src;
+      player.src=proxyPlayURL(src);
     }else{alert('当前浏览器不支持 HLS 播放（已尝试自动加载播放组件）');return;}
   });
 }
@@ -1890,14 +1903,10 @@ function playClean(){
   loadHls(function(){
     if(hlsInst){hlsInst.destroy();hlsInst=null;}
     if(Hls.isSupported()){
-      hlsInst=new Hls({enableWorker:true,
-        xhrSetup:function(xhr){
-          xhr.withCredentials=false;
-          xhr.setRequestHeader('Origin',location.origin);
-        }});
-      hlsInst.loadSource(src);hlsInst.attachMedia(player);
+      hlsInst=new Hls(hlsConfig());
+      hlsInst.loadSource(proxyPlayURL(src));hlsInst.attachMedia(player);
     }else if(player.canPlayType('application/vnd.apple.mpegurl')){
-      player.src=src;
+      player.src=proxyPlayURL(src);
     }else{alert('当前浏览器不支持 HLS 播放');return;}
     player.play().catch(function(){});
   });
@@ -2183,6 +2192,18 @@ var video=document.getElementById('player');
 if(title){document.title=title+' - MXGT-Go 播放器';}
 document.getElementById('src').textContent=src||'缺少 url 参数';
 function isDirect(u){return /\.(mp4|mkv|webm|flv)(\?|$)/i.test(u);}
+// 播放走本服务代理 /api/play：分片同源 + 服务端带 UA/Referer/超时，解决第三方 m3u8 跨域与限速卡顿
+function proxyPlayURL(u){return '/api/play?url='+encodeURIComponent(u);}
+// hls.js 抗卡顿配置：加大缓冲 + 分片/清单失败重试（指数退避）+ 软件解密兜底
+function hlsConfig(){return {
+  enableWorker:true,
+  maxBufferLength:60,maxMaxBufferLength:180,backBufferLength:30,startLevel:-1,maxBufferSize:60*1000*1000,
+  fragLoadPolicy:{default:{maxNumRetry:5,retryDelay:400,backoff:'exponential',maxRetryDelay:4000}},
+  manifestLoadPolicy:{default:{maxNumRetry:3,retryDelay:300}},
+  levelLoadPolicy:{default:{maxNumRetry:3,retryDelay:300}},
+  enableSoftwareAES:true,
+  xhrSetup:function(xhr){xhr.withCredentials=false;xhr.setRequestHeader('Origin',location.origin);}
+};}
 function loadHls(cb){
   if(window.Hls){return cb();}
   var cdn=['https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js',
@@ -2201,16 +2222,15 @@ if(src){
   if(isDirect(src)){
     video.src=src;video.play().catch(function(){});
   }else if(video.canPlayType('application/vnd.apple.mpegurl')){
-    video.src=src;video.play().catch(function(){});
+    video.src=proxyPlayURL(src);video.play().catch(function(){});
   }else{
     loadHls(function(){
       if(Hls&&Hls.isSupported()){
-        var hls=new Hls({enableWorker:true,
-          xhrSetup:function(xhr){xhr.withCredentials=false;xhr.setRequestHeader('Origin',location.origin);}});
-        hls.loadSource(src);hls.attachMedia(video);
+        var hls=new Hls(hlsConfig());
+        hls.loadSource(proxyPlayURL(src));hls.attachMedia(video);
         video.play().catch(function(){});
       }else if(video.canPlayType('application/vnd.apple.mpegurl')){
-        video.src=src;
+        video.src=proxyPlayURL(src);
       }else{alert('当前浏览器不支持 HLS 播放');}
     });
   }
@@ -2224,6 +2244,127 @@ if(src){
 func handlePlayer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	io.WriteString(w, playerPageHTML)
+}
+
+// ============================================================
+// 播放代理 /api/play?url=<m3u8|分片|密钥>：解决播放卡顿
+//   播放器请求本服务 → 代拉源站 m3u8/分片（带浏览器 UA + 站域 Referer + 超时），
+//   m3u8 内分片/密钥/子列表地址改写为本服务代理地址。
+//   收益：① 第三方分片无需 CORS（hls.js XHR 跨域不再失败导致黑屏/卡顿）
+//         ② 源站限速/反爬由服务端统一应对（UA/Referer/重试）
+//         ③ 播放器与分片同源，走本服务稳定链路
+// ============================================================
+
+// playHTTP 播放代理专用客户端：更长超时（分片可能慢）+ 关闭证书校验（部分源 http/自签）
+var playHTTP = &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{
+	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	Proxy:           http.ProxyFromEnvironment,
+}}
+
+// isPlaylistURL 判断请求目标是否为 m3u8 播放列表（按 URL 后缀或响应 Content-Type）
+func isPlaylistURL(raw, ct string) bool {
+	lower := strings.ToLower(raw)
+	if strings.Contains(lower, ".m3u8") || strings.HasSuffix(lower, ".m3u") {
+		return true
+	}
+	ct = strings.ToLower(ct)
+	return strings.Contains(ct, "mpegurl") || strings.Contains(ct, "m3u8") || strings.Contains(ct, "x-mpegurl")
+}
+
+// playProxyURL 生成本服务播放代理地址（相对路径，页面同源）
+func playProxyURL(u string) string {
+	return "/api/play?url=" + url.QueryEscape(u)
+}
+
+// rewritePlaylist 改写 m3u8 播放列表：分片/密钥/子列表地址全部指向本服务代理（解决跨域与源站限速卡顿）
+func rewritePlaylist(body []byte, baseURL string) []byte {
+	base := baseURL
+	if i := strings.LastIndex(base, "/"); i >= 0 {
+		base = base[:i+1]
+	}
+	abs := func(u string) string {
+		if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+			return u
+		}
+		return base + u
+	}
+	lines := strings.Split(string(body), "\n")
+	var out []string
+	for _, ln := range lines {
+		t := strings.TrimSpace(ln)
+		if strings.HasPrefix(t, "#") {
+			if strings.HasPrefix(t, "#EXT-X-KEY:") && strings.Contains(t, "URI=") {
+				// 改写 AES-128 密钥地址（URI 可能为相对路径）
+				t = regexp.MustCompile(`URI="([^"]+)"`).ReplaceAllStringFunc(t, func(m string) string {
+					inner := regexp.MustCompile(`^URI="([^"]+)"$`).FindStringSubmatch(m)
+					if len(inner) < 2 {
+						return m
+					}
+					return `URI="` + playProxyURL(abs(inner[1])) + `"`
+				})
+			}
+			out = append(out, t)
+			continue
+		}
+		if t == "" {
+			out = append(out, ln)
+			continue
+		}
+		out = append(out, playProxyURL(abs(t)))
+	}
+	return []byte(strings.Join(out, "\n"))
+}
+
+// handlePlayProxy GET /api/play?url=<http(s)地址>：m3u8 播放列表改写返回；分片/密钥/媒体字节流透传（支持 Range）
+func handlePlayProxy(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("url"))
+	if raw == "" || (!strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://")) {
+		http.Error(w, "url 参数需为 http(s) 地址", http.StatusBadRequest)
+		return
+	}
+	req, err := http.NewRequestWithContext(r.Context(), "GET", raw, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.Header.Set("User-Agent", siteFetchUA)
+	if base, e := url.Parse(raw); e == nil {
+		req.Header.Set("Referer", base.Scheme+"://"+base.Host+"/")
+	}
+	if rng := r.Header.Get("Range"); rng != "" {
+		req.Header.Set("Range", rng)
+	}
+	resp, err := playHTTP.Do(req)
+	if err != nil {
+		http.Error(w, "upstream error: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	ct := resp.Header.Get("Content-Type")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Range, Accept-Ranges")
+	w.Header().Set("Access-Control-Allow-Headers", "Origin, Range, Accept, User-Agent, Referer")
+	w.Header().Set("Cache-Control", "no-store")
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		http.Error(w, "upstream "+resp.Status, http.StatusBadGateway)
+		return
+	}
+	if isPlaylistURL(raw, ct) {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8")
+		w.Write(rewritePlaylist(b, raw))
+		return
+	}
+	// 分片/密钥/媒体字节流直传
+	if resp.StatusCode == http.StatusPartialContent {
+		w.Header().Set("Content-Range", resp.Header.Get("Content-Range"))
+		w.Header().Set("Content-Length", resp.Header.Get("Content-Length"))
+		w.WriteHeader(http.StatusPartialContent)
+	} else {
+		w.Header().Set("Content-Length", resp.Header.Get("Content-Length"))
+		w.WriteHeader(http.StatusOK)
+	}
+	_, _ = io.Copy(w, resp.Body)
 }
 
 // handleFront 渲染前台接口调用详情页
@@ -5547,6 +5688,7 @@ func main() {
 		fmt.Fprintf(w, "ok %s\n", AppVersion)
 	})
 	http.HandleFunc("/player", handlePlayer) // 独立外置播放页（开放，供官替 external_url 新窗口播放）
+	http.HandleFunc("/api/play", handlePlayProxy) // 播放代理：m3u8 改写 + 分片透传（解决跨域/限速卡顿）
 	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, stats.snapshot())
 	})
