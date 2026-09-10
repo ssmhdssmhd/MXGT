@@ -173,6 +173,21 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.6.2 (2026-09-10) — 后台「HTTP 接口说明」补全
+
+> 后台 `/mxadmin` 的接口说明表格此前只列出 9 个接口，本次补全为完整列表（含新版增强播放、jx、播放页、映射、平台、非正片标注、弹幕、远程更新、AI 配置等）。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **📚 后台接口说明补全**：`📚 HTTP 接口说明` 表格从 9 行扩充到 19 行，补齐：`/api/clean/enhanced[/json]`（新版增强测试播放）、`/api/jx`（影视/TVBox 兼容）、`/player`（外置播放页）、`/api/maps`（官替映射）、`/api/platforms`（官方平台自动更新）、`/api/skip`（非正片区间标注）、`/api/danmaku`（弹幕过滤规则库）、`/api/update/check` + `/api/update/apply`（远程更新）、`/api/ai/config` 等；
+- 版本升级 `v0.6.1 → v0.6.2`。
+
+### 验证
+
+- `go vet` / `go build` 通过；`/mxadmin` 页面接口表格渲染完整。
+
+---
+
 ## v0.6.1 (2026-09-10) — 远程更新多镜像回退，修复已部署客户检测不到新版本
 
 > 已部署客户远程更新「获取不到最新版」根因：新版代码未推送到 `go` 分支，GitHub 上 `latest.json` 仍为旧版且无对应 Release。本次已推送并发布 v0.6.0；同时将更新检查改为**多镜像回退**，即使 GitHub 原生 CDN 缓存延迟也能拿到最新清单。

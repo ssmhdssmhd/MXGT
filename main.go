@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.1"
+	AppVersion = "v0.6.2"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1142,13 +1142,24 @@ const adminPageHTML = `<!DOCTYPE html>
     <h2>📚 HTTP 接口说明</h2>
     <table>
       <tr><th>接口</th><th>说明</th></tr>
+      <tr><td><code>GET /</code> / <code>GET /mxadmin</code></td><td>落地页（不进入后台）/ 后台管理页（本页）</td></tr>
       <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;</code></td><td>返回过滤后的无广告 M3U8 纯文本（绝对地址）</td></tr>
       <tr><td><code>GET /api/clean/json?url=&lt;m3u8&gt;</code></td><td>返回 JSON：统计 + 过滤后文本 + 每个片段明细</td></tr>
       <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;&amp;opt=aggresive</code></td><td>开启聚合聚类识别（可能误伤统一切片正片）</td></tr>
+      <tr><td><code>GET /api/clean/enhanced[/json]?url=&lt;m3u8&gt;</code></td><td>🆕 新版增强测试播放：独立引擎，叠加平台广告域关键词 + 片头片尾超短簇高置信检测</td></tr>
       <tr><td><code>GET /api/replace?url=&lt;官方视频页&gt;</code></td><td>官替链路：资源站匹配后返回无广告直链 ad_skip_url</td></tr>
+      <tr><td><code>GET /api/jx?url=&lt;链接&gt;&amp;engine=basic/auto/ai</code></td><td>影视 App / TVBox 等通用兼容接口（JSON，带跨域）</td></tr>
+      <tr><td><code>GET /player?url=&lt;去广告直链&gt;&amp;title=&lt;剧名&gt;</code></td><td>独立外置播放页（开放，hls.js/原生播放，全站跨域）</td></tr>
+      <tr><td><code>GET /api/maps</code> / <code>/add</code> / <code>/delete</code> / <code>/fetch</code></td><td>官替映射列表 / 添加 / 删除 / 从真实链接抓取剧名集数</td></tr>
+      <tr><td><code>GET /api/platforms</code> / <code>/add</code> / <code>/update</code> / <code>/delete</code> / <code>/fetch</code> / <code>/links</code> / <code>/oneclick</code></td><td>官方平台自动更新配置：列表 / 增 / 改 / 删 / 抓取 / 内置一键映射 / 无脑映射</td></tr>
+      <tr><td><code>GET /api/skip</code> / <code>/add</code> / <code>/delete</code></td><td>⏱️ 非正片区间标注：列表 / 添加 / 删除时间戳区间</td></tr>
+      <tr><td><code>GET /api/danmaku</code> / <code>/add</code> / <code>/toggle</code> / <code>/delete</code> / <code>/test</code></td><td>💬 弹幕过滤规则库：列表 / 添加 / 启停 / 删除 / 单条命中测试</td></tr>
       <tr><td><code>GET /api/sites</code> / <code>/toggle</code> / <code>/test</code></td><td>资源站列表（默认隐藏失效）/ 启停 / 搜索测试</td></tr>
       <tr><td><code>POST /api/sites/add</code> / <code>/update</code> / <code>/delete</code> / <code>/check</code></td><td>添加 / 编辑 / 删除资源站 / 异步批量检测（并发）并屏蔽失效站</td></tr>
       <tr><td><code>GET /api/sites/check/progress?task=</code></td><td>查询批量检测任务进度（供进度条轮询）</td></tr>
+      <tr><td><code>GET /api/update/check</code></td><td>检查远程是否有新版本（读取线上 latest.json）</td></tr>
+      <tr><td><code>POST /api/update/apply</code></td><td>下载新版本 zip 并自动替换重启（需登录）</td></tr>
+      <tr><td><code>GET /api/ai/config</code> / <code>POST /api/ai/config</code></td><td>查看（key 打码）/ 更新 AI 去广告配置（更新需登录）</td></tr>
       <tr><td><code>GET /api/stats</code></td><td>运行统计（JSON）</td></tr>
       <tr><td><code>GET /healthz</code></td><td>健康检查</td></tr>
     </table>
