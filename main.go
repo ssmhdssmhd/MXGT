@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.5"
+	AppVersion = "v0.6.6"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -313,6 +313,7 @@ var enhancedAdURLRe = regexp.MustCompile(`(?i)(\.(baidu|bdstatic|aliyun|alicdn|b
 // enhancedDetectAds 新版增强检测：仅新增高置信规则，不回改原已判段。
 // 1. 增强 URL 关键词（平台广告域/前中后插播常见特征）
 // 2. 边界短簇：开头/结尾连续超短视频（<2s）且成簇（>=3 段）判为广告，避免片头片尾 logo 簇误删正片
+// 3. 中插短簇：片段中间被长正片包围的连续短段（<6s，1-3 段）判为广告（中插广告典型形态）
 func enhancedDetectAds(segs []Segment) {
 	if len(segs) == 0 {
 		return
@@ -331,6 +332,56 @@ func enhancedDetectAds(segs []Segment) {
 	markBoundaryCluster(segs, true)
 	// 3. 边界短簇：结尾连续短簇
 	markBoundaryCluster(segs, false)
+	// 4. 中插短簇：长正片包围的短段簇（中插广告/贴片最典型形态）
+	markMidrollClusters(segs)
+}
+
+// markMidrollClusters 中插短簇检测：序列中间连续短段（<6s）组成的簇（1-3 段），
+// 且两侧紧邻片段时长显著更长（平均 ≥ 2.2 倍）时判为广告。
+// 避免误伤：片头/片尾 logo 簇由 markBoundaryCluster 处理；正片中间偶发短段需两侧邻居足够长才判。
+func markMidrollClusters(segs []Segment) {
+	n := len(segs)
+	i := 0
+	for i < n {
+		if segs[i].IsAd || segs[i].Duration <= 0 || segs[i].Duration >= 6.0 {
+			i++
+			continue
+		}
+		// 收集连续短段簇
+		j := i
+		var sum float64
+		for j < n && !segs[j].IsAd && segs[j].Duration > 0 && segs[j].Duration < 6.0 {
+			sum += segs[j].Duration
+			j++
+		}
+		cnt := j - i
+		if cnt >= 1 && cnt <= 3 {
+			avg := sum / float64(cnt)
+			var sideSum float64
+			var sideCnt int
+			for k := i - 1; k >= i-2 && k >= 0; k-- {
+				if segs[k].IsAd || segs[k].Duration <= 0 {
+					continue
+				}
+				sideSum += segs[k].Duration
+				sideCnt++
+			}
+			for k := j; k < j+2 && k < n; k++ {
+				if segs[k].IsAd || segs[k].Duration <= 0 {
+					continue
+				}
+				sideSum += segs[k].Duration
+				sideCnt++
+			}
+			if sideCnt >= 2 && sideSum/float64(sideCnt) >= avg*2.2 {
+				for k := i; k < j; k++ {
+					segs[k].IsAd = true
+					segs[k].AdReason = "enhanced_midroll_cluster"
+				}
+			}
+		}
+		i = j
+	}
 }
 
 // markBoundaryCluster 标记开头(forward=true)/结尾(forward=false) 连续超短视频簇（>=3 段，<2s）为广告。
@@ -688,6 +739,11 @@ func runClean(rawURL string, aggresive bool, engine string, enhanced func(segs [
 	res.TotalSegments = len(segs)
 
 	detectAds(segs, aggresive)
+
+	// 增强检测：仅当调用方传入时叠加（新版增强测试播放引擎：平台广告域 + 边界短簇 + 中插短簇）
+	if enhanced != nil {
+		enhanced(segs)
+	}
 
 	// AI 去广告：规则检测后追加 AI 识别标记（失败自动回退到规则结果，不影响播放）
 	if eng == "ai" && len(segs) > 0 {
@@ -1252,11 +1308,10 @@ async function runEnhanced(){
 async function playEnhanced(){
   const url=el('enhInput').value.trim();
   if(!url){alert('请先粘贴 M3U8 地址');return;}
-  const eng=el('enhEngOpt').value;
-  const src='/api/clean/enhanced?url='+encodeURIComponent(url)+(eng?'&engine='+eng:'');
+  // /api/play 播放代理已内置增强去广告（平台广告域 + 边界短簇 + 中插短簇），分片同源防卡顿
   el('enhPlaySrc').style.display='block';
-  el('enhPlaySrc').textContent='播放地址: '+src;
-  playURLWith(src, function(){ el('playSrc').textContent='（新版增强）已尝试播放'; });
+  el('enhPlaySrc').textContent='播放地址: '+proxyPlayURL(url)+'　（服务端已内置增强去广告）';
+  playURLWith(url, function(){ el('playSrc').textContent='（新版增强）已尝试播放'; });
 }
 // 播放走本服务代理 /api/play（分片同源 + 服务端 UA/Referer/超时），解决第三方 m3u8 跨域/限速卡顿
 function proxyPlayURL(u){return '/api/play?url='+encodeURIComponent(u);}
@@ -2261,6 +2316,45 @@ var playHTTP = &http.Client{Timeout: 60 * time.Second, Transport: &http.Transpor
 	Proxy:           http.ProxyFromEnvironment,
 }}
 
+// playlistCache 播放代理去广告结果缓存：同一 m3u8 清单播放器会重复请求，避免反复抓源站+过滤（慢/触发反爬）
+var playlistCache sync.Map // key=URL → cachedPlaylist
+const playlistCacheTTL = 60 * time.Second
+
+type cachedPlaylist struct {
+	ts   time.Time
+	body []byte
+}
+
+func getCachedPlaylist(key string) ([]byte, bool) {
+	v, ok := playlistCache.Load(key)
+	if !ok {
+		return nil, false
+	}
+	c := v.(cachedPlaylist)
+	if time.Since(c.ts) > playlistCacheTTL {
+		playlistCache.Delete(key)
+		return nil, false
+	}
+	return c.body, true
+}
+
+func setCachedPlaylist(key string, body []byte) {
+	playlistCache.Store(key, cachedPlaylist{ts: time.Now(), body: body})
+}
+
+// cleanPlaylistOnce 对已抓取的 m3u8 body 做增强去广告，返回过滤后的播放列表文本。
+// master 列表（仅码率分叉、无分片）或解析失败返回 ok=false，由调用方原样改写（其子列表请求仍会走本代理过滤）。
+// 供 /api/play 播放代理复用，保证「播放即去广告」且与「新版增强测试播放」引擎一致。
+func cleanPlaylistOnce(body []byte, mediaURL string) (string, bool) {
+	segs, _, isMaster, err := parseM3U8(string(body), mediaURL)
+	if err != nil || isMaster || len(segs) == 0 {
+		return "", false
+	}
+	detectAds(segs, true)
+	enhancedDetectAds(segs)
+	return buildFilteredM3U8(segs, maxTargetDuration(segs)), true
+}
+
 // isPlaylistURL 判断请求目标是否为 m3u8 播放列表（按 URL 后缀或响应 Content-Type）
 func isPlaylistURL(raw, ct string) bool {
 	lower := strings.ToLower(raw)
@@ -2350,8 +2444,21 @@ func handlePlayProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if isPlaylistURL(raw, ct) {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		var b []byte
+		if cb, ok := getCachedPlaylist(raw); ok {
+			b = cb
+		} else {
+			b, _ = io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		}
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8")
+		// 增强去广告：输出过滤后清单，分片仍改走本代理（不卡顿 + 无广告）
+		if filtered, ok := cleanPlaylistOnce(b, raw); ok {
+			setCachedPlaylist(raw, []byte(filtered))
+			w.Write(rewritePlaylist([]byte(filtered), raw))
+			return
+		}
+		// master 列表 / 解析失败：原样改写（子列表与分片仍走本代理过滤）
+		setCachedPlaylist(raw, b)
 		w.Write(rewritePlaylist(b, raw))
 		return
 	}
@@ -5728,6 +5835,7 @@ func main() {
 		writeJSON(w, res)
 	})
 	// 新版增强测试播放引擎：/api/clean/enhanced（独立实现，不影响原 /api/clean）
+	// 默认返回过滤后 m3u8（可直接喂播放器），format=json 返回结构化结果
 	http.HandleFunc("/api/clean/enhanced", func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
 		eng := r.URL.Query().Get("engine")
@@ -5737,7 +5845,15 @@ func main() {
 			writeJSON(w, map[string]interface{}{"success": false, "message": res.Message})
 			return
 		}
-		writeJSON(w, res)
+		if r.URL.Query().Get("format") == "json" {
+			res.Segments = nil
+			writeJSON(w, res)
+			return
+		}
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Cache-Control", "no-store")
+		io.WriteString(w, res.FilteredM3U8)
 	})
 	http.HandleFunc("/api/clean/enhanced/json", func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
