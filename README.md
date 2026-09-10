@@ -49,6 +49,8 @@ go run main.go "https://示例.com/playlist.m3u8"
 | `POST /api/platforms/update` | 编辑官方平台配置（按 `old_platform`+`old_domain` 定位，正则合法性校验） |
 | `POST /api/platforms/delete?platform=&domain=` | 删除官方平台配置 |
 | `GET /api/platforms/fetch?url=<真实官方链接>` | **自动更新官方**：按优先级匹配平台 → 标题选择器提取 → 解析「影视剧名+剧集集数」返回，供自动映射到映射表 |
+| `GET /api/platforms/links` | 内置官方平台一键映射链接清单（腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP） |
+| `POST /api/platforms/oneclick?key=<内置key>` | **无脑映射**：内置官方链接实时抓取→解析剧名→自动映射到专区，无需输入链接（含反爬标题过滤） |
 | `GET /api/jx?url=<m3u8/官方页/直链>&engine=basic/auto/ai` | **JSON 通用兼容接口**（供影视 / TVBox / 盒子等调用）：返回 `{code,success,msg,url(去广告可播),full,play,name,pic,header,format}`，已带跨域、URL 基于请求 Host 动态拼接不硬编码 |
 | `GET/POST /api/ai/config` | 查看(仅GET,key打码)/更新(POST需登录) AI 去广告配置，返回 `ai_version`（见 `ai/` 独立目录） |
 | `GET /api/sites` | 资源站列表（`resource_sites.json`，默认全部禁用，后台按需启用） |
@@ -83,6 +85,7 @@ go run main.go "https://示例.com/playlist.m3u8"
 ### 自动更新官方（Official Platform Auto-Update）
 
 - 后台「🛰️ 自动更新官方」面板：**顺序（优先级）/平台名称/域名/URL 匹配正则/标题选择器/优先级/启用/备注** 的配置列表，支持添加、编辑、删除、启停；
+- **⚡ 一键映射**：面板内置各大官方平台默认链接，点击即**无脑映射**——后端实时抓取该官方链接标题 → 解析影视剧名 → 自动映射到专区，**无需输入链接**；命中反爬/验证页则拒绝映射并提示，避免脏数据；
 - 配置持久化到可执行文件旁 `official_platforms.json`，内置 7 平台默认配置（腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP）；
 - `matchOfficialPlatform` 按**优先级顺序**匹配 URL（域名包含 + URL 正则可选），`detectPlatform` 优先使用用户配置，未配置回退内置平台提示；
 - **标题选择器**：自定义正则（第 1 捕获组）从真实页面提取标题，空则回退默认 `og:title`/`<title>`；
@@ -169,6 +172,22 @@ chmod +x mxgt-go
 ---
 
 ## Go 版更新日志（branch `go`）
+
+## v0.5.6 (2026-09-10) — 失效站可折叠 + 自动更新官方「一键映射」内置链接
+
+> 资源站管理新增「❌ 已失效/暂停」可折叠区；自动更新官方内置各大官方链接，点击即**无脑映射**（无需输入链接），实时抓取并自动映射到专区。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **失效站可折叠**：资源站列表底部新增失效折叠区（默认折叠），主列表只显示可用站（启用/未启用分组 + 已启用/可用/失效统计）；
+- **一键映射**：`GET /api/platforms/links`（内置 7 平台链接清单）+ `POST /api/platforms/oneclick?key=`（实时抓取→解析剧名→自动写入映射表）；反爬标题过滤拒绝脏数据；
+- 版本升级 `v0.5.5 → v0.5.6`。
+
+### 验证
+
+- `CGO_ENABLED=0 go build -o mxgt-go .` 通过，`gofmt` 干净；冒烟测试 login→links→oneclick→maps 贯通。
+
+---
 
 ## v0.5.5 (2026-09-09) — 资源站「搜索验证站」识别标注：不误判失效
 

@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.5.5"
+	AppVersion = "v0.5.6"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -928,6 +928,11 @@ const adminPageHTML = `<!DOCTYPE html>
 
   <div class="panel">
     <h2>🛰️ 自动更新官方 <span class="muted">（平台匹配规则：按优先级顺序 → 域名 + URL正则 → 标题选择器提取 → 自动映射剧名/集数到映射表）</span></h2>
+    <div class="row" style="flex-wrap:wrap;margin-bottom:4px">
+      <span class="muted" style="line-height:2">⚡ <b>一键映射</b>（内置各官方平台链接，点击即实时抓取并自动映射到专区，无需输入链接）：</span>
+      <span id="ocLinks"></span>
+      <span class="muted" id="ocInfo" style="width:100%"></span>
+    </div>
     <div class="row" style="flex-wrap:wrap">
       <input id="pfUrl" placeholder="粘贴真实官方链接，自动匹配平台并提取「影视剧名 + 剧集集数」" style="flex:1;min-width:280px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
       <button class="btn" style="padding:7px 14px;font-size:12px" onclick="pfFetch()">🔍 从链接自动获取</button>
@@ -955,7 +960,7 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
-    <h2>🏢 资源站管理 <span class="muted">（默认全部禁用，按需启用；失效站自动隐藏）</span></h2>
+    <h2>🏢 资源站管理 <span class="muted">（默认全部禁用，按需启用；失效站自动归入下方「❌ 已失效/暂停」折叠区查看）</span></h2>
     <div class="row" style="flex-wrap:wrap">
       <input id="nsName" placeholder="名称（必填）" style="width:150px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
       <input id="nsApi" placeholder="采集接口 https://…/api.php/provide/vod/（必填）" style="flex:1;min-width:260px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
@@ -971,7 +976,7 @@ const adminPageHTML = `<!DOCTYPE html>
       <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="loadSites()">⟳ 刷新</button>
       <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="setAllSites(false)">全部折叠</button>
       <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="setAllSites(true)">全部展开</button>
-      <label class="muted" style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="hideFail" checked onchange="loadSites()"> 隐藏失效站</label>
+      <span class="muted" id="siteKwLabel">失效站见下方折叠区</span>
       <span class="muted">测试词</span>
       <input id="siteKw" value="庆余年" style="width:110px;padding:6px;border-radius:8px;border:1px solid #d1d5db">
       <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="checkSites()">🧹 检测并屏蔽失效站</button>
@@ -1065,7 +1070,7 @@ function applyUpdate(){
     setTimeout(function(){location.reload();},4000);
   }).catch(function(e){el('updInfo').textContent='发起失败: '+e.message});
 }
-refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms();
+refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms(); loadOneClickLinks();
 
 function buildCleanURL(url, aggr){
   const eng=el('engOpt')?el('engOpt').value:'';
@@ -1154,8 +1159,8 @@ function showProg(on){el('siteProg').style.display=on?'block':'none';}
 async function loadSites(){
   showProg(true);
   try{
-    const hide=el('hideFail')?el('hideFail').checked:true;
-    const r=await fetch('/api/sites'+(hide?'':'?show=all'));
+    // 始终 show=all：失效站在前端单独折叠展示（「显示失效」可折叠）
+    const r=await fetch('/api/sites?show=all');
     if(r.status===401){location.href='/mxadmin/login';return;}
     const j=await r.json();
     sitesData=(j&&j.sites)?j.sites:[];
@@ -1164,6 +1169,7 @@ async function loadSites(){
   }catch(e){el('siteList').innerHTML='<span class="muted">加载失败: '+esc(e.message)+'</span>';}
   showProg(false);
 }
+function isFailedSite(x){return !x||x.status!=='active'}
 function renderSites(){
   if(!sitesData)return;
   const q=((el('siteSearch').value)||'').trim().toLowerCase();
@@ -1171,11 +1177,14 @@ function renderSites(){
     if(!q)return true;
     return (x.name+((x.note)||'')+((x.api_url)||'')).toLowerCase().indexOf(q)>=0;
   });
-  const en=s2.filter(function(x){return x.enabled}).length;
+  // 主列表排除失效站；失效站归入下方「显示失效」可折叠区
+  const okSites=s2.filter(function(x){return !isFailedSite(x)});
+  const failSites=s2.filter(isFailedSite);
+  const en=okSites.filter(function(x){return x.enabled}).length;
   const st=sitesStats||{};
-  el('siteCount').innerHTML='已启用 '+en+' / 显示 '+s2.length+' 个站点'+(q?'（筛选：'+esc(q)+'）':'')+
-    (st.total?'　<span class="muted">共 '+st.total+' · 可用 '+st.active+' · 失效 '+st.failed+'</span>':'');
-  const groups=[[esc('🟢 已启用'),s2.filter(x=>x.enabled)],[esc('⚪ 未启用'),s2.filter(x=>!x.enabled)]];
+  el('siteCount').innerHTML='已启用 '+en+' / 可用 '+okSites.length+' 个站点'+(q?'（筛选：'+esc(q)+'）':'')+
+    (st.total?'　<span class="muted">共 '+st.total+' · 失效 '+failSites.length+'</span>':'');
+  const groups=[[esc('🟢 已启用'),okSites.filter(x=>x.enabled)],[esc('⚪ 未启用'),okSites.filter(x=>!x.enabled)]];
   let html='';
   groups.forEach(function(g){
     const label=g[0],arr=g[1];
@@ -1194,6 +1203,20 @@ function renderSites(){
     }).join('');
     html+='</details>';
   });
+  // 失效站折叠区（默认折叠，点击展开查看被屏蔽/失效站）
+  if(failSites.length){
+    html+='<details class="site" id="failFold"><summary>❌ 已失效 / 暂停（'+failSites.length+'）－ 点击展开查看</summary>';
+    html+=failSites.map(function(x){
+      return '<div class="siterow">'+
+        '<label class="sw"><input type="checkbox" '+(x.enabled?'checked':'')+' onchange="toggleSite(\''+x.name.replace(/'/g,"\\'")+'\',this.checked)"></label>'+
+        '<b style="color:#dc2626">'+esc(x.name)+'</b>'+
+        '<span class="muted" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.note||'')+'</span>'+
+        '<button class="btn gh" onclick="editSite(\''+x.name.replace(/'/g,"\\'")+'\')">✏️ 编辑</button>'+
+        '<button class="btn gh" style="color:#dc2626" onclick="deleteSite(\''+x.name.replace(/'/g,"\\'")+'\')">🗑 删除</button>'+
+        '</div><div class="sitedtl" id="edt_'+esc(x.name)+'" style="display:none"></div>';
+    }).join('');
+    html+='</details>';
+  }
   el('siteList').innerHTML=html||'<span class="muted">无匹配站点</span>';
 }
 async function addSite(){
@@ -1367,6 +1390,35 @@ async function delMap(from,to){
 }
 // —— 自动更新官方：官方平台配置（顺序/平台/域名/URL正则/标题选择器/优先级）——
 let pfEditKey=null; // 编辑状态：{platform,domain}
+
+// 一键映射：加载内置官方链接按钮（用户无需输入链接）
+async function loadOneClickLinks(){
+  try{
+    const r=await fetch('/api/platforms/links');
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    const lks=(j&&j.links)||[];
+    el('ocLinks').innerHTML=lks.length?lks.map(function(l){
+      return '<button class="btn" data-lab="⚡ '+esc(l.label)+'" style="padding:6px 12px;font-size:12px;margin:3px" title="'+esc(l.url)+'" onclick="oneClickMap(\''+l.key+'\',this)">⚡ '+esc(l.label)+'</button>';
+    }).join(''):'<span class="muted">无内置链接</span>';
+  }catch(e){el('ocLinks').textContent='加载失败: '+esc(e.message);}
+}
+async function oneClickMap(key,btn){
+  const lab=btn?btn.getAttribute('data-lab')||'重试':null;
+  if(btn){btn.disabled=true;btn.textContent='映射中…';}
+  el('ocInfo').textContent='正在从官方链接实时抓取剧名并自动映射…';
+  try{
+    const r=await fetch('/api/platforms/oneclick?key='+encodeURIComponent(key),{method:'POST'});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    el('ocInfo').innerHTML=j.success
+      ?'<span style="color:#16a34a">✅ '+esc(j.message)+'</span>'
+      :'<span style="color:#dc2626">❌ '+esc(j.message||'失败')+'</span>';
+    if(j.success){await loadMaps();loadPlatforms();}
+  }catch(e){el('ocInfo').textContent='失败: '+esc(e.message);}
+  if(btn){btn.disabled=false;btn.textContent=lab||'重试';}
+}
+
 async function loadPlatforms(){
   try{
     const r=await fetch('/api/platforms');
@@ -2895,6 +2947,69 @@ var defaultOfficialPlatforms = []OfficialPlatform{
 
 var platformCfgMu sync.Mutex
 
+// builtinOfficialLink 内置官方平台一键映射链接（用户无需输入链接，点「⚡ 一键映射」即自动抓取+映射到专区）
+type builtinOfficialLink struct {
+	Key      string `json:"key"`
+	Platform string `json:"platform"`
+	Label    string `json:"label"`
+	URL      string `json:"url"`
+}
+
+// builtinOfficialLinks 各大官方平台默认链接清单，用于自动更新官方「无脑映射」
+var builtinOfficialLinks = []builtinOfficialLink{
+	{Key: "tencent", Platform: "腾讯视频", Label: "腾讯视频", URL: "https://v.qq.com/x/cover/mzc00200n3mbhnb/j0045t4yj1m.html"},
+	{Key: "iqiyi", Platform: "爱奇艺", Label: "爱奇艺", URL: "https://www.iqiyi.com/v_19rrhk9suw.html"},
+	{Key: "youku", Platform: "优酷", Label: "优酷", URL: "https://v.youku.com/v_show/id_XNTA3MjQ5NDY4NA.html"},
+	{Key: "mgtv", Platform: "芒果TV", Label: "芒果TV", URL: "https://www.mgtv.com/b/418417.html"},
+	{Key: "bilibili", Platform: "哔哩哔哩", Label: "哔哩哔哩", URL: "https://www.bilibili.com/video/BV1GJ411x7h7"},
+	{Key: "sohu", Platform: "搜狐视频", Label: "搜狐视频", URL: "https://tv.sohu.com/"},
+	{Key: "pptv", Platform: "PP视频", Label: "PP视频", URL: "https://v.pptv.com/"},
+}
+
+func builtinLinkByKey(key string) *builtinOfficialLink {
+	for i := range builtinOfficialLinks {
+		if builtinOfficialLinks[i].Key == key {
+			return &builtinOfficialLinks[i]
+		}
+	}
+	return nil
+}
+
+// antiBotTitleWords 反爬/验证页标题黑名单：命中视为未抓到真实剧名，避免把脏标题映射进专区
+var antiBotTitleWords = []string{"验证码", "安全验证", "访问异常", "请输入", "页面不存在", "出错了", "403", "404"}
+
+// suspiciousTitle 判断标题是否为反爬/占位内容（过短或含验证词）
+func suspiciousTitle(t string) bool {
+	t = strings.TrimSpace(t)
+	if t == "" || len([]rune(t)) < 2 {
+		return true
+	}
+	for _, w := range antiBotTitleWords {
+		if strings.Contains(t, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// addOfficialOneClickMap 一键映射：把官方剧名写入映射表（from=官方剧名, to=官方剧名，note=官方一键自动映射），自动去重
+func addOfficialOneClickMap(platform, officialName string) bool {
+	if platform == "" || officialName == "" {
+		return false
+	}
+	titleMapsMu.Lock()
+	defer titleMapsMu.Unlock()
+	cfg := loadTitleMaps()
+	for _, m := range cfg.NameMaps {
+		if m.Platform == platform && m.From == officialName && m.To == officialName {
+			return false // 已存在
+		}
+	}
+	cfg.NameMaps = append(cfg.NameMaps, TitleMap{Platform: platform, From: officialName, To: officialName, Note: "官方一键自动映射"})
+	_ = saveTitleMaps(cfg)
+	return true
+}
+
 func officialPlatformsPath() string {
 	if exe, err := os.Executable(); err == nil {
 		return filepath.Join(filepath.Dir(exe), "official_platforms.json")
@@ -4120,6 +4235,58 @@ func handlePlatformsFetch(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handlePlatformsLinks GET /api/platforms/links 内置官方平台一键映射链接清单（用户无需输入链接）
+func handlePlatformsLinks(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]interface{}{
+		"success": true, "links": builtinOfficialLinks,
+		"hint": "点击「⚡ 一键映射」将从对应官方链接实时抓取剧名并自动映射到专区，无需输入链接",
+	})
+}
+
+// handlePlatformsOneClick POST /api/platforms/oneclick?key=<内置链接key> 无脑映射：
+// 内置官方链接 → 实时抓取标题 → 解析官方剧名 → 自动写入映射表（全程无需用户输入链接）
+func handlePlatformsOneClick(w http.ResponseWriter, r *http.Request) {
+	key := strings.TrimSpace(r.URL.Query().Get("key"))
+	link := builtinLinkByKey(key)
+	if link == nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未找到该官方链接"})
+		return
+	}
+	p := matchOfficialPlatform(link.URL)
+	if p == nil {
+		recordCall("/api/platforms/oneclick", link.URL, false, 0, "未匹配平台配置")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未匹配到官方平台配置（' + link.Platform + '）请先配置对应平台域名"})
+		return
+	}
+	title := fetchVideoTitleWithSelector(link.URL, p.TitleSelector)
+	if title == "" {
+		recordCall("/api/platforms/oneclick", link.URL, false, 0, "无法获取视频信息")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "该官方页面未能获取到视频信息（可能被反爬，可换链接或配标题选择器）"})
+		return
+	}
+	if suspiciousTitle(title) {
+		recordCall("/api/platforms/oneclick", link.URL, false, 0, "疑似反爬页: "+title)
+		writeJSON(w, map[string]interface{}{"success": false, "message": "该链接返回疑似验证/反爬页（「" + title + "」），未映射以避免脏数据；可换内置其它链接或配标题选择器"})
+		return
+	}
+	vi := parseVideoTitle(title)
+	official := strings.TrimSpace(vi.BaseTitle)
+	if official == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未能从标题解析出剧名: " + title})
+		return
+	}
+	added := addOfficialOneClickMap(p.Platform, official)
+	we := "（已在映射表中，未重复添加）"
+	if added {
+		we = "（已自动映射到专区）"
+	}
+	recordCall("/api/platforms/oneclick", link.URL, true, 0, fmt.Sprintf("%s · %s%s", p.Platform, official, we))
+	writeJSON(w, map[string]interface{}{
+		"success": true, "platform": p.Platform, "base_title": official,
+		"episode_num": vi.EpisodeNum, "added": added, "message": "平台「" + p.Platform + "」· 影视剧名「" + official + "」" + we,
+	})
+}
+
 // ============================================================
 // 后台登录鉴权：账号密码（默认 admin / admin123，后台可改，持久化 auth.json）
 // ============================================================
@@ -4516,6 +4683,8 @@ func main() {
 	http.HandleFunc("/api/platforms/update", guard(handlePlatformsUpdate))
 	http.HandleFunc("/api/platforms/delete", guard(handlePlatformsDelete))
 	http.HandleFunc("/api/platforms/fetch", guard(handlePlatformsFetch))
+	http.HandleFunc("/api/platforms/links", guard(handlePlatformsLinks))
+	http.HandleFunc("/api/platforms/oneclick", guard(handlePlatformsOneClick))
 	log.Printf("MXGT-Go %s listening on %s (M3U8 去广告 + 官替链路服务)", AppVersion, *addr)
 	// 使用全局 httpServer 句柄：更新重启时可优雅关闭释放端口（修复更新后不自动重启）
 	httpServer = &http.Server{Addr: *addr, Handler: withCORS(http.DefaultServeMux)}
