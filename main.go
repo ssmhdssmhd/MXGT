@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.5.3"
+	AppVersion = "v0.5.4"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -904,7 +904,7 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
-    <h2>🗺️ 官替映射专区 <span class="muted">（已内置 7 种官方平台字段提取：腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP，自动拆分剧名+剧集）</span></h2>
+    <h2>🗺️ 官替映射专区 <span class="muted">（🧠 已开启自动学习：官替解析成功后自动生成「官方剧名→资源站标准剧名」映射，无需手动逐个添加；手动抓取表单仍可用）</span></h2>
     <div class="row" style="flex-wrap:wrap">
       <input id="mapUrl" placeholder="粘贴真实官方视频页链接，如腾讯/爱奇艺/优酷…，自动抓取剧名与集数" style="flex:1;min-width:280px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
       <button class="btn" style="padding:7px 14px;font-size:12px" onclick="fetchMap()">🔍 从链接抓取</button>
@@ -1131,6 +1131,10 @@ async function runReplace(){
       s+=' | '+ (j.site||'?') +' · 第'+(j.episode_num||'?')+'集 · score='+Math.round(j.match_score||0);
       s+=' <a href="'+j.m3u8_url+'" target="_blank">源 m3u8 ↗</a>';
     }
+    if(j.auto_learn_map){
+      s+=' <span style="color:#16a34a;font-weight:700">🧠 自动生成映射「'+esc(j.auto_learn_map)+'」（累计 '+j.auto_learn_count+' 条）</span>';
+    }
+    s+=' <a href="#" onclick="loadMaps();return false;" style="font-size:12px">🗺️ 查看映射表</a>';
     if(j.ad_skip_url){
       const safe=j.ad_skip_url.replace(/'/g,"\\'");
       s+=' <a href="'+j.ad_skip_url+'" target="_blank">无广告直链 ↗</a>';
@@ -2987,6 +2991,36 @@ func saveTitleMaps(c *TitleMaps) error {
 	return os.WriteFile(titleMapsPath(), b, 0o644)
 }
 
+// autoLearnTitleMap 官替匹配成功后自动学习映射：官方剧名 → 资源站标准剧名，持久化到 title_maps.json。
+// 无需前端一个一个添加：只要官替成功命中资源站、且资源站剧名与官方剧名表述不同（非同名），就自动生成一条映射，
+// 映射被 titleMapCandidates 双向往回展开，下次同类剧名直接命中。返回生成的「官方剧名 → 资源站标准剧名」，已存在则返回空。
+func autoLearnTitleMap(platform string, vi VideoInfo, matched ResourceVideo) string {
+	f := strings.TrimSpace(vi.BaseTitle)
+	rvi := parseVideoTitle(matched.Name)
+	t := strings.TrimSpace(rvi.BaseTitle)
+	if f == "" || t == "" || f == t {
+		return ""
+	}
+	// 资源站剧名可能是多条拼接（如「独剑九天|HD|国语」），只取首个分隔后的基础剧名
+	if i := strings.IndexAny(t, "|｜/／ "); i > 0 {
+		t = strings.TrimSpace(t[:i])
+		if t == "" || t == f {
+			return ""
+		}
+	}
+	titleMapsMu.Lock()
+	defer titleMapsMu.Unlock()
+	cfg := loadTitleMaps()
+	for _, m := range cfg.NameMaps {
+		if m.From == f && m.To == t {
+			return "" // 已存在
+		}
+	}
+	cfg.NameMaps = append(cfg.NameMaps, TitleMap{Platform: platform, From: f, To: t, Note: "自动学习（官替解析成功自动生成）"})
+	_ = saveTitleMaps(cfg)
+	return f + " → " + t
+}
+
 // titleMapCandidates 返回名称 + 所有映射变体（官方↔资源站双向），用于匹配时提高命中
 func titleMapCandidates(name string) []string {
 	seen := map[string]bool{}
@@ -3147,6 +3181,8 @@ type ReplaceResult struct {
 	PlayURL        string        `json:"play_url,omitempty"`     // 内置播放地址（= ad_skip_url，经 /api/clean 去广告）
 	ExternalURL    string        `json:"external_url,omitempty"` // 外置播放页（/player?url=…，基于请求 Host 动态拼接）
 	UsedKeyword    string        `json:"used_keyword,omitempty"`
+	AutoLearnMap   string        `json:"auto_learn_map,omitempty"` // 本次官替成功自动生成的映射「官方剧名 → 资源站标准剧名」
+	AutoLearnCount int           `json:"auto_learn_count"`         // 本次自动生成映射累计条数
 	SearchKeywords []string      `json:"search_keywords,omitempty"`
 	SearchedSites  int           `json:"searched_sites"`
 	SiteOK         []string      `json:"site_ok,omitempty"`
@@ -3267,6 +3303,17 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 	res.Site = best.Video.Site
 	res.MatchScore = best.Score
 	res.UsedKeyword = used
+	// 自动学习映射：官替成功后自动生成「官方剧名 → 资源站标准剧名」并保存，无需前端一个一个添加
+	if learned := autoLearnTitleMap(platform, vi, best.Video); learned != "" {
+		res.AutoLearnMap = learned
+		learnCount := 0
+		for _, m := range loadTitleMaps().NameMaps {
+			if strings.Contains(m.Note, "自动学习") {
+				learnCount++
+			}
+		}
+		res.AutoLearnCount = learnCount
+	}
 	steps = append(steps, replaceStep{"search", "资源站搜索", "ok",
 		fmt.Sprintf("命中站点 %s · score=%.1f · 关键词 %s", best.Video.Site, best.Score, used)})
 
