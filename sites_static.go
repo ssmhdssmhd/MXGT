@@ -13,7 +13,7 @@ const defaultSitesJSON = `{
             "api_url": "https://cj.lziapi.com/api.php/provide/vod/from/lzm3u8/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "推荐",
             "priority": 100
         },
@@ -23,7 +23,7 @@ const defaultSitesJSON = `{
             "api_url": "https://bfzyapi.com/api.php/provide/vod/from/bfzym3u8/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "推荐",
             "priority": 100
         },
@@ -33,7 +33,7 @@ const defaultSitesJSON = `{
             "api_url": "https://www.ffzy.tv/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "推荐，API已更新",
             "priority": 100
         },
@@ -44,7 +44,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：SSL连接超时，域名无法解析，确认失效",
+            "note": "自动屏蔽: Get \"https://api.yzzy-app.com/mc.php/provide/vod/?ac=videoli",
             "priority": 100
         },
         {
@@ -52,9 +52,9 @@ const defaultSitesJSON = `{
             "site_url": "https://wsyzy.cc",
             "api_url": "https://wsyzy.cc/api.php/provide/vod/from/wysm3u8/?ac=list",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "卡",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -62,9 +62,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.6duzy.com",
             "api_url": "https://www.mdzyapi.com/api.php/provide/vod/from/lium3u8/?ac=list",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -74,7 +74,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：HTTP 200但API无有效数据，确认失效",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -84,7 +84,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：SSL连接超时，域名无法解析，确认失效",
+            "note": "自动屏蔽: Get \"https://api.akuapi.com/api.php/provide/vod/from/ukm3u8/",
             "priority": 100
         },
         {
@@ -92,9 +92,9 @@ const defaultSitesJSON = `{
             "site_url": "https://dbzy.tv",
             "api_url": "https://dbzy.tv/api.php/provide/vod/from/dbm3u8/?ac=list",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -103,7 +103,7 @@ const defaultSitesJSON = `{
             "api_url": "https://www.maoyanzy.com/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "API已更新",
             "priority": 100
         },
@@ -114,7 +114,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "SSL连接失败",
+            "note": "自动屏蔽: Get \"https://yhznyy.com/api.php/provide/vod/from/hm3u8/?ac=v",
             "priority": 100
         },
         {
@@ -124,7 +124,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "SSL连接失败",
+            "note": "自动屏蔽: Get \"https://iqiyiapi.w1612.cc/api.php/provide/vod/?ac=video",
             "priority": 100
         },
         {
@@ -132,9 +132,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.gfzyw.com",
             "api_url": "https://www.gfzyw.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "修复API地址，2026-07-23验证可用，响应时间约969ms",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -142,9 +142,9 @@ const defaultSitesJSON = `{
             "site_url": "https://suonizy.cc",
             "api_url": "https://suonizy.cc/api.php/provide/vod/?ac=list",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "API已更新",
+            "note": "可用但慢(3316ms)",
             "priority": 100
         },
         {
@@ -153,7 +153,7 @@ const defaultSitesJSON = `{
             "api_url": "https://www.zuidazy.co/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "API已更新",
             "priority": 100
         },
@@ -163,7 +163,7 @@ const defaultSitesJSON = `{
             "api_url": "https://okzyw.cc/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "API已更新",
             "priority": 100
         },
@@ -174,7 +174,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：SSL连接超时，域名无法解析，确认失效",
+            "note": "自动屏蔽: Get \"https://api.niuniuzy.com/api.php/provide/vod/from/nnm3u",
             "priority": 100
         },
         {
@@ -183,7 +183,7 @@ const defaultSitesJSON = `{
             "api_url": "https://kuaichezy.com/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "API已更新",
             "priority": 100
         },
@@ -193,7 +193,7 @@ const defaultSitesJSON = `{
             "api_url": "https://shandianzy.com/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "API已更新",
             "priority": 100
         },
@@ -203,8 +203,8 @@ const defaultSitesJSON = `{
             "api_url": "https://cj.yayazy.net/api.php/provide/vod/from/yym3u8/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -212,9 +212,9 @@ const defaultSitesJSON = `{
             "site_url": "https://wujinwszy.com",
             "api_url": "http://api.wujinwszy.net/api.php/provide/vod/?ac=list",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "无水印，但卡",
+            "note": "可用但慢(3783ms)",
             "priority": 100
         },
         {
@@ -224,7 +224,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "SSL连接失败",
+            "note": "自动屏蔽: Get \"https://www.xinlangapi.com/xinlangapi.php/provide/vod/f",
             "priority": 100
         },
         {
@@ -233,8 +233,8 @@ const defaultSitesJSON = `{
             "api_url": "https://www.subozy.com/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -243,8 +243,8 @@ const defaultSitesJSON = `{
             "api_url": "https://www.hongniuzY2.com/api.php/provide/vod/from/hnm3u8/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -254,7 +254,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "SSL连接失败",
+            "note": "自动屏蔽: Get \"https://jsszyapi.com/api.php/provide/vod/from/jsm3u8/?a",
             "priority": 100
         },
         {
@@ -263,8 +263,8 @@ const defaultSitesJSON = `{
             "api_url": "https://hhzyapi.com/api.php/provide/vod/from/hhm3u8/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -273,8 +273,8 @@ const defaultSitesJSON = `{
             "api_url": "https://api.guangsuapi.com/api.php/provide/vod/from/gsm3u8/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -282,9 +282,9 @@ const defaultSitesJSON = `{
             "site_url": "http://taopianapi.com",
             "api_url": "http://taopianapi.com/cjapi/mc10/vod/json/m3u8.html",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "修复SSL问题，改用HTTP协议，2026-07-23验证可用，响应时间约1123ms",
+            "note": "可用但慢(9701ms)",
             "priority": 100
         },
         {
@@ -292,19 +292,9 @@ const defaultSitesJSON = `{
             "site_url": "https://mtzy.me",
             "api_url": "https://caiji.maotai999.vip/api.php/provide/vod/from/mtm3u8/?ac=list",
             "type": "maccms",
-            "status": "active",
-            "enabled": false,
-            "note": "",
-            "priority": 100
-        },
-        {
-            "name": "10樱花",
-            "site_url": "https://www.huayuapi.com",
-            "api_url": "https://m3u8.apihyzy.com/api.php/provide/vod/?ac=list",
-            "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "SSL连接失败",
+            "note": "可用但慢(4250ms)",
             "priority": 100
         },
         {
@@ -314,7 +304,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "SSL连接失败",
+            "note": "自动屏蔽: Get \"https://jyzypy.com/provide/vod/from/jinyangm3u8/at/json",
             "priority": 100
         },
         {
@@ -323,7 +313,7 @@ const defaultSitesJSON = `{
             "api_url": "http://cdn.dzzyapi.com/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "仅支持HTTP",
             "priority": 100
         },
@@ -334,7 +324,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "SSL连接失败",
+            "note": "自动屏蔽: Get \"https://ikunzypi.com/api.php/provide/vod/?ac=videolist&",
             "priority": 100
         },
         {
@@ -343,7 +333,7 @@ const defaultSitesJSON = `{
             "api_url": "https://www.ryzy.tv/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "API已更新",
             "priority": 100
         },
@@ -353,7 +343,7 @@ const defaultSitesJSON = `{
             "api_url": "https://caiji.dyttzyapi.com/api.php/provide/vod/from/dyttm3u8/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "IP验证无法播放，开全局代理或返回原始链接",
             "priority": 100
         },
@@ -363,7 +353,7 @@ const defaultSitesJSON = `{
             "api_url": "https://caiji.xgzyapi.com/api.php/provide/vod/at/xml/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "XML采集接口",
             "priority": 100
         },
@@ -374,7 +364,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：SSL连接超时，确认跑路失效",
+            "note": "自动屏蔽: Get \"https://www.feidaozy.com/api.php/provide/vod/?ac=videol",
             "priority": 100
         },
         {
@@ -384,7 +374,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "跑路",
+            "note": "自动屏蔽: Get \"https://leshiapi.com/api.php/provide/vod/?ac=videolist&",
             "priority": 100
         },
         {
@@ -394,7 +384,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "跑路",
+            "note": "自动屏蔽: Get \"https://xkanzy10.com/api.php/provide/vod/?ac=videolist&",
             "priority": 100
         },
         {
@@ -404,7 +394,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "跑路",
+            "note": "自动屏蔽: Get \"https://caiji.qhzyapi.com/api.php/provide/vod/from/qhm3",
             "priority": 100
         },
         {
@@ -414,7 +404,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：HTTP 200但API无视频数据，确认跑路失效",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -423,7 +413,7 @@ const defaultSitesJSON = `{
             "api_url": "https://mdzyapi.com/api.php/provide/vod",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "修复API地址，更换域名，2026-07-23验证可用，响应时间约1065ms（原停更状态已恢复）",
             "priority": 100
         },
@@ -434,7 +424,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：SSL连接失败，原备注停更，确认失效",
+            "note": "自动屏蔽: Get \"https://www.feisuzyapi.com/api.php/provide/vod/from/fsm",
             "priority": 100
         },
         {
@@ -444,7 +434,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：HTTP 404，API接口不存在，确认跑路失效",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -454,7 +444,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "跑路",
+            "note": "自动屏蔽: Get \"https://jk2.yycmsszywapi.cc/api.php/provide/vod?ac=vide",
             "priority": 100
         },
         {
@@ -464,7 +454,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：SSL连接超时，确认跑路失效",
+            "note": "自动屏蔽: Get \"https://api.wuxianzy.net/api.php/provide/vod/?ac=videol",
             "priority": 100
         },
         {
@@ -474,7 +464,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：IP直连SSL超时，原备注翻墙，确认不可用",
+            "note": "自动屏蔽: Get \"https://104.161.22.125/api.php/provide/vod/from/lem3u8/",
             "priority": 100
         },
         {
@@ -484,7 +474,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：SSL连接失败，域名解析异常，确认失效",
+            "note": "自动屏蔽: Get \"https://cajhwba.com/api.php/provide/vod/?ac=videolist&l",
             "priority": 100
         },
         {
@@ -494,7 +484,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：SSL连接失败，原备注停运，确认失效",
+            "note": "自动屏蔽: Get \"https://api.fczy888.me/api.php/provide/vod/from/fcm3u8/",
             "priority": 100
         },
         {
@@ -504,7 +494,7 @@ const defaultSitesJSON = `{
             "type": "maccms",
             "status": "paused",
             "enabled": false,
-            "note": "2026-07-23深度检测：SSL连接失败，确认失效",
+            "note": "自动屏蔽: Get \"https://mozhuazy.com/api.php/provide/vod/from/mzm3u8/?a",
             "priority": 100
         },
         {
@@ -513,7 +503,7 @@ const defaultSitesJSON = `{
             "api_url": "https://lgzyz.xyz/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "新增，4K资源",
             "priority": 100
         },
@@ -522,9 +512,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.moduzy.cc",
             "api_url": "https://www.moduzy.cc/api.php/provide/vod/?ac=list",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -533,7 +523,7 @@ const defaultSitesJSON = `{
             "api_url": "https://kankan01.com/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "新增",
             "priority": 100
         },
@@ -543,7 +533,7 @@ const defaultSitesJSON = `{
             "api_url": "https://yhzy.cc/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "新增",
             "priority": 100
         },
@@ -553,7 +543,7 @@ const defaultSitesJSON = `{
             "api_url": "https://www.haohuazy.com/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "新增",
             "priority": 100
         },
@@ -563,7 +553,7 @@ const defaultSitesJSON = `{
             "api_url": "http://bdzy.tv/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "新增，仅支持HTTP",
             "priority": 100
         },
@@ -573,7 +563,7 @@ const defaultSitesJSON = `{
             "api_url": "https://dyttzyw.tv/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "新增",
             "priority": 100
         },
@@ -583,7 +573,7 @@ const defaultSitesJSON = `{
             "api_url": "https://iqiyizy.cc/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "新增",
             "priority": 100
         },
@@ -592,9 +582,9 @@ const defaultSitesJSON = `{
             "site_url": "https://niuniuzy6.com",
             "api_url": "https://niuniuzy6.com/api.php/provide/vod/?ac=list",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增",
+            "note": "可用但慢(3013ms)",
             "priority": 100
         },
         {
@@ -602,9 +592,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.lzzy.tv",
             "api_url": "https://www.lzzy.tv/api.php/provide/vod/?ac=list",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增",
+            "note": "可用但慢(5189ms)",
             "priority": 100
         },
         {
@@ -613,7 +603,7 @@ const defaultSitesJSON = `{
             "api_url": "https://tyyszy.com/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "新增",
             "priority": 100
         },
@@ -622,9 +612,9 @@ const defaultSitesJSON = `{
             "site_url": "https://vod.korge.cn",
             "api_url": "https://vod.korge.cn/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "官方推荐",
+            "note": "自动屏蔽: Get \"https://vod.korge.cn/api.php/provide/vod/?ac=videolist&",
             "priority": 100
         },
         {
@@ -632,9 +622,9 @@ const defaultSitesJSON = `{
             "site_url": "https://cjhwba.com",
             "api_url": "https://cjhwba.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "官方推荐",
+            "note": "自动屏蔽: Get \"https://cjhwba.com/api.php/provide/vod/?ac=videolist&li",
             "priority": 100
         },
         {
@@ -642,9 +632,9 @@ const defaultSitesJSON = `{
             "site_url": "https://json02.heimuer.xyz",
             "api_url": "https://json02.heimuer.xyz/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "官方推荐",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -652,9 +642,9 @@ const defaultSitesJSON = `{
             "site_url": "https://ikunzyapi.com",
             "api_url": "https://ikunzyapi.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "官方推荐",
+            "note": "自动屏蔽: Get \"https://ikunzyapi.com/api.php/provide/vod/?ac=videolist",
             "priority": 100
         },
         {
@@ -662,9 +652,9 @@ const defaultSitesJSON = `{
             "site_url": "http://api.wzy.tv",
             "api_url": "http://api.wzy.tv/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "短剧资源",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -673,7 +663,7 @@ const defaultSitesJSON = `{
             "api_url": "https://api.1080zyku.com/inc/api_mac10.php/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "官方推荐",
             "priority": 100
         },
@@ -682,9 +672,9 @@ const defaultSitesJSON = `{
             "site_url": "https://collect.wolongzy.cc",
             "api_url": "https://collect.wolongzy.cc/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "官方推荐",
+            "note": "自动屏蔽: Get \"https://collect.wolongzy.cc/api.php/provide/vod/?ac=vid",
             "priority": 100
         },
         {
@@ -692,9 +682,9 @@ const defaultSitesJSON = `{
             "site_url": "https://haiwaikan.com",
             "api_url": "https://haiwaikan.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "海外资源",
+            "note": "自动屏蔽: Get \"https://haiwaikan.com/api.php/provide/vod/?ac=videolist",
             "priority": 100
         },
         {
@@ -703,7 +693,7 @@ const defaultSitesJSON = `{
             "api_url": "https://360zy.com/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "JSON接口",
             "priority": 100
         },
@@ -712,9 +702,9 @@ const defaultSitesJSON = `{
             "site_url": "http://ys9.cttv.vip",
             "api_url": "http://ys9.cttv.vip/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "JSON接口",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -722,9 +712,9 @@ const defaultSitesJSON = `{
             "site_url": "https://yyff.540734621.xyz",
             "api_url": "https://yyff.540734621.xyz/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "JSON接口",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -732,9 +722,9 @@ const defaultSitesJSON = `{
             "site_url": "https://hw8.live",
             "api_url": "https://hw8.live/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "备用线路",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -742,9 +732,9 @@ const defaultSitesJSON = `{
             "site_url": "https://iqyi.xiaohuangrenhtv.com",
             "api_url": "https://iqyi.xiaohuangrenhtv.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "JSON接口",
+            "note": "自动屏蔽: Get \"https://iqyi.xiaohuangrenhtv.com/api.php/provide/vod/?a",
             "priority": 100
         },
         {
@@ -752,9 +742,9 @@ const defaultSitesJSON = `{
             "site_url": "https://api.ukuapi.com",
             "api_url": "https://api.ukuapi.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "JSON接口",
+            "note": "自动屏蔽: Get \"https://api.ukuapi.com/api.php/provide/vod/?ac=videolis",
             "priority": 100
         },
         {
@@ -762,9 +752,9 @@ const defaultSitesJSON = `{
             "site_url": "https://49zyw.com",
             "api_url": "https://49zyw.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "JSON接口",
+            "note": "自动屏蔽: Get \"https://49zyw.com/api.php/provide/vod/?ac=videolist&lim",
             "priority": 100
         },
         {
@@ -772,9 +762,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.kuaikan-api.com",
             "api_url": "https://www.kuaikan-api.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "JSON接口",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -782,9 +772,9 @@ const defaultSitesJSON = `{
             "site_url": "https://xzcjz.com",
             "api_url": "https://xzcjz.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "JSON接口",
+            "note": "自动屏蔽: Get \"https://xzcjz.com/api.php/provide/vod/?ac=videolist&lim",
             "priority": 100
         },
         {
@@ -792,9 +782,9 @@ const defaultSitesJSON = `{
             "site_url": "http://www.ahjiuman.com",
             "api_url": "http://www.ahjiuman.com/api.php/provide/vod/at/json/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "JSON接口",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -802,9 +792,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.911ysw.top",
             "api_url": "https://www.911ysw.top/tianyi.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "JSON接口",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -813,7 +803,7 @@ const defaultSitesJSON = `{
             "api_url": "https://www.huyaapi.com/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "JSON接口",
             "priority": 100
         },
@@ -823,7 +813,7 @@ const defaultSitesJSON = `{
             "api_url": "https://api.apibdzy.com/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "JSON接口",
             "priority": 100
         },
@@ -833,7 +823,7 @@ const defaultSitesJSON = `{
             "api_url": "https://p2100.net/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "JSON接口",
             "priority": 100
         },
@@ -843,7 +833,7 @@ const defaultSitesJSON = `{
             "api_url": "https://subocaiji.com/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "JSON接口",
             "priority": 100
         },
@@ -853,17 +843,7 @@ const defaultSitesJSON = `{
             "api_url": "https://caiji.moduapi.cc/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "JSON接口",
-            "priority": 100
-        },
-        {
-            "name": "奇虎资源",
-            "site_url": "https://caiji.qhzyapi.com",
-            "api_url": "https://caiji.qhzyapi.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "JSON接口",
             "priority": 100
         },
@@ -872,9 +852,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.kuaiyunzy.com",
             "api_url": "https://www.kuaiyunzy.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "JSON接口",
+            "note": "自动屏蔽: Get \"https://www.kuaiyunzy.com/api.php/provide/vod/?ac=video",
             "priority": 100
         },
         {
@@ -882,9 +862,9 @@ const defaultSitesJSON = `{
             "site_url": "http://vod-demo.onrender.com",
             "api_url": "http://vod-demo.onrender.com/pubdvod.php",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "公开测试接口",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -892,9 +872,9 @@ const defaultSitesJSON = `{
             "site_url": "http://39kan.com",
             "api_url": "http://39kan.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -902,9 +882,9 @@ const defaultSitesJSON = `{
             "site_url": "http://vlbmv.cc",
             "api_url": "http://vlbmv.cc/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -912,9 +892,9 @@ const defaultSitesJSON = `{
             "site_url": "http://lehootv.com",
             "api_url": "http://lehootv.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -922,9 +902,9 @@ const defaultSitesJSON = `{
             "site_url": "http://tangrenjie.tv",
             "api_url": "http://tangrenjie.tv/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -932,9 +912,9 @@ const defaultSitesJSON = `{
             "site_url": "http://api.kuapi.cc",
             "api_url": "http://api.kuapi.cc/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -942,9 +922,9 @@ const defaultSitesJSON = `{
             "site_url": "http://kudian10.com",
             "api_url": "http://kudian10.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "酷点备用线路",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -953,7 +933,7 @@ const defaultSitesJSON = `{
             "api_url": "http://slapibf.com/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "补充资源站",
             "priority": 100
         },
@@ -962,9 +942,9 @@ const defaultSitesJSON = `{
             "site_url": "http://api.ykapi.net",
             "api_url": "http://api.ykapi.net/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -972,9 +952,9 @@ const defaultSitesJSON = `{
             "site_url": "http://apitzy.com",
             "api_url": "http://apitzy.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -982,9 +962,9 @@ const defaultSitesJSON = `{
             "site_url": "http://j8zyapi.com",
             "api_url": "http://j8zyapi.com/provide/vod/from/jin/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -992,9 +972,9 @@ const defaultSitesJSON = `{
             "site_url": "http://aosikazy.com",
             "api_url": "http://aosikazy.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "可用但慢(3665ms)",
             "priority": 100
         },
         {
@@ -1002,9 +982,9 @@ const defaultSitesJSON = `{
             "site_url": "http://api.apilyzy.com",
             "api_url": "http://api.apilyzy.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1012,9 +992,9 @@ const defaultSitesJSON = `{
             "site_url": "https://m3u8.bdxzyapi.com",
             "api_url": "https://m3u8.bdxzyapi.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: Get \"https://m3u8.bdxzyapi.com/api.php/provide/vod/?ac=video",
             "priority": 100
         },
         {
@@ -1022,9 +1002,9 @@ const defaultSitesJSON = `{
             "site_url": "http://www.kuaibozy.com",
             "api_url": "http://www.kuaibozy.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1032,9 +1012,9 @@ const defaultSitesJSON = `{
             "site_url": "http://lovedan.net",
             "api_url": "http://lovedan.net/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 403",
             "priority": 100
         },
         {
@@ -1042,9 +1022,9 @@ const defaultSitesJSON = `{
             "site_url": "http://www.zzrhgg.com",
             "api_url": "http://www.zzrhgg.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -1052,9 +1032,9 @@ const defaultSitesJSON = `{
             "site_url": "http://prinevillesda.org",
             "api_url": "http://prinevillesda.org/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1062,9 +1042,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.qilinzyz.com",
             "api_url": "https://www.qilinzyz.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -1072,9 +1052,9 @@ const defaultSitesJSON = `{
             "site_url": "http://api.lqzy.cc",
             "api_url": "http://api.lqzy.cc/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1082,9 +1062,9 @@ const defaultSitesJSON = `{
             "site_url": "http://zy.yilans.net:8090",
             "api_url": "http://zy.yilans.net:8090/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1092,9 +1072,9 @@ const defaultSitesJSON = `{
             "site_url": "http://gwcmslctv.vip",
             "api_url": "http://gwcmslctv.vip/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "补充资源站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1102,9 +1082,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.heiliaozydh.com",
             "api_url": "https://www.heiliaozydh.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "萌芽合作站",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -1112,9 +1092,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.nxxzyuan.cc",
             "api_url": "https://www.nxxzyuan.cc/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "萌芽合作站",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -1122,9 +1102,9 @@ const defaultSitesJSON = `{
             "site_url": "https://yutuzy.com",
             "api_url": "https://yutuzy.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "萌芽合作站",
+            "note": "自动屏蔽: Get \"https://yutuzy.com/api.php/provide/vod/?ac=videolist&li",
             "priority": 100
         },
         {
@@ -1133,7 +1113,7 @@ const defaultSitesJSON = `{
             "api_url": "https://ckzy1.com/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "萌芽合作站",
             "priority": 100
         },
@@ -1142,9 +1122,9 @@ const defaultSitesJSON = `{
             "site_url": "https://888lm.vip",
             "api_url": "https://888lm.vip/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "萌芽合作站",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1153,7 +1133,7 @@ const defaultSitesJSON = `{
             "api_url": "https://sex8zy8.com/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "萌芽合作站",
             "priority": 100
         },
@@ -1162,9 +1142,9 @@ const defaultSitesJSON = `{
             "site_url": "http://bfzy3.tv",
             "api_url": "http://bfzy3.tv/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "萌芽合作站",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -1172,9 +1152,9 @@ const defaultSitesJSON = `{
             "site_url": "https://155zy3.com",
             "api_url": "https://155zy3.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "萌芽合作站",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -1183,7 +1163,7 @@ const defaultSitesJSON = `{
             "api_url": "http://senlinzy3.com/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
+            "enabled": true,
             "note": "萌芽合作站",
             "priority": 100
         },
@@ -1192,9 +1172,9 @@ const defaultSitesJSON = `{
             "site_url": "https://wsyzy.sbs",
             "api_url": "https://wsyzy.sbs/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "萌芽合作站",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -1202,9 +1182,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.jiuyo.com",
             "api_url": "https://www.jiuyo.com/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "萌芽合作站",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -1212,9 +1192,9 @@ const defaultSitesJSON = `{
             "site_url": "https://xn--2qqq4c14c921h.cc",
             "api_url": "https://xn--2qqq4c14c921h.cc/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "萌芽合作站",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -1222,9 +1202,9 @@ const defaultSitesJSON = `{
             "site_url": "https://98zy.me",
             "api_url": "https://98zy.me/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "萌芽合作站",
+            "note": "自动屏蔽: Get \"https://98zy.me/api.php/provide/vod/?ac=videolist&limit",
             "priority": 100
         },
         {
@@ -1232,9 +1212,9 @@ const defaultSitesJSON = `{
             "site_url": "https://xgzy.tv",
             "api_url": "https://xgzy.tv/api.php/provide/vod/from/xiguam3u8/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "note": "可用但慢(3090ms)",
             "priority": 100
         },
         {
@@ -1243,8 +1223,8 @@ const defaultSitesJSON = `{
             "api_url": "https://api.wsyzy.net/api.php/provide/vod/from/wsym3u8/at/json/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1253,8 +1233,8 @@ const defaultSitesJSON = `{
             "api_url": "https://xsd.sdzyapi.com/api.php/provide/vod/from/sdm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1263,8 +1243,8 @@ const defaultSitesJSON = `{
             "api_url": "https://caiji.kuaichezy.org/api.php/provide/vod/from/kcm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1273,8 +1253,8 @@ const defaultSitesJSON = `{
             "api_url": "https://api.niuniuzy.me/api.php/provide/vod/from/nnm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1282,9 +1262,9 @@ const defaultSitesJSON = `{
             "site_url": "https://api.wujinapi.me",
             "api_url": "https://api.wujinapi.me/api.php/provide/vod/from/wjm3u8/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "note": "可用但慢(3222ms)",
             "priority": 100
         },
         {
@@ -1292,9 +1272,9 @@ const defaultSitesJSON = `{
             "site_url": "https://api.okzyw.net",
             "api_url": "https://api.okzyw.net/api.php/provide/vod/from/okm3u8/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "note": "可用但慢(4548ms)",
             "priority": 100
         },
         {
@@ -1303,8 +1283,8 @@ const defaultSitesJSON = `{
             "api_url": "https://suoniapi.com/api.php/provide/vod/from/snm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1313,8 +1293,8 @@ const defaultSitesJSON = `{
             "api_url": "https://api.zuidapi.com/api.php/provide/vod/from/zuidam3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1323,8 +1303,8 @@ const defaultSitesJSON = `{
             "api_url": "https://api.ukuapi88.com/api.php/provide/vod/from/ukm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1333,8 +1313,8 @@ const defaultSitesJSON = `{
             "api_url": "https://api.xinlangapi.com/xinlangapi.php/provide/vod/from/xlm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1342,9 +1322,9 @@ const defaultSitesJSON = `{
             "site_url": "https://98zy.vip",
             "api_url": "https://98zy.vip/api.php/provide/vod/at/json/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "note": "自动屏蔽: Get \"https://98zy.vip/api.php/provide/vod/at/json/?ac=videol",
             "priority": 100
         },
         {
@@ -1353,8 +1333,8 @@ const defaultSitesJSON = `{
             "api_url": "https://iqiyizyapi.com/api.php/provide/vod/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1363,8 +1343,8 @@ const defaultSitesJSON = `{
             "api_url": "https://jyzyapi.com/provide/vod/from/jinyingm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1372,9 +1352,9 @@ const defaultSitesJSON = `{
             "site_url": "https://caiji.maotaizy.cc",
             "api_url": "https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "note": "可用但慢(4190ms)",
             "priority": 100
         },
         {
@@ -1382,9 +1362,9 @@ const defaultSitesJSON = `{
             "site_url": "https://api.wwzy.tv",
             "api_url": "https://api.wwzy.tv/api.php/provide/vod/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "note": "自动屏蔽: Get \"https://api.wwzy.tv/api.php/provide/vod/at/json?ac=vide",
             "priority": 100
         },
         {
@@ -1393,8 +1373,8 @@ const defaultSitesJSON = `{
             "api_url": "https://www.hongniuzy2.com/api.php/provide/vod/from/hnm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1402,9 +1382,9 @@ const defaultSitesJSON = `{
             "site_url": "https://cj.rycjapi.com",
             "api_url": "https://cj.rycjapi.com/api.php/provide/vod/from/rym3u8/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "note": "自动屏蔽: Get \"https://cj.rycjapi.com/api.php/provide/vod/from/rym3u8/",
             "priority": 100
         },
         {
@@ -1413,8 +1393,8 @@ const defaultSitesJSON = `{
             "api_url": "http://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8/at/json/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1422,9 +1402,9 @@ const defaultSitesJSON = `{
             "site_url": "https://api.yzzy-api.com",
             "api_url": "http://api.yzzy-api.com/inc/api_mac10.php",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1433,8 +1413,8 @@ const defaultSitesJSON = `{
             "api_url": "https://ckzy.me/api.php/provide/vod/from/ckm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1443,8 +1423,8 @@ const defaultSitesJSON = `{
             "api_url": "https://tyyszyapi.com/api.php/provide/vod/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1452,9 +1432,9 @@ const defaultSitesJSON = `{
             "site_url": "https://caiji.dbzy5.com",
             "api_url": "https://caiji.dbzy5.com/api.php/provide/vod/from/dbm3u8/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合B",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1463,18 +1443,8 @@ const defaultSitesJSON = `{
             "api_url": "https://jszyapi.com/api.php/provide/vod/from/jsm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合B",
-            "priority": 100
-        },
-        {
-            "name": "影剧资源",
-            "site_url": "https://caiji.maotaizy.cc",
-            "api_url": "https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8/at/josn",
-            "type": "maccms",
-            "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合B",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1482,9 +1452,9 @@ const defaultSitesJSON = `{
             "site_url": "https://m3u8.apiyhzy.com",
             "api_url": "https://m3u8.apiyhzy.com/api.php/provide/vod/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合B",
+            "note": "可用但慢(3277ms)",
             "priority": 100
         },
         {
@@ -1493,8 +1463,8 @@ const defaultSitesJSON = `{
             "api_url": "https://api.maoyanapi.top/api.php/provide/vod/at/json/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合B",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1503,8 +1473,8 @@ const defaultSitesJSON = `{
             "api_url": "https://bdzy1.com/api.php/provide/vod/from/dbm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合B",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1513,8 +1483,8 @@ const defaultSitesJSON = `{
             "api_url": "https://api.souavzyw.net/api.php/provide/vod/at/json/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1523,8 +1493,8 @@ const defaultSitesJSON = `{
             "api_url": "https://thzy1.me/api.php/provide/vod/from/thm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合S",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1532,9 +1502,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.xxibaozyw.com",
             "api_url": "https://www.xxibaozyw.com/api.php/provide/vod/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "note": "自动屏蔽: HTTP 500",
             "priority": 100
         },
         {
@@ -1542,9 +1512,9 @@ const defaultSitesJSON = `{
             "site_url": "https://caiji.semaozy.net",
             "api_url": "https://caiji.semaozy.net/inc/apijson_vod.php",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -1553,8 +1523,8 @@ const defaultSitesJSON = `{
             "api_url": "https://hsckzy888.com/api.php/provide/vod/from/hsckm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1563,8 +1533,8 @@ const defaultSitesJSON = `{
             "api_url": "https://xingba222.com/api.php/provide/vod/at/json/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1573,8 +1543,8 @@ const defaultSitesJSON = `{
             "api_url": "https://apiyutu.com/api.php/provide/vod/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1582,9 +1552,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.xiangjiaozyw.com",
             "api_url": "https://www.xiangjiaozyw.com/api.php/provide/vod/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "note": "自动屏蔽: HTTP 500",
             "priority": 100
         },
         {
@@ -1593,8 +1563,8 @@ const defaultSitesJSON = `{
             "api_url": "https://ckbh1.xyz/api.php/provide/vod/from/ckm3u8/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1602,9 +1572,9 @@ const defaultSitesJSON = `{
             "site_url": "https://xzybb1.com",
             "api_url": "https://xzybb1.com/api.php/provide/vod/at/json",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合D",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -1612,9 +1582,9 @@ const defaultSitesJSON = `{
             "site_url": "https://www.caiji.cyou",
             "api_url": "https://www.caiji.cyou/api.php/provide/vod/at/json/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -1623,8 +1593,8 @@ const defaultSitesJSON = `{
             "api_url": "http://154.219.117.232:9981/jacloudapi.php/provide/vod/at/json",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1632,9 +1602,9 @@ const defaultSitesJSON = `{
             "site_url": "https://zy.jinchancaiji.com",
             "api_url": "http://zy.jinchancaiji.com/api.php/provide/vod/at/json/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·皮皮虾-综合A",
+            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1642,9 +1612,9 @@ const defaultSitesJSON = `{
             "site_url": "https://gc.wki8.com",
             "api_url": "https://gc.wki8.com/api.php/provide/vod/at/json/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·萌芽-官采",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -1653,8 +1623,8 @@ const defaultSitesJSON = `{
             "api_url": "https://jp98.vip/api.php/provide/vod/at/json/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·萌芽-推荐",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1662,9 +1632,9 @@ const defaultSitesJSON = `{
             "site_url": "https://api.jmzy.com",
             "api_url": "https://api.jmzy.com/api.php/provide/vod/at/json/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·萌芽-切片",
+            "note": "自动屏蔽: Get \"https://api.jmzy.com/api.php/provide/vod/at/json/?ac=vi",
             "priority": 100
         },
         {
@@ -1673,8 +1643,8 @@ const defaultSitesJSON = `{
             "api_url": "https://bf.xoxowin86cisyap.com/api.php/provide/vod/at/json/",
             "type": "maccms",
             "status": "active",
-            "enabled": false,
-            "note": "新增·萌芽-切片",
+            "enabled": true,
+            "note": "检测可用",
             "priority": 100
         },
         {
@@ -1682,9 +1652,9 @@ const defaultSitesJSON = `{
             "site_url": "https://res4k.jdyx.pro",
             "api_url": "https://res4k.jdyx.pro/api.php/provide/vod/",
             "type": "maccms",
-            "status": "active",
+            "status": "paused",
             "enabled": false,
-            "note": "新增·萌芽-自定义",
+            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         }
     ]

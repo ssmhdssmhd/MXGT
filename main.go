@@ -2902,6 +2902,27 @@ type maccmsItem struct {
 	VodID2      string `json:"id"`
 }
 
+// maccmsFlex 宽松版采集接口响应：vod_id/id 兼容数字或字符串（部分站返回数字 id 导致标准解析失败）
+type maccmsFlex struct {
+	List []maccmsItemFlex `json:"list"`
+	Data []maccmsItemFlex `json:"data"`
+	Msg  string           `json:"msg"`
+}
+
+type maccmsItemFlex struct {
+	VodID       json.Number `json:"vod_id"`
+	VodName     string      `json:"vod_name"`
+	VodPic      string      `json:"vod_pic"`
+	VodRemarks  string      `json:"vod_remarks"`
+	VodPlayURL  string      `json:"vod_play_url"`
+	VodPlayFrom string      `json:"vod_play_from"`
+	Name        string      `json:"name"`
+	PlayURL     string      `json:"play_url"`
+	Pic         string      `json:"pic"`
+	Remarks     string      `json:"remarks"`
+	VodID2      json.Number `json:"id"`
+}
+
 type maccmsResp struct {
 	List []maccmsItem `json:"list"`
 	Data []maccmsItem `json:"data"`
@@ -2917,13 +2938,19 @@ var siteHTTP = &http.Client{Timeout: 12 * time.Second, Transport: &http.Transpor
 // siteConcurrency 资源站批量操作（搜索/检测）全局并发数，-sites-conc 可调，默认 8
 var siteConcurrency = 8
 
+// siteFetchUA 资源站/采集接口请求用的浏览器 UA（很多资源站有 UA/Referer 反爬，冷 UA 会被拒或返回非标准内容）
+const siteFetchUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+
 func httpGetBody(u string) ([]byte, error) {
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Referer", u)
+	req.Header.Set("User-Agent", siteFetchUA)
+	// Referer 设为站点根域，避免被当爬虫（部分资源站校验 Referer 需与站同域）
+	if base, e := url.Parse(u); e == nil {
+		req.Header.Set("Referer", base.Scheme+"://"+base.Host+"/")
+	}
 	resp, err := siteHTTP.Do(req)
 	if err != nil {
 		return nil, err
@@ -3143,6 +3170,29 @@ func searchSiteOne(s Site, kw string) ([]ResourceVideo, error) {
 // parseMaccmsItems 解析采集接口响应为通用条目列表（JSON / 标准 XML / 自定义 XML）
 func parseMaccmsItems(b []byte) ([]maccmsItem, error) {
 	items := []maccmsItem{}
+	// 1. 宽松 JSON：vod_id/id 兼容数字或字符串（多数站 id 为数字，标准 string 解析会失败）
+	var flex maccmsFlex
+	if err := json.Unmarshal(b, &flex); err == nil {
+		for _, it := range append(append([]maccmsItemFlex{}, flex.List...), flex.Data...) {
+			items = append(items, maccmsItem{
+				VodID:       it.VodID.String(),
+				VodName:     it.VodName,
+				VodPic:      it.VodPic,
+				VodRemarks:  it.VodRemarks,
+				VodPlayURL:  it.VodPlayURL,
+				VodPlayFrom: it.VodPlayFrom,
+				Name:        it.Name,
+				PlayURL:     it.PlayURL,
+				Pic:         it.Pic,
+				Remarks:     it.Remarks,
+				VodID2:      it.VodID2.String(),
+			})
+		}
+		if len(items) > 0 {
+			return items, nil
+		}
+	}
+	// 2. 标准 JSON（兼容既有逻辑）
 	var r maccmsResp
 	if err := json.Unmarshal(b, &r); err == nil && (len(r.List) > 0 || len(r.Data) > 0) {
 		items = append(items, r.List...)
