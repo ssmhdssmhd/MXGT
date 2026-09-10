@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.7"
+	AppVersion = "v0.6.8"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -334,6 +334,43 @@ func enhancedDetectAds(segs []Segment) {
 	markBoundaryCluster(segs, false)
 	// 4. 中插短簇：长正片包围的短段簇（中插广告/贴片最典型形态）
 	markMidrollClusters(segs)
+	// 5. 成对 DISCONTINUITY 广告块：插入点→短块→恢复点（广告常见），夹 1-12 段且总时长 ≤ 120s 判为广告
+	markDiscontinuityBlocks(segs)
+}
+
+// markDiscontinuityBlocks 成对 DISCONTINUITY 广告块检测：
+// 广告插入在 m3u8 中常表现为「插入点 DISCONTINUITY → 若干段 → 恢复点 DISCONTINUITY」成对出现。
+// 两个 DISCONTINUITY 之间夹 1-12 段且总时长 ≤ 120s 时判为广告；
+// 片头拼接/正片大段切分通常夹块远大于此（或仅单次 DISCONTINUITY），避免误伤。
+func markDiscontinuityBlocks(segs []Segment) {
+	n := len(segs)
+	i := 0
+	for i < n {
+		if !segs[i].Discontinuity {
+			i++
+			continue
+		}
+		start := i
+		j := i + 1
+		var sum float64
+		for j < n && !segs[j].Discontinuity {
+			sum += segs[j].Duration
+			j++
+		}
+		if j >= n {
+			break // 无成对恢复点（如片头单次拼接），跳过
+		}
+		cnt := j - start
+		if cnt >= 1 && cnt <= 12 && sum > 0 && sum <= 120 {
+			for k := start; k < j; k++ {
+				if !segs[k].IsAd {
+					segs[k].IsAd = true
+					segs[k].AdReason = "enhanced_discontinuity_block"
+				}
+			}
+		}
+		i = j
+	}
 }
 
 // markMidrollClusters 中插短簇检测：序列中间连续短段（<6s）组成的簇（1-3 段），
