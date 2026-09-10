@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.5.6"
+	AppVersion = "v0.6.0"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -303,6 +303,68 @@ func detectAds(segs []Segment, aggresive bool) {
 	// 3. 聚合识别（仅 aggresive）：同目录重复短时长桶批量标记
 	if aggresive {
 		detectClusters(segs)
+	}
+}
+
+// 增强检测使用的平台广告域/关键词补充表（中小资源站常见）。命中 URL 判定为广告段。
+var enhancedAdURLRe = regexp.MustCompile(`(?i)(\.(baidu|bdstatic|aliyun|alicdn|bytedance|byteimg|toutiao|qiniucdn|upyun)\.[a-z]+/ad|/ad[s]{0,2}/|_ad\.|ad_insert|advert\.|\.adx|gdt_|tvc_|preroll|midroll|postroll)`)
+
+// enhancedDetectAds 新版增强检测：仅新增高置信规则，不回改原已判段。
+// 1. 增强 URL 关键词（平台广告域/前中后插播常见特征）
+// 2. 边界短簇：开头/结尾连续超短视频（<2s）且成簇（>=3 段）判为广告，避免片头片尾 logo 簇误删正片
+func enhancedDetectAds(segs []Segment) {
+	if len(segs) == 0 {
+		return
+	}
+	// 1. 增强 URL 关键词
+	for i := range segs {
+		if segs[i].IsAd {
+			continue
+		}
+		if enhancedAdURLRe.MatchString(segs[i].URI) || enhancedAdURLRe.MatchString(segs[i].AbsURI) {
+			segs[i].IsAd = true
+			segs[i].AdReason = "enhanced_url_keyword"
+		}
+	}
+	// 2. 边界短簇：开头连续短簇
+	markBoundaryCluster(segs, true)
+	// 3. 边界短簇：结尾连续短簇
+	markBoundaryCluster(segs, false)
+}
+
+// markBoundaryCluster 标记开头(forward=true)/结尾(forward=false) 连续超短视频簇（>=3 段，<2s）为广告。
+// 采用簇内多数+整体时长占比双条件，避免误伤片头 logo 短段。
+func markBoundaryCluster(segs []Segment, forward bool) {
+	n := len(segs)
+	get := func(i int) int {
+		if forward {
+			return i
+		}
+		return n - 1 - i
+	}
+	// 收集边界连续短段下标
+	var cluster []int
+	for i := 0; i < n; i++ {
+		idx := get(i)
+		if segs[idx].IsAd {
+			if len(cluster) > 0 {
+				continue // 已判广告段不参与，但不停留簇
+			}
+			continue
+		}
+		if segs[idx].Duration > 0 && segs[idx].Duration < 2.0 {
+			cluster = append(cluster, idx)
+		} else {
+			break
+		}
+	}
+	if len(cluster) >= 3 {
+		for _, idx := range cluster {
+			if !segs[idx].IsAd {
+				segs[idx].IsAd = true
+				segs[idx].AdReason = "enhanced_boundary_cluster"
+			}
+		}
 	}
 }
 
@@ -573,8 +635,20 @@ func buildFilteredM3U8(segs []Segment, targetDuration int) string {
 	return b.String()
 }
 
-// cleanOne 主流程：抓取-解析-检测-输出
+// cleanOne 主流程：抓取-解析-检测-输出（保持原版本行为不变，仅供既有接口复用）
 func cleanOne(rawURL string, aggresive bool, engine string) ParseResult {
+	return runClean(rawURL, aggresive, engine, nil)
+}
+
+// cleanEnhanced 新版增强测试播放引擎：在基础去广告之外叠加增强检测（边界短簇 + 平台广告域前缀）
+// 独立实现、不改动原 cleanOne，供「新版增强测试播放」后台与 /api/clean/enhanced 接口使用。
+func cleanEnhanced(rawURL, engine string) ParseResult {
+	return runClean(rawURL, true, engine, enhancedDetectAds)
+}
+
+// runClean 去广告公共流程：抓取-解析-检测-输出。enhanced 为空则行为与 cleanOne 完全一致，
+// 非空则在 detectAds 后追加一次增强检测（不改动原检测结果，只新加标记）。
+func runClean(rawURL string, aggresive bool, engine string, enhanced func(segs []Segment)) ParseResult {
 	start := time.Now()
 	res := ParseResult{}
 	if rawURL == "" {
@@ -986,6 +1060,73 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
+    <h2>🆕 新版增强测试播放 <span class="muted">（独立引擎 /api/clean/enhanced，不改动原有解析测试；在基础去广告上叠加「平台广告域关键词 + 片头片尾超短簇」高置信增强检测）</span></h2>
+    <div class="row">
+      <input type="url" id="enhInput" placeholder="粘贴 M3U8 地址，走增强检测引擎"
+             onkeydown="if(event.key==='Enter')runEnhanced()">
+      <label class="sw">去广告引擎
+        <select id="enhEngOpt" style="padding:6px 8px;border-radius:8px;border:1px solid #d1d5db">
+          <option value="">基础(默认)</option><option value="ai">AI 审核</option>
+        </select></label>
+      <button class="btn" onclick="runEnhanced()">⚡ 增强解析</button>
+      <button class="btn ghost" onclick="playEnhanced()">▶ 直接播放增强结果</button>
+    </div>
+    <div class="stat-line" id="enhStats"></div>
+    <div class="stat-line" id="enhPlaySrc" style="display:none"></div>
+    <pre id="enhOut"></pre>
+  </div>
+
+  <div class="panel">
+    <h2>⏱️ 非正片区间标注 <span class="muted">（SponsorBlock 思路：维护片头/片尾/赞助/三连/其他 时间戳区间，存 skip_ranges.json，供播放器按区间跳过）</span></h2>
+    <div class="row" style="flex-wrap:wrap">
+      <span class="muted">起始(s)</span>
+      <input id="skStart" type="number" min="0" step="0.1" placeholder="0" style="width:90px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <span class="muted">结束(s)</span>
+      <input id="skEnd" type="number" min="0" step="0.1" placeholder="30" style="width:90px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <span class="muted">类型</span>
+      <select id="skType" style="padding:8px;border-radius:10px;border:1px solid #d1d5db">
+        <option value="intro">片头</option><option value="outro">片尾</option><option value="sponsor">赞助</option>
+        <option value="selfpromo">自我推广</option><option value="interaction">互动/三连</option><option value="other">其他</option>
+      </select>
+      <input id="skNote" placeholder="备注（可选）" style="width:160px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="addSkip()">➕ 添加区间</button>
+      <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="loadSkips()">⟳ 刷新</button>
+      <span class="muted" id="skInfo"></span>
+    </div>
+    <table>
+      <thead><tr><th>起始</th><th>结束</th><th>类型</th><th>备注</th><th>来源</th><th>操作</th></tr></thead>
+      <tbody id="skList"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>💬 弹幕过滤规则库 <span class="muted">（独立模块，存 danmaku_rules.json；关键词/正则规则过滤广告/刷屏/剧透等弹幕，未来接弹幕源即用）</span></h2>
+    <div class="row" style="flex-wrap:wrap">
+      <input id="dmPattern" placeholder="规则内容（必填）：keyword=包含词，regex=正则表达式" style="flex:1;min-width:240px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <select id="dmType" style="padding:8px;border-radius:10px;border:1px solid #d1d5db">
+        <option value="keyword">关键词</option><option value="regex">正则</option>
+      </select>
+      <select id="dmCategory" style="padding:8px;border-radius:10px;border:1px solid #d1d5db">
+        <option value="ad">广告</option><option value="spam">垃圾刷屏</option><option value="spoiler">剧透</option>
+        <option value="attack">人身攻击</option><option value="nsfw">低俗</option><option value="other">其他</option>
+      </select>
+      <input id="dmNote" placeholder="备注（可选）" style="width:160px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="addDanmaku()">➕ 添加规则</button>
+      <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="loadDanmaku()">⟳ 刷新</button>
+    </div>
+    <div class="row" style="flex-wrap:wrap">
+      <span class="muted">测试弹幕文本</span>
+      <input id="dmTestText" placeholder="输入一条弹幕，测试是否命中规则" style="flex:1;min-width:240px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="testDanmaku()">🔍 测试</button>
+      <span class="muted" id="dmTestInfo"></span>
+    </div>
+    <table>
+      <thead><tr><th>类型</th><th>规则内容</th><th>分类</th><th>命中</th><th>备注</th><th>启用</th><th>操作</th></tr></thead>
+      <tbody id="dmList"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
     <h2>🔄 远程在线更新</h2>
     <div class="row">
       <div class="stat-line" id="updInfo" style="display:block"><!--UPD_BLOCK--></div>
@@ -1070,7 +1211,119 @@ function applyUpdate(){
     setTimeout(function(){location.reload();},4000);
   }).catch(function(e){el('updInfo').textContent='发起失败: '+e.message});
 }
-refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms(); loadOneClickLinks();
+refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms(); loadOneClickLinks(); loadSkips(); loadDanmaku();
+
+// —— 新版增强测试播放（/api/clean/enhanced）——
+function enhBuildURL(url, eng){
+  return '/api/clean/enhanced/json?url='+encodeURIComponent(url)+(eng?'&engine='+eng:'');
+}
+async function runEnhanced(){
+  const url=el('enhInput').value.trim();
+  el('enhStats').style.display='none'; el('enhOut').style.display='none';
+  if(!url){alert('请先粘贴 M3U8 地址');return;}
+  el('enhOut').style.display='block';el('enhOut').textContent='请求中…';
+  const eng=el('enhEngOpt').value;
+  try{
+    const r=await fetch(enhBuildURL(url,eng));
+    const j=await r.json();
+    if(!j.success){el('enhOut').textContent=j.message||'解析失败';el('enhStats').style.display='block';el('enhStats').textContent='✕ '+ (j.message||'');return;}
+    el('enhStats').style.display='block';
+    el('enhStats').textContent=(j.message||'')+'　引擎='+(j.engine||'-');
+    let txt='总 '+j.total_segments+' 段 · 广告 '+j.ad_count+' 段 ('+(j.ad_ratio||0).toFixed(1)+'%) · 保留 '+j.kept_segments+' 段\n\n';
+    const rows=(j.segments||[]).map(function(s){
+      return (s.is_ad?'[AD '+(s.ad_reason||'')+'] ':'[OK] ')+'#'+s.index+'  '+(s.duration||0).toFixed(2)+'s  '+(s.abs_uri||s.uri||'');
+    });
+    txt+=rows.join('\n');
+    el('enhOut').textContent=txt;
+  }catch(e){el('enhOut').textContent='解析失败: '+e.message}
+}
+async function playEnhanced(){
+  const url=el('enhInput').value.trim();
+  if(!url){alert('请先粘贴 M3U8 地址');return;}
+  const eng=el('enhEngOpt').value;
+  const src='/api/clean/enhanced?url='+encodeURIComponent(url)+(eng?'&engine='+eng:'');
+  el('enhPlaySrc').style.display='block';
+  el('enhPlaySrc').textContent='播放地址: '+src;
+  playURLWith(src, function(){ el('playSrc').textContent='（新版增强）已尝试播放'; });
+}
+function playURLWith(url, cb){
+  const v=el('player');
+  const panel=el('playPanel'); if(panel)panel.style.display='block';
+  const srcEl=el('playSrc'); if(srcEl){srcEl.style.display='block';srcEl.textContent='播放源: '+url;}
+  function destroy(){ if(window.__hls){window.__hls.destroy();window.__hls=null;} }
+  destroy();
+  if(navigator.userAgent.indexOf('Safari')>=0 && window.Hls===undefined){
+    v.src=url; v.play().catch(function(){});
+  } else {
+    loadHls(function(){
+      if(!window.Hls.isSupported()){v.src=url;v.play().catch(function(){});return;}
+      const hls=new Hls(); window.__hls=hls;
+      hls.loadSource(url); hls.attachMedia(v);
+      hls.on(Hls.Events.MANIFEST_PARSED,function(){v.play().catch(function(){});});
+    });
+  }
+  if(cb)cb();
+}
+// —— 非正片区间标注（/api/skip）——
+const skipTypeMap={'intro':'片头','outro':'片尾','sponsor':'赞助','selfpromo':'自我推广','interaction':'互动/三连','other':'其他'};
+async function loadSkips(){
+  try{
+    const d=await getJSON('/api/skip');
+    el('skInfo').textContent='共 '+d.total+' 个区间';
+    el('skList').innerHTML=(d.ranges||[]).map(function(r){
+      return '<tr><td>'+r.start.toFixed(1)+'s</td><td>'+r.end.toFixed(1)+'s</td><td>'+(skipTypeMap[r.type]||r.type)+'</td><td>'+(r.note||'')+'</td><td>'+(r.source||'')+'</td>'+
+        '<td><button class="btn gh" onclick="delSkip(\''+r.id+'\')">🗑 删除</button></td></tr>';
+    }).join('')||'<tr><td colspan="6" class="muted">暂无区间</td></tr>';
+  }catch(e){el('skInfo').textContent='加载失败: '+e.message}
+}
+async function addSkip(){
+  const start=parseFloat(el('skStart').value); const end=parseFloat(el('skEnd').value);
+  if(!(start>=0)||!(end>start)){alert('请输入有效起始/结束（0 ≤ 起始 < 结束）');return;}
+  const d=await fetch('/api/skip/add',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({start:start,end:end,type:el('skType').value,note:el('skNote').value.trim()})}).then(function(r){return r.json()});
+  if(d.success){el('skStart').value='';el('skEnd').value='';el('skNote').value='';loadSkips();}
+  else{alert(d.message||'添加失败');}
+}
+async function delSkip(id){
+  if(!confirm('确定删除该区间吗？'))return;
+  const d=await fetch('/api/skip/delete?id='+encodeURIComponent(id),{method:'POST'}).then(function(r){return r.json()});
+  if(d.success){loadSkips();}else{alert(d.message||'删除失败');}
+}
+// —— 弹幕过滤规则库（/api/danmaku）——
+const dmCatMap={'ad':'广告','spam':'垃圾刷屏','spoiler':'剧透','attack':'人身攻击','nsfw':'低俗','other':'其他'};
+async function loadDanmaku(){
+  try{
+    const d=await getJSON('/api/danmaku');
+    el('dmList').innerHTML=(d.rules||[]).map(function(r){
+      return '<tr><td>'+r.type+'</td><td>'+(r.type==='regex'?'<code>'+r.pattern+'</code>':r.pattern)+'</td><td>'+(dmCatMap[r.category]||r.category)+'</td><td>'+r.hits+'</td><td>'+(r.note||'')+'</td>'+
+        '<td>'+(r.enabled?'✅':'⛔')+'</td>'+
+        '<td><button class="btn gh" onclick="toggleDanmaku(\''+r.id+'\')">启停</button> <button class="btn gh" onclick="delDanmaku(\''+r.id+'\')">🗑 删除</button></td></tr>';
+    }).join('')||'<tr><td colspan="7" class="muted">暂无规则</td></tr>';
+  }catch(e){el('dmList').innerHTML='<tr><td colspan="7">加载失败</td></tr>';}
+}
+async function addDanmaku(){
+  const pattern=el('dmPattern').value.trim();
+  if(!pattern){alert('请输入规则内容');return;}
+  const d=await fetch('/api/danmaku/add',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type:el('dmType').value,pattern:pattern,category:el('dmCategory').value,note:el('dmNote').value.trim()})}).then(function(r){return r.json()});
+  if(d.success){el('dmPattern').value='';el('dmNote').value='';loadDanmaku();}
+  else{alert(d.message||'添加失败');}
+}
+async function toggleDanmaku(id){
+  await fetch('/api/danmaku/toggle?id='+encodeURIComponent(id),{method:'POST'}).then(function(r){return r.json()});
+  loadDanmaku();
+}
+async function delDanmaku(id){
+  if(!confirm('确定删除该规则吗？'))return;
+  const d=await fetch('/api/danmaku/delete?id='+encodeURIComponent(id),{method:'POST'}).then(function(r){return r.json()});
+  if(d.success){loadDanmaku();}else{alert(d.message||'删除失败');}
+}
+async function testDanmaku(){
+  const text=el('dmTestText').value.trim();
+  if(!text){alert('请输入弹幕文本');return;}
+  const d=await fetch('/api/danmaku/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})}).then(function(r){return r.json()});
+  el('dmTestInfo').textContent=d.blocked?('⛔ 已过滤 ['+(dmCatMap[d.category]||d.category)+'] 命中:「'+d.matched+'」'):'✅ 未命中规则';
+}
 
 function buildCleanURL(url, aggr){
   const eng=el('engOpt')?el('engOpt').value:'';
@@ -4427,6 +4680,369 @@ func handlePlatformsOneClick(w http.ResponseWriter, r *http.Request) {
 }
 
 // ============================================================
+// 非正片区间标注（SponsorBlock 思路）：维护「片头/片尾/赞助/三连/其他」时间戳区间，
+// 持久化 skip_ranges.json；/api/skip 在去广告结果上叠加区间清单，供播放器按区间跳过。
+// ============================================================
+
+// SkipRange 一个非正片时间戳区间（秒）
+type SkipRange struct {
+	ID     string  `json:"id"`
+	Start  float64 `json:"start"`
+	End    float64 `json:"end"`
+	Type   string  `json:"type"` // intro/outro/sponsor/selfpromo/interaction/other
+	Note   string  `json:"note,omitempty"`
+	Source string  `json:"source,omitempty"` // manual/auto
+}
+
+// SkipRangesConfig 区间配置（可执行文件旁 skip_ranges.json）
+type SkipRangesConfig struct {
+	Version    string      `json:"version"`
+	UpdateDate string      `json:"update_date"`
+	Ranges     []SkipRange `json:"ranges"`
+}
+
+var skipMu sync.Mutex
+
+func skipRangesPath() string {
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "skip_ranges.json")
+	}
+	return "skip_ranges.json"
+}
+
+func loadSkipRanges() *SkipRangesConfig {
+	cfg := &SkipRangesConfig{Version: "1.0", UpdateDate: time.Now().Format("2006-01-02")}
+	if b, err := os.ReadFile(skipRangesPath()); err == nil {
+		c2 := &SkipRangesConfig{}
+		if json.Unmarshal(b, c2) == nil {
+			return c2
+		}
+	}
+	return cfg
+}
+
+func saveSkipRanges(cfg *SkipRangesConfig) error {
+	cfg.UpdateDate = time.Now().Format("2006-01-02")
+	b, _ := json.MarshalIndent(cfg, "", "    ")
+	return os.WriteFile(skipRangesPath(), b, 0o644)
+}
+
+func newSkipID() string {
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%x", b)
+}
+
+// handleSkipList GET /api/skip → 全部区间（按 start 升序）
+func handleSkipList(w http.ResponseWriter, r *http.Request) {
+	skipMu.Lock()
+	defer skipMu.Unlock()
+	cfg := loadSkipRanges()
+	sort.SliceStable(cfg.Ranges, func(i, j int) bool { return cfg.Ranges[i].Start < cfg.Ranges[j].Start })
+	writeJSON(w, map[string]interface{}{"success": true, "total": len(cfg.Ranges), "ranges": cfg.Ranges})
+}
+
+// handleSkipAdd POST /api/skip/add {start,end,type,note} → 新增区间（自动校验）
+func handleSkipAdd(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Start float64 `json:"start"`
+		End   float64 `json:"end"`
+		Type  string  `json:"type"`
+		Note  string  `json:"note"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数解析失败: " + err.Error()})
+		return
+	}
+	if in.Start < 0 || in.End <= in.Start {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "区间无效：需要 0 ≤ start < end"})
+		return
+	}
+	valid := map[string]bool{"intro": true, "outro": true, "sponsor": true, "selfpromo": true, "interaction": true, "other": true}
+	if in.Type == "" {
+		in.Type = "other"
+	}
+	if !valid[in.Type] {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "type 需为 intro/outro/sponsor/selfpromo/interaction/other"})
+		return
+	}
+	skipMu.Lock()
+	defer skipMu.Unlock()
+	cfg := loadSkipRanges()
+	cfg.Ranges = append(cfg.Ranges, SkipRange{
+		ID: newSkipID(), Start: in.Start, End: in.End,
+		Type: in.Type, Note: strings.TrimSpace(in.Note), Source: "manual",
+	})
+	if err := saveSkipRanges(cfg); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/skip/add", "", true, 0, fmt.Sprintf("添加非正片区间 %0.1f-%0.1fs (%s)", in.Start, in.End, in.Type))
+	writeJSON(w, map[string]interface{}{"success": true, "message": "已添加区间", "total": len(cfg.Ranges)})
+}
+
+// handleSkipDelete POST /api/skip/delete?id= → 删除区间
+func handleSkipDelete(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少 id"})
+		return
+	}
+	skipMu.Lock()
+	defer skipMu.Unlock()
+	cfg := loadSkipRanges()
+	out := cfg.Ranges[:0]
+	found := false
+	for _, rg := range cfg.Ranges {
+		if rg.ID == id {
+			found = true
+			continue
+		}
+		out = append(out, rg)
+	}
+	cfg.Ranges = out
+	if !found {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "区间不存在"})
+		return
+	}
+	if err := saveSkipRanges(cfg); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/skip/delete", id, true, 0, "删除非正片区间")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "已删除区间", "total": len(cfg.Ranges)})
+}
+
+// ============================================================
+// 弹幕过滤规则库（独立模块，后续可接弹幕源）：关键词/正则规则 → 过滤弹幕文案。
+// 持久化 danmaku_rules.json；API 只提供规则管理与单条文本过滤，不依赖播放器 DOM。
+// ============================================================
+
+// DanmakuRule 一条弹幕过滤规则
+type DanmakuRule struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"` // keyword / regex
+	Pattern  string `json:"pattern"`
+	Category string `json:"category"` // ad/spam/spoiler/attack/nsfw/other
+	Note     string `json:"note,omitempty"`
+	Enabled  bool   `json:"enabled"`
+	Hits     int64  `json:"hits,omitempty"`
+}
+
+// DanmakuRulesConfig 弹幕规则配置（可执行文件旁 danmaku_rules.json）
+type DanmakuRulesConfig struct {
+	Version    string        `json:"version"`
+	UpdateDate string        `json:"update_date"`
+	Rules      []DanmakuRule `json:"rules"`
+}
+
+var dmMu sync.Mutex
+
+func danmakuRulesPath() string {
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "danmaku_rules.json")
+	}
+	return "danmaku_rules.json"
+}
+
+func loadDanmakuRules() *DanmakuRulesConfig {
+	cfg := &DanmakuRulesConfig{Version: "1.0", UpdateDate: time.Now().Format("2006-01-02")}
+	if b, err := os.ReadFile(danmakuRulesPath()); err == nil {
+		c2 := &DanmakuRulesConfig{}
+		if json.Unmarshal(b, c2) == nil {
+			return c2
+		}
+	}
+	return cfg
+}
+
+func saveDanmakuRules(cfg *DanmakuRulesConfig) error {
+	cfg.UpdateDate = time.Now().Format("2006-01-02")
+	b, _ := json.MarshalIndent(cfg, "", "    ")
+	return os.WriteFile(danmakuRulesPath(), b, 0o644)
+}
+
+var danmakuRegexCache = map[string]*regexp.Regexp{}
+var danmakuRegexMu sync.Mutex
+
+// compileDanmakuRegex 编译（带缓存）正则规则
+func compileDanmakuRegex(pattern string) *regexp.Regexp {
+	danmakuRegexMu.Lock()
+	defer danmakuRegexMu.Unlock()
+	if re, ok := danmakuRegexCache[pattern]; ok {
+		return re
+	}
+	re, err := regexp.Compile("(?i)" + pattern)
+	if err != nil {
+		return nil
+	}
+	danmakuRegexCache[pattern] = re
+	return re
+}
+
+// danmakuFilterText 用当前启用规则过滤一条弹幕文本；返回是否应隐藏 + 命中的规则类型
+func danmakuFilterText(text string) (bool, string, string) {
+	dmMu.Lock()
+	defer dmMu.Unlock()
+	cfg := loadDanmakuRules()
+	for i := range cfg.Rules {
+		r := &cfg.Rules[i]
+		if !r.Enabled {
+			continue
+		}
+		hit := false
+		switch r.Type {
+		case "regex":
+			re := compileDanmakuRegex(r.Pattern)
+			if re != nil && re.MatchString(text) {
+				hit = true
+			}
+		default: // keyword：子串匹配
+			if strings.Contains(text, r.Pattern) {
+				hit = true
+			}
+		}
+		if hit {
+			r.Hits++
+			_ = saveDanmakuRules(cfg)
+			return true, r.Category, r.Pattern
+		}
+	}
+	return false, "", ""
+}
+
+// handleDanmakuRulesList GET /api/danmaku → 规则列表（含命中数）
+func handleDanmakuRulesList(w http.ResponseWriter, r *http.Request) {
+	dmMu.Lock()
+	defer dmMu.Unlock()
+	cfg := loadDanmakuRules()
+	writeJSON(w, map[string]interface{}{"success": true, "total": len(cfg.Rules), "rules": cfg.Rules})
+}
+
+// handleDanmakuRulesAdd POST /api/danmaku/add {type,pattern,category,note,enabled} → 新增规则
+func handleDanmakuRulesAdd(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Type     string `json:"type"`
+		Pattern  string `json:"pattern"`
+		Category string `json:"category"`
+		Note     string `json:"note"`
+		Enabled  *bool  `json:"enabled"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数解析失败: " + err.Error()})
+		return
+	}
+	in.Pattern = strings.TrimSpace(in.Pattern)
+	if in.Pattern == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "规则内容不能为空"})
+		return
+	}
+	if in.Type == "" {
+		in.Type = "keyword"
+	}
+	if in.Type != "keyword" && in.Type != "regex" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "type 需为 keyword 或 regex"})
+		return
+	}
+	if in.Type == "regex" {
+		if compileDanmakuRegex(in.Pattern) == nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "正则不合法"})
+			return
+		}
+	}
+	if in.Category == "" {
+		in.Category = "other"
+	}
+	enabled := true
+	if in.Enabled != nil {
+		enabled = *in.Enabled
+	}
+	dmMu.Lock()
+	defer dmMu.Unlock()
+	cfg := loadDanmakuRules()
+	for _, r := range cfg.Rules {
+		if r.Type == in.Type && r.Pattern == in.Pattern {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "规则已存在"})
+			return
+		}
+	}
+	cfg.Rules = append(cfg.Rules, DanmakuRule{
+		ID: newSkipID(), Type: in.Type, Pattern: in.Pattern,
+		Category: in.Category, Note: strings.TrimSpace(in.Note), Enabled: enabled,
+	})
+	if err := saveDanmakuRules(cfg); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/danmaku/add", in.Pattern, true, 0, "新增弹幕过滤规则")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "已添加规则", "total": len(cfg.Rules)})
+}
+
+// handleDanmakuRulesToggle POST /api/danmaku/toggle?id= → 启停规则
+func handleDanmakuRulesToggle(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少 id"})
+		return
+	}
+	dmMu.Lock()
+	defer dmMu.Unlock()
+	cfg := loadDanmakuRules()
+	for i := range cfg.Rules {
+		if cfg.Rules[i].ID == id {
+			cfg.Rules[i].Enabled = !cfg.Rules[i].Enabled
+			_ = saveDanmakuRules(cfg)
+			recordCall("/api/danmaku/toggle", id, true, 0, "启停弹幕规则")
+			writeJSON(w, map[string]interface{}{"success": true, "message": "已切换规则状态", "enabled": cfg.Rules[i].Enabled})
+			return
+		}
+	}
+	writeJSON(w, map[string]interface{}{"success": false, "message": "规则不存在"})
+}
+
+// handleDanmakuRulesDelete POST /api/danmaku/delete?id= → 删除规则
+func handleDanmakuRulesDelete(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少 id"})
+		return
+	}
+	dmMu.Lock()
+	defer dmMu.Unlock()
+	cfg := loadDanmakuRules()
+	out := cfg.Rules[:0]
+	found := false
+	for _, rl := range cfg.Rules {
+		if rl.ID == id {
+			found = true
+			continue
+		}
+		out = append(out, rl)
+	}
+	cfg.Rules = out
+	if !found {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "规则不存在"})
+		return
+	}
+	_ = saveDanmakuRules(cfg)
+	recordCall("/api/danmaku/delete", id, true, 0, "删除弹幕过滤规则")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "已删除规则", "total": len(cfg.Rules)})
+}
+
+// handleDanmakuTest POST /api/danmaku/test {text} → 测试单条文本是否被过滤（不落库）
+func handleDanmakuTest(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数解析失败"})
+		return
+	}
+	blocked, cat, pat := danmakuFilterText(strings.TrimSpace(in.Text))
+	writeJSON(w, map[string]interface{}{"success": true, "blocked": blocked, "category": cat, "matched": pat})
+}
+
+// ============================================================
 // 后台登录鉴权：账号密码（默认 admin / admin123，后台可改，持久化 auth.json）
 // ============================================================
 
@@ -4796,6 +5412,35 @@ func main() {
 		recordClean(res, u)
 		writeJSON(w, res)
 	})
+	// 新版增强测试播放引擎：/api/clean/enhanced（独立实现，不影响原 /api/clean）
+	http.HandleFunc("/api/clean/enhanced", func(w http.ResponseWriter, r *http.Request) {
+		u := r.URL.Query().Get("url")
+		eng := r.URL.Query().Get("engine")
+		res := cleanEnhanced(u, eng)
+		recordClean(res, u)
+		if !res.Success {
+			writeJSON(w, map[string]interface{}{"success": false, "message": res.Message})
+			return
+		}
+		writeJSON(w, res)
+	})
+	http.HandleFunc("/api/clean/enhanced/json", func(w http.ResponseWriter, r *http.Request) {
+		u := r.URL.Query().Get("url")
+		eng := r.URL.Query().Get("engine")
+		res := cleanEnhanced(u, eng)
+		recordClean(res, u)
+		writeJSON(w, res)
+	})
+	// 非正片区间标注（SponsorBlock 思路，需登录）：/api/skip
+	http.HandleFunc("/api/skip", guard(handleSkipList))
+	http.HandleFunc("/api/skip/add", guard(handleSkipAdd))
+	http.HandleFunc("/api/skip/delete", guard(handleSkipDelete))
+	// 弹幕过滤规则库（独立模块，需登录）：/api/danmaku
+	http.HandleFunc("/api/danmaku", guard(handleDanmakuRulesList))
+	http.HandleFunc("/api/danmaku/add", guard(handleDanmakuRulesAdd))
+	http.HandleFunc("/api/danmaku/toggle", guard(handleDanmakuRulesToggle))
+	http.HandleFunc("/api/danmaku/delete", guard(handleDanmakuRulesDelete))
+	http.HandleFunc("/api/danmaku/test", guard(handleDanmakuTest))
 	// AI 去广告配置查看/更新
 	http.HandleFunc("/api/ai/config", handleAIConfig)
 	// 官替链路：官方视频页 → 资源站 → 无广告 m3u8
