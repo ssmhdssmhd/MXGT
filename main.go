@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.8"
+	AppVersion = "v0.6.9"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1223,6 +1223,25 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
+    <h2>🔍 广告核查 <span class="muted">（列出每一个「不连贯」片段：拼接点/时长突变/偏短/规则已删，逐段播放核查，确认广告一键写入跳过区间——规则漏检的兜底，播放时自动跳过）</span></h2>
+    <div class="row" style="flex-wrap:wrap">
+      <input id="adInput" placeholder="粘贴 M3U8 地址，核查不连贯片段是否有广告" style="flex:1;min-width:300px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db"
+             onkeydown="if(event.key==='Enter')runAudit()">
+      <input id="adKey" placeholder="视频标识（剧名 第N集，空=全局）" style="width:200px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <button class="btn" onclick="runAudit()">🔎 开始核查</button>
+    </div>
+    <div class="stat-line" id="adStats"></div>
+    <div class="stat-line" id="adPlayerTip" style="display:none"></div>
+    <table>
+      <thead><tr><th>时间轴(过滤后)</th><th>时长</th><th>可疑</th><th>片段</th><th>操作</th></tr></thead>
+      <tbody id="adList"></tbody>
+    </table>
+    <details><summary style="cursor:pointer;color:#94a3b8;margin-top:8px">🗑 规则已删广告段（共 <span id="adDelCnt">0</span> 段）</summary>
+      <table><thead><tr><th>原始序号</th><th>时长</th><th>原因</th><th>片段</th></tr></thead><tbody id="adDeleted"></tbody></table>
+    </details>
+  </div>
+
+  <div class="panel">
     <h2>🔄 远程在线更新</h2>
     <div class="row">
       <div class="stat-line" id="updInfo" style="display:block"><!--UPD_BLOCK--></div>
@@ -1428,6 +1447,60 @@ async function delSkip(id){
   if(!confirm('确定删除该区间吗？'))return;
   const d=await fetch('/api/skip/delete?id='+encodeURIComponent(id),{method:'POST'}).then(function(r){return r.json()});
   if(d.success){loadSkips();}else{alert(d.message||'删除失败');}
+}
+// —— 广告核查（/api/audit）：逐段核查不连贯片段，确认广告写入跳过区间 ——
+async function runAudit(){
+  const url=el('adInput').value.trim();
+  el('adStats').style.display='none';
+  if(!url){alert('请先粘贴 M3U8 地址');return;}
+  el('adStats').style.display='block'; el('adStats').textContent='核查中…';
+  el('adList').innerHTML=''; el('adDeleted').innerHTML=''; el('adDelCnt').textContent='0';
+  el('adPlayerTip').style.display='none';
+  try{
+    const r=await fetch('/api/audit?url='+encodeURIComponent(url));
+    const j=await r.json();
+    if(!j.success){el('adStats').textContent='✕ '+(j.message||'核查失败');return;}
+    el('adStats').textContent=j.message;
+    const rows=(j.segments||[]).filter(function(s){return s.suspect&&s.suspect.length;});
+    el('adList').innerHTML=rows.map(function(s){
+      const tag=(s.suspect||[]).map(function(t){return '<span style="color:#d97706;font-weight:600">'+t+'</span>'}).join(' ');
+      return '<tr data-idx="'+s.index+'"><td>'+s.start.toFixed(1)+'–'+s.end.toFixed(1)+'s</td><td>'+s.duration.toFixed(2)+'s</td>'+
+        '<td>'+tag+'</td><td style="max-width:280px;word-break:break-all;font-size:11px;color:#94a3b8">'+(s.abs_uri||s.uri||'')+'</td>'+
+        '<td><button class="btn gh" style="padding:3px 8px;font-size:12px" onclick="adPlay('+s.start.toFixed(3)+','+s.end.toFixed(3)+')">▶ 播放核对</button> '+
+        '<button class="btn gh" style="padding:3px 8px;font-size:12px;background:#dc2626;color:#fff" onclick="adMark('+s.start.toFixed(3)+','+s.end.toFixed(3)+')">⛔ 标广告</button> '+
+        '<button class="btn gh" style="padding:3px 8px;font-size:12px" onclick="adIgnore(\''+s.index+'\')">✅ 正常</button></td></tr>';
+    }).join('')||'<tr><td colspan="5" class="muted">未发现可疑片段，可展开下方查看规则已删广告</td></tr>';
+    el('adDelCnt').textContent=(j.ads||[]).length;
+    el('adDeleted').innerHTML=(j.ads||[]).map(function(s){
+      return '<tr><td>#'+s.index+'</td><td>'+s.duration.toFixed(2)+'s</td><td>'+(s.ad_reason||'')+'</td><td style="max-width:280px;word-break:break-all;font-size:11px;color:#94a3b8">'+(s.abs_uri||s.uri||'')+'</td></tr>';
+    }).join('')||'<tr><td colspan="4" class="muted">无</td></tr>';
+  }catch(e){el('adStats').textContent='核查失败: '+e.message}
+}
+function adPlay(start,end){ // 用主播放器加载该 m3u8（经 /api/play 代理），定位到可疑段时间轴核对上下文
+  const url=el('adInput').value.trim();
+  if(!url){alert('缺少 M3U8 地址');return;}
+  el('adPlayerTip').style.display='block';
+  el('adPlayerTip').textContent='主播放器已加载该片，定位到 '+start.toFixed(1)+'s–'+end.toFixed(1)+'s（可前后拖动核对上下文）…';
+  playURLWith(url, function(){
+    const v=el('player');
+    const go=function(){ v.currentTime=start; v.play().catch(function(){}); };
+    if(v.readyState>=1){go();}else{v.addEventListener('loadedmetadata',go,{once:true});}
+  });
+}
+function adMark(start,end){ // 确认广告 → 写入 skip 区间（过滤后时间轴，与播放器一致）
+  const key=el('adKey').value.trim();
+  fetch('/api/skip/add',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({key:key,start:start,end:end,type:'sponsor',note:'人工核查确认广告'})})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.success){loadSkips();alert('✅ 已加入跳过区间 '+(key?('「'+key+'」'):'（全局）')+' '+start+'–'+end+'s，该视频播放时自动跳过');}
+      else{alert(d.message||'标记失败（需登录后台）');}
+    })
+    .catch(function(e){alert('标记失败: '+e.message)});
+}
+function adIgnore(idx){ // 确认正常 → 本次核查会话隐藏
+  const row=document.querySelector('#adList tr[data-idx="'+idx+'"]');
+  if(row)row.style.display='none';
 }
 // —— 弹幕过滤规则库（/api/danmaku）——
 const dmCatMap={'ad':'广告','spam':'垃圾刷屏','spoiler':'剧透','attack':'人身攻击','nsfw':'低俗','other':'其他'};
@@ -2496,6 +2569,137 @@ func rewritePlaylist(body []byte, baseURL, proxyBase string) []byte {
 		out = append(out, prox(abs(t)))
 	}
 	return []byte(strings.Join(out, "\n"))
+}
+
+// ============================================================
+// 广告核查 /api/audit：把每一个「不连贯」片段列出来，供人工逐段核查是否有广告
+// 覆盖规则漏检兜底：规则引擎判不了的（时长与正片相同、无 URL/标签特征），
+// 人工确认后一键写入 skip 区间（按视频标识），播放时自动跳过 → 实际播放不再出现。
+// 时间轴为「过滤后时间轴」，与 /api/play 播放器时间轴一致，标记区间不错位。
+// ============================================================
+
+// AuditSegment 核查输出段（过滤后时间轴）
+type AuditSegment struct {
+	Index    int      `json:"index"`
+	Start    float64  `json:"start"`
+	End      float64  `json:"end"`
+	Duration float64  `json:"duration"`
+	URI      string   `json:"uri"`
+	AbsURI   string   `json:"abs_uri"`
+	IsAd     bool     `json:"is_ad"`
+	AdReason string   `json:"ad_reason,omitempty"`
+	Suspect  []string `json:"suspect,omitempty"`
+}
+
+// AuditResult 核查结果
+type AuditResult struct {
+	Success  bool           `json:"success"`
+	Message  string         `json:"message,omitempty"`
+	URL      string         `json:"url"`
+	MediaURL string         `json:"media_url,omitempty"`
+	TotalRaw int            `json:"total_raw"` // 原始段数
+	AdCount  int            `json:"ad_count"`  // 规则已判广告数
+	Segments []AuditSegment `json:"segments"`  // 保留段（过滤后时间轴，含可疑标记）
+	Ads      []AuditSegment `json:"ads"`       // 规则已删广告段（原始序号）
+}
+
+// auditParse 解析 + 增强检测 + 生成核查清单（与 /api/play 同一套检测）
+func auditParse(rawURL string) AuditResult {
+	res := AuditResult{Success: false, URL: rawURL}
+	body, err := newClient().fetch(rawURL)
+	if err != nil {
+		res.Message = "抓取失败: " + err.Error()
+		return res
+	}
+	mediaURL := rawURL
+	segs, variants, isMaster, err := parseM3U8(body, mediaURL)
+	if err != nil {
+		res.Message = "解析失败: " + err.Error()
+		return res
+	}
+	if isMaster && len(variants) > 0 {
+		sort.Slice(variants, func(a, b int) bool { return variants[a].Bandwidth > variants[b].Bandwidth })
+		mediaURL = resolve(rawURL, variants[0].URI)
+		body2, err2 := newClient().fetch(mediaURL)
+		if err2 != nil {
+			res.Message = "media 抓取失败: " + err2.Error()
+			return res
+		}
+		segs, _, _, _ = parseM3U8(body2, mediaURL)
+	}
+	res.MediaURL = mediaURL
+	res.TotalRaw = len(segs)
+	if len(segs) == 0 {
+		res.Message = "无有效片段"
+		return res
+	}
+	detectAds(segs, true)
+	enhancedDetectAds(segs)
+
+	var kept []Segment
+	for _, s := range segs {
+		if s.IsAd {
+			res.Ads = append(res.Ads, AuditSegment{Index: s.Index, Duration: s.Duration, URI: s.URI, AbsURI: s.AbsURI, IsAd: true, AdReason: s.AdReason})
+			res.AdCount++
+		} else {
+			kept = append(kept, s)
+		}
+	}
+	// 过滤后时间轴（跳过已删广告段累计）
+	acc := 0.0
+	for _, s := range kept {
+		as := AuditSegment{
+			Index: s.Index, Start: acc, End: acc + s.Duration,
+			Duration: s.Duration, URI: s.URI, AbsURI: s.AbsURI,
+		}
+		// 不连贯/可疑标记
+		if s.Discontinuity {
+			as.Suspect = append(as.Suspect, "拼接点")
+		}
+		if s.Duration < 2.0 {
+			as.Suspect = append(as.Suspect, "偏短")
+		}
+		res.Segments = append(res.Segments, as)
+		acc += s.Duration
+	}
+	// 时长突变：与保留段前后邻段均值比较（>2 倍或 <1/2）
+	for i := range res.Segments {
+		as := &res.Segments[i]
+		var sum float64
+		var cnt int
+		for j := i - 1; j <= i+1; j++ {
+			if j < 0 || j >= len(res.Segments) || j == i {
+				continue
+			}
+			sum += res.Segments[j].Duration
+			cnt++
+		}
+		if cnt >= 1 {
+			avg := sum / float64(cnt)
+			if as.Duration < avg/2 || as.Duration > avg*2 {
+				as.Suspect = append(as.Suspect, "时长突变")
+			}
+		}
+	}
+	sus := 0
+	for i := range res.Segments {
+		sus += len(res.Segments[i].Suspect)
+	}
+	res.Success = true
+	res.Message = fmt.Sprintf("原始 %d 段 · 规则已删广告 %d 段 · 保留 %d 段 · 可疑 %d 处", res.TotalRaw, res.AdCount, len(res.Segments), sus)
+	return res
+}
+
+// handleAudit GET /api/audit?url=<m3u8>：广告核查（开放，播放器/核查面板使用）
+func handleAudit(w http.ResponseWriter, r *http.Request) {
+	u := strings.TrimSpace(r.URL.Query().Get("url"))
+	if u == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少 url 参数"})
+		return
+	}
+	res := auditParse(u)
+	recordCall("/api/audit", u, res.Success, 0, res.Message)
+	writeJSON(w, res)
 }
 
 // handlePlayProxy GET /api/play?url=<http(s)地址>：m3u8 播放列表改写返回；分片/密钥/媒体字节流透传（支持 Range）
@@ -5924,6 +6128,7 @@ func main() {
 	})
 	http.HandleFunc("/player", handlePlayer) // 独立外置播放页（开放，供官替 external_url 新窗口播放）
 	http.HandleFunc("/api/play", handlePlayProxy) // 播放代理：m3u8 改写 + 分片透传（解决跨域/限速卡顿）
+	http.HandleFunc("/api/audit", handleAudit)    // 广告核查：列出不连贯片段供人工核查（开放）
 	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, stats.snapshot())
 	})
