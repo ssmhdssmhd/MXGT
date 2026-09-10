@@ -1,6 +1,6 @@
 {
     "version": "1.0",
-    "update_date": "2026-09-09",
+    "update_date": "2026-09-10",
     "sites": [
         {
             "name": "量子",
@@ -1220,6 +1220,466 @@
             "status": "active",
             "enabled": false,
             "note": "萌芽合作站",
+            "priority": 100
+        },
+        {
+            "name": "西瓜资源",
+            "site_url": "https://xgzy.tv",
+            "api_url": "https://xgzy.tv/api.php/provide/vod/from/xiguam3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "无水印资源",
+            "site_url": "https://api.wsyzy.net",
+            "api_url": "https://api.wsyzy.net/api.php/provide/vod/from/wsym3u8/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "闪电资源",
+            "site_url": "https://xsd.sdzyapi.com",
+            "api_url": "https://xsd.sdzyapi.com/api.php/provide/vod/from/sdm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "快车资源",
+            "site_url": "https://caiji.kuaichezy.org",
+            "api_url": "https://caiji.kuaichezy.org/api.php/provide/vod/from/kcm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "牛牛资源",
+            "site_url": "https://api.niuniuzy.me",
+            "api_url": "https://api.niuniuzy.me/api.php/provide/vod/from/nnm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "无尽资源API",
+            "site_url": "https://api.wujinapi.me",
+            "api_url": "https://api.wujinapi.me/api.php/provide/vod/from/wjm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "OK资源API",
+            "site_url": "https://api.okzyw.net",
+            "api_url": "https://api.okzyw.net/api.php/provide/vod/from/okm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "索尼资源",
+            "site_url": "https://suoniapi.com",
+            "api_url": "https://suoniapi.com/api.php/provide/vod/from/snm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "最大资源",
+            "site_url": "https://api.zuidapi.com",
+            "api_url": "https://api.zuidapi.com/api.php/provide/vod/from/zuidam3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "U酷资源API",
+            "site_url": "https://api.ukuapi88.com",
+            "api_url": "https://api.ukuapi88.com/api.php/provide/vod/from/ukm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "新浪资源",
+            "site_url": "https://api.xinlangapi.com",
+            "api_url": "https://api.xinlangapi.com/xinlangapi.php/provide/vod/from/xlm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "98资源",
+            "site_url": "https://98zy.vip",
+            "api_url": "https://98zy.vip/api.php/provide/vod/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "爱奇艺站",
+            "site_url": "https://iqiyizyapi.com",
+            "api_url": "https://iqiyizyapi.com/api.php/provide/vod/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "金鹰资源API",
+            "site_url": "https://jyzyapi.com",
+            "api_url": "https://jyzyapi.com/provide/vod/from/jinyingm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "茅台资源",
+            "site_url": "https://caiji.maotaizy.cc",
+            "api_url": "https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "旺旺资源",
+            "site_url": "https://api.wwzy.tv",
+            "api_url": "https://api.wwzy.tv/api.php/provide/vod/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "红牛资源API",
+            "site_url": "https://www.hongniuzy2.com",
+            "api_url": "https://www.hongniuzy2.com/api.php/provide/vod/from/hnm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "如意资源API",
+            "site_url": "https://cj.rycjapi.com",
+            "api_url": "https://cj.rycjapi.com/api.php/provide/vod/from/rym3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "非凡资源API",
+            "site_url": "https://cj.ffzyapi.com",
+            "api_url": "http://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "优秀资源",
+            "site_url": "https://api.yzzy-api.com",
+            "api_url": "http://api.yzzy-api.com/inc/api_mac10.php",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "CK伦理",
+            "site_url": "https://ckzy.me",
+            "api_url": "https://ckzy.me/api.php/provide/vod/from/ckm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "天涯影视",
+            "site_url": "https://tyyszyapi.com",
+            "api_url": "https://tyyszyapi.com/api.php/provide/vod/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "豆瓣资源API",
+            "site_url": "https://caiji.dbzy5.com",
+            "api_url": "https://caiji.dbzy5.com/api.php/provide/vod/from/dbm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合B",
+            "priority": 100
+        },
+        {
+            "name": "极速资源API",
+            "site_url": "https://jszyapi.com",
+            "api_url": "https://jszyapi.com/api.php/provide/vod/from/jsm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合B",
+            "priority": 100
+        },
+        {
+            "name": "影剧资源",
+            "site_url": "https://caiji.maotaizy.cc",
+            "api_url": "https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8/at/josn",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合B",
+            "priority": 100
+        },
+        {
+            "name": "樱花资源API",
+            "site_url": "https://m3u8.apiyhzy.com",
+            "api_url": "https://m3u8.apiyhzy.com/api.php/provide/vod/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合B",
+            "priority": 100
+        },
+        {
+            "name": "猫眼资源API",
+            "site_url": "https://api.maoyanapi.top",
+            "api_url": "https://api.maoyanapi.top/api.php/provide/vod/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合B",
+            "priority": 100
+        },
+        {
+            "name": "百度云站",
+            "site_url": "https://bdzy1.com",
+            "api_url": "https://bdzy1.com/api.php/provide/vod/from/dbm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合B",
+            "priority": 100
+        },
+        {
+            "name": "搜AV资源",
+            "site_url": "https://api.souavzyw.net",
+            "api_url": "https://api.souavzyw.net/api.php/provide/vod/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "桃花视频",
+            "site_url": "https://thzy1.me",
+            "api_url": "https://thzy1.me/api.php/provide/vod/from/thm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合S",
+            "priority": 100
+        },
+        {
+            "name": "细胞资源",
+            "site_url": "https://www.xxibaozyw.com",
+            "api_url": "https://www.xxibaozyw.com/api.php/provide/vod/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "色猫资源",
+            "site_url": "https://caiji.semaozy.net",
+            "api_url": "https://caiji.semaozy.net/inc/apijson_vod.php",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "黄色仓库",
+            "site_url": "https://hsckzy888.com",
+            "api_url": "https://hsckzy888.com/api.php/provide/vod/from/hsckm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "杏吧资源",
+            "site_url": "https://xingba222.com",
+            "api_url": "https://xingba222.com/api.php/provide/vod/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "玉兔资源API",
+            "site_url": "https://apiyutu.com",
+            "api_url": "https://apiyutu.com/api.php/provide/vod/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "香蕉资源",
+            "site_url": "https://www.xiangjiaozyw.com",
+            "api_url": "https://www.xiangjiaozyw.com/api.php/provide/vod/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "CK百货",
+            "site_url": "https://ckbh1.xyz",
+            "api_url": "https://ckbh1.xyz/api.php/provide/vod/from/ckm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "幸资源站",
+            "site_url": "https://xzybb1.com",
+            "api_url": "https://xzybb1.com/api.php/provide/vod/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合D",
+            "priority": 100
+        },
+        {
+            "name": "789资源",
+            "site_url": "https://www.caiji.cyou",
+            "api_url": "https://www.caiji.cyou/api.php/provide/vod/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "建安资源",
+            "site_url": "https://154.219.117.232:9981",
+            "api_url": "http://154.219.117.232:9981/jacloudapi.php/provide/vod/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "金蝉资源",
+            "site_url": "https://zy.jinchancaiji.com",
+            "api_url": "http://zy.jinchancaiji.com/api.php/provide/vod/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·皮皮虾-综合A",
+            "priority": 100
+        },
+        {
+            "name": "山海资源",
+            "site_url": "https://gc.wki8.com",
+            "api_url": "https://gc.wki8.com/api.php/provide/vod/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·萌芽-官采",
+            "priority": 100
+        },
+        {
+            "name": "精品98资源",
+            "site_url": "https://jp98.vip",
+            "api_url": "https://jp98.vip/api.php/provide/vod/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·萌芽-推荐",
+            "priority": 100
+        },
+        {
+            "name": "金马资源网",
+            "site_url": "https://api.jmzy.com",
+            "api_url": "https://api.jmzy.com/api.php/provide/vod/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·萌芽-切片",
+            "priority": 100
+        },
+        {
+            "name": "暴风资源站S",
+            "site_url": "https://bf.xoxowin86cisyap.com",
+            "api_url": "https://bf.xoxowin86cisyap.com/api.php/provide/vod/at/json/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·萌芽-切片",
+            "priority": 100
+        },
+        {
+            "name": "热播4k公益",
+            "site_url": "https://res4k.jdyx.pro",
+            "api_url": "https://res4k.jdyx.pro/api.php/provide/vod/",
+            "type": "maccms",
+            "status": "active",
+            "enabled": false,
+            "note": "新增·萌芽-自定义",
             "priority": 100
         }
     ]
