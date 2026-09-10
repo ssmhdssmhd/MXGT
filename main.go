@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.6"
+	AppVersion = "v0.6.7"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1136,6 +1136,8 @@ const adminPageHTML = `<!DOCTYPE html>
   <div class="panel">
     <h2>⏱️ 非正片区间标注 <span class="muted">（SponsorBlock 思路：维护片头/片尾/赞助/三连/其他 时间戳区间，存 skip_ranges.json，供播放器按区间跳过）</span></h2>
     <div class="row" style="flex-wrap:wrap">
+      <span class="muted">视频标识(空=全局)</span>
+      <input id="skKey" placeholder="剧名 第N集 / 留空对所有视频生效" style="width:180px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
       <span class="muted">起始(s)</span>
       <input id="skStart" type="number" min="0" step="0.1" placeholder="0" style="width:90px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
       <span class="muted">结束(s)</span>
@@ -1151,7 +1153,7 @@ const adminPageHTML = `<!DOCTYPE html>
       <span class="muted" id="skInfo"></span>
     </div>
     <table>
-      <thead><tr><th>起始</th><th>结束</th><th>类型</th><th>备注</th><th>来源</th><th>操作</th></tr></thead>
+      <thead><tr><th>视频</th><th>起始</th><th>结束</th><th>类型</th><th>备注</th><th>来源</th><th>操作</th></tr></thead>
       <tbody id="skList"></tbody>
     </table>
   </div>
@@ -1279,7 +1281,7 @@ function applyUpdate(){
     setTimeout(function(){location.reload();},4000);
   }).catch(function(e){el('updInfo').textContent='发起失败: '+e.message});
 }
-refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms(); loadOneClickLinks(); loadSkips(); loadDanmaku();
+refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms(); loadOneClickLinks(); loadSkips(); loadDanmaku(); initSkipAuto();
 
 // —— 新版增强测试播放（/api/clean/enhanced）——
 function enhBuildURL(url, eng){
@@ -1314,7 +1316,26 @@ async function playEnhanced(){
   playURLWith(url, function(){ el('playSrc').textContent='（新版增强）已尝试播放'; });
 }
 // 播放走本服务代理 /api/play（分片同源 + 服务端 UA/Referer/超时），解决第三方 m3u8 跨域/限速卡顿
-function proxyPlayURL(u){return '/api/play?url='+encodeURIComponent(u);}
+// 已是本服务地址（/api/play、/api/clean 等）不再二次代理，避免本服务请求本服务多一层往返
+function isLocalProxy(u){return u.indexOf('/api/play')===0||u.indexOf('/api/clean')===0||/^https?:\/\/[^/]*\/api\/(play|clean)/.test(u);}
+function proxyPlayURL(u){return isLocalProxy(u)?u:'/api/play?url='+encodeURIComponent(u);}
+// —— 非正片区间自动跳过（内嵌/占位广告：播放器按区间 seek 跳过，SponsorBlock 思路）——
+let __skipRanges=[],__skipBound=false,__lastSkip=0;
+function setSkipRanges(rs){__skipRanges=(rs||[]).filter(function(r){return r&&r.start<r.end;});}
+function bindSkipAuto(v){
+  if(!v||__skipBound)return;__skipBound=true;
+  v.addEventListener('timeupdate',function(){
+    const t=v.currentTime,now=Date.now();
+    if(now-__lastSkip<300)return; // 防连续 seek 死循环
+    for(let i=0;i<__skipRanges.length;i++){
+      const rg=__skipRanges[i];
+      if(t>rg.start&&t<rg.end-0.3){__lastSkip=now;v.currentTime=rg.end+0.01;break;}
+    }
+  });
+}
+function initSkipAuto(){ // 默认加载全局区间（所有视频通用的片头片尾等），官替结果会覆盖
+  fetch('/api/skip').then(function(r){return r.json()}).then(function(d){if(d.ranges)setSkipRanges(d.ranges);}).catch(function(){});
+}
 function isDirectURL(u){return /\.(mp4|mkv|webm|flv)(\?|$)/i.test(u);}
 // hls.js 抗卡顿配置：加大缓冲 + 分片/清单失败重试（指数退避）+ 软件解密兜底
 function hlsConfig(){return {
@@ -1331,6 +1352,7 @@ function playURLWith(url, cb){
   const panel=el('playPanel'); if(panel)panel.style.display='block';
   const srcEl=el('playSrc'); if(srcEl){srcEl.style.display='block';srcEl.textContent='播放源: '+url;}
   const src=isDirectURL(url)?url:proxyPlayURL(url);
+  bindSkipAuto(v); // 非正片区间自动跳过（内嵌/占位广告）
   function destroy(){ if(window.__hls){window.__hls.destroy();window.__hls=null;} }
   destroy();
   if(navigator.userAgent.indexOf('Safari')>=0 && window.Hls===undefined){
@@ -1352,17 +1374,17 @@ async function loadSkips(){
     const d=await getJSON('/api/skip');
     el('skInfo').textContent='共 '+d.total+' 个区间';
     el('skList').innerHTML=(d.ranges||[]).map(function(r){
-      return '<tr><td>'+r.start.toFixed(1)+'s</td><td>'+r.end.toFixed(1)+'s</td><td>'+(skipTypeMap[r.type]||r.type)+'</td><td>'+(r.note||'')+'</td><td>'+(r.source||'')+'</td>'+
+      return '<tr><td>'+(r.key||'🌐 全局')+'</td><td>'+r.start.toFixed(1)+'s</td><td>'+r.end.toFixed(1)+'s</td><td>'+(skipTypeMap[r.type]||r.type)+'</td><td>'+(r.note||'')+'</td><td>'+(r.source||'')+'</td>'+
         '<td><button class="btn gh" onclick="delSkip(\''+r.id+'\')">🗑 删除</button></td></tr>';
-    }).join('')||'<tr><td colspan="6" class="muted">暂无区间</td></tr>';
+    }).join('')||'<tr><td colspan="7" class="muted">暂无区间</td></tr>';
   }catch(e){el('skInfo').textContent='加载失败: '+e.message}
 }
 async function addSkip(){
   const start=parseFloat(el('skStart').value); const end=parseFloat(el('skEnd').value);
   if(!(start>=0)||!(end>start)){alert('请输入有效起始/结束（0 ≤ 起始 < 结束）');return;}
   const d=await fetch('/api/skip/add',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({start:start,end:end,type:el('skType').value,note:el('skNote').value.trim()})}).then(function(r){return r.json()});
-  if(d.success){el('skStart').value='';el('skEnd').value='';el('skNote').value='';loadSkips();}
+    body:JSON.stringify({key:el('skKey').value.trim(),start:start,end:end,type:el('skType').value,note:el('skNote').value.trim()})}).then(function(r){return r.json()});
+  if(d.success){el('skKey').value='';el('skStart').value='';el('skEnd').value='';el('skNote').value='';loadSkips();}
   else{alert(d.message||'添加失败');}
 }
 async function delSkip(id){
@@ -1433,6 +1455,7 @@ function playURL(src){
   const player=el('player');
   el('playSrc').textContent='播放源: '+src;
   el('playPanel').style.display='block';
+  bindSkipAuto(player); // 非正片区间自动跳过（内嵌/占位广告）
   if(hlsInst){try{hlsInst.destroy();}catch(e){}hlsInst=null;}
   // mp4 等直链：交给原生播放器，任何浏览器都支持
   if(isDirectVideo(src)){
@@ -1479,6 +1502,10 @@ async function runReplace(){
       s+=' <button class="btn" style="padding:4px 10px;font-size:12px" onclick="playURL(\''+safe+'\')">▶ 内置播放</button>';
       if(j.external_url){
         s+=' <button class="btn" style="padding:4px 10px;font-size:12px" onclick="window.open(\''+j.external_url.replace(/'/g,"\\'")+'\',\'_blank\')">↗ 外置播放</button>';
+      }
+      if(j.skip_ranges&&j.skip_ranges.length){
+        setSkipRanges(j.skip_ranges); // 官替视频专属+全局区间，内置播放自动跳过内嵌/占位广告
+        s+=' <span style="color:#d97706;font-weight:600">⏭️ 已加载 '+j.skip_ranges.length+' 个跳过区间</span>';
       }
     }
     el('repStats').style.display='block';el('repStats').innerHTML=s;
@@ -2242,13 +2269,26 @@ const playerPageHTML = `<!DOCTYPE html>
   <div class="tip">来源：资源站 → 官替去广告直链（支持跨域）。m3u8 自动走 hls.js，mp4/mkv 直链原生播放。</div>
 <script>
 function g(n){return new URLSearchParams(location.search).get(n)||''}
-var src=g('url'),title=g('title');
+var src=g('url'),title=g('title'),key=g('key');
 var video=document.getElementById('player');
 if(title){document.title=title+' - MXGT-Go 播放器';}
 document.getElementById('src').textContent=src||'缺少 url 参数';
 function isDirect(u){return /\.(mp4|mkv|webm|flv)(\?|$)/i.test(u);}
-// 播放走本服务代理 /api/play：分片同源 + 服务端带 UA/Referer/超时，解决第三方 m3u8 跨域与限速卡顿
-function proxyPlayURL(u){return '/api/play?url='+encodeURIComponent(u);}
+// 播放走本服务代理 /api/play：分片同源 + 服务端带 UA/Referer/超时，解决第三方 m3u8 跨域与限速卡顿；
+// 已是本服务地址（/api/play、/api/clean 等）不再二次代理
+function isLocalProxy(u){return u.indexOf('/api/play')===0||u.indexOf('/api/clean')===0||/^https?:\/\/[^/]*\/api\/(play|clean)/.test(u);}
+function proxyPlayURL(u){return isLocalProxy(u)?u:'/api/play?url='+encodeURIComponent(u);}
+// 非正片区间自动跳过（内嵌/占位广告）：按视频 key 加载区间（key 为空只取全局区间），播放时 seek 跳过
+var skipRanges=[],lastSkip=0;
+fetch('/api/skip'+(key?'?key='+encodeURIComponent(key):'')).then(function(r){return r.json()}).then(function(d){skipRanges=(d.ranges||[]).filter(function(r){return r&&r.start<r.end;});}).catch(function(){});
+video.addEventListener('timeupdate',function(){
+  var t=video.currentTime,now=Date.now();
+  if(now-lastSkip<300)return;
+  for(var i=0;i<skipRanges.length;i++){
+    var rg=skipRanges[i];
+    if(t>rg.start&&t<rg.end-0.3){lastSkip=now;video.currentTime=rg.end+0.01;break;}
+  }
+});
 // hls.js 抗卡顿配置：加大缓冲 + 分片/清单失败重试（指数退避）+ 软件解密兜底
 function hlsConfig(){return {
   enableWorker:true,
@@ -2370,11 +2410,23 @@ func playProxyURL(u string) string {
 	return "/api/play?url=" + url.QueryEscape(u)
 }
 
+// playProxyAbsURL 生成本服务播放代理绝对地址（基于请求 Host），供外部播放器（TVBox 等）使用
+func playProxyAbsURL(proxyBase, u string) string {
+	return proxyBase + "/api/play?url=" + url.QueryEscape(u)
+}
+
 // rewritePlaylist 改写 m3u8 播放列表：分片/密钥/子列表地址全部指向本服务代理（解决跨域与源站限速卡顿）
-func rewritePlaylist(body []byte, baseURL string) []byte {
+// proxyBase 非空时输出绝对代理地址（外部播放器可播）；为空输出相对路径（同源页面）
+func rewritePlaylist(body []byte, baseURL, proxyBase string) []byte {
 	base := baseURL
 	if i := strings.LastIndex(base, "/"); i >= 0 {
 		base = base[:i+1]
+	}
+	prox := func(u string) string {
+		if proxyBase != "" {
+			return playProxyAbsURL(proxyBase, u)
+		}
+		return playProxyURL(u)
 	}
 	abs := func(u string) string {
 		if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
@@ -2394,7 +2446,7 @@ func rewritePlaylist(body []byte, baseURL string) []byte {
 					if len(inner) < 2 {
 						return m
 					}
-					return `URI="` + playProxyURL(abs(inner[1])) + `"`
+					return `URI="` + prox(abs(inner[1])) + `"`
 				})
 			}
 			out = append(out, t)
@@ -2404,7 +2456,7 @@ func rewritePlaylist(body []byte, baseURL string) []byte {
 			out = append(out, ln)
 			continue
 		}
-		out = append(out, playProxyURL(abs(t)))
+		out = append(out, prox(abs(t)))
 	}
 	return []byte(strings.Join(out, "\n"))
 }
@@ -2450,16 +2502,22 @@ func handlePlayProxy(w http.ResponseWriter, r *http.Request) {
 		} else {
 			b, _ = io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 		}
+		// 基于请求 Host 生成绝对代理前缀：分片/密钥/子列表地址输出为绝对地址，外部播放器（TVBox 等）可直接播放
+		scheme := "http"
+		if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+			scheme = "https"
+		}
+		proxyBase := scheme + "://" + r.Host
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8")
 		// 增强去广告：输出过滤后清单，分片仍改走本代理（不卡顿 + 无广告）
 		if filtered, ok := cleanPlaylistOnce(b, raw); ok {
 			setCachedPlaylist(raw, []byte(filtered))
-			w.Write(rewritePlaylist([]byte(filtered), raw))
+			w.Write(rewritePlaylist([]byte(filtered), raw, proxyBase))
 			return
 		}
 		// master 列表 / 解析失败：原样改写（子列表与分片仍走本代理过滤）
 		setCachedPlaylist(raw, b)
-		w.Write(rewritePlaylist(b, raw))
+		w.Write(rewritePlaylist(b, raw, proxyBase))
 		return
 	}
 	// 分片/密钥/媒体字节流直传
@@ -4083,8 +4141,10 @@ type ReplaceResult struct {
 	VideoRemarks   string        `json:"video_remarks,omitempty"`
 	M3U8URL        string        `json:"m3u8_url,omitempty"`
 	ADSkipURL      string        `json:"ad_skip_url,omitempty"`
-	PlayURL        string        `json:"play_url,omitempty"`     // 内置播放地址（= ad_skip_url，经 /api/clean 去广告）
+	PlayURL        string        `json:"play_url,omitempty"`     // 内置播放地址（= ad_skip_url，经 /api/play 增强去广告+代理）
 	ExternalURL    string        `json:"external_url,omitempty"` // 外置播放页（/player?url=…，基于请求 Host 动态拼接）
+	SkipKey        string        `json:"skip_key,omitempty"`     // 该视频的区间匹配标识（剧名 第N集）
+	SkipRanges     []SkipRange   `json:"skip_ranges,omitempty"`  // 该视频应跳过的非正片区间（含全局区间）
 	UsedKeyword    string        `json:"used_keyword,omitempty"`
 	AutoLearnMap   string        `json:"auto_learn_map,omitempty"` // 本次官替成功自动生成的映射「官方剧名 → 资源站标准剧名」
 	AutoLearnCount int           `json:"auto_learn_count"`         // 本次自动生成映射累计条数
@@ -4236,11 +4296,16 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 		}
 	}
 	res.M3U8URL = m3u8
-	res.ADSkipURL = playURL(r, "/api/clean", url.Values{"url": {m3u8}})
+	// 统一走播放代理 /api/play：服务端内置增强去广告（平台广告域+边界短簇+中插短簇）+ 分片代理防卡顿，
+	// 不再单独请求 /api/clean（避免二次过滤与源站分片直连）
+	res.ADSkipURL = playURL(r, "/api/play", url.Values{"url": {m3u8}})
 	// 内置播放：直接播放去广告直链；外置播放：独立播放页（跨域由 withCORS 覆盖，URL 基于请求 Host 动态拼接不硬编码）
 	res.PlayURL = res.ADSkipURL
-	res.ExternalURL = playURL(r, "/player", url.Values{"url": {m3u8}, "title": {vi.BaseTitle}})
-	steps = append(steps, replaceStep{"output", "组装输出", "ok", "ad_skip_url 已生成（经 /api/clean 去广告）；支持内置/外置播放"})
+	// 该视频的区间匹配标识 + 应跳过的非正片区间（含全局区间），播放器据此自动跳过内嵌/占位广告
+	res.SkipKey = vi.BaseTitle + " 第" + strconv.Itoa(vi.EpisodeNum) + "集"
+	res.SkipRanges = rangesForVideo(res.SkipKey)
+	res.ExternalURL = playURL(r, "/player", url.Values{"url": {m3u8}, "title": {vi.BaseTitle}, "key": {res.SkipKey}})
+	steps = append(steps, replaceStep{"output", "组装输出", "ok", "ad_skip_url 已生成（经 /api/play 增强去广告+代理）；内置/外置播放均可，非正片区间自动跳过"})
 
 	res.Success = true
 	res.Message = "官替解析成功，请播放 ad_skip_url（无广告）"
@@ -5106,8 +5171,10 @@ func handlePlatformsOneClick(w http.ResponseWriter, r *http.Request) {
 // ============================================================
 
 // SkipRange 一个非正片时间戳区间（秒）
+// Key 为视频标识（如「剧名 第N集」，可空=全局区间，所有视频生效），用于按视频跳过内嵌/占位广告
 type SkipRange struct {
 	ID     string  `json:"id"`
+	Key    string  `json:"key,omitempty"`
 	Start  float64 `json:"start"`
 	End    float64 `json:"end"`
 	Type   string  `json:"type"` // intro/outro/sponsor/selfpromo/interaction/other
@@ -5154,18 +5221,41 @@ func newSkipID() string {
 	return fmt.Sprintf("%x", b)
 }
 
-// handleSkipList GET /api/skip → 全部区间（按 start 升序）
+// rangesForVideo 返回指定视频（key）应跳过的非正片区间：全局区间 + 该视频专属区间（按 start 升序）
+func rangesForVideo(key string) []SkipRange {
+	cfg := loadSkipRanges()
+	var out []SkipRange
+	for _, rg := range cfg.Ranges {
+		if rg.Key == "" || rg.Key == key {
+			out = append(out, rg)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Start < out[j].Start })
+	return out
+}
+
+// handleSkipList GET /api/skip?key=<视频标识> → 区间（按 start 升序）
+// key 为空：只返回全局区间（Key 为空）；key=剧名 第N集：返回全局区间 + 该视频专属区间
 func handleSkipList(w http.ResponseWriter, r *http.Request) {
 	skipMu.Lock()
 	defer skipMu.Unlock()
+	key := strings.TrimSpace(r.URL.Query().Get("key"))
 	cfg := loadSkipRanges()
-	sort.SliceStable(cfg.Ranges, func(i, j int) bool { return cfg.Ranges[i].Start < cfg.Ranges[j].Start })
-	writeJSON(w, map[string]interface{}{"success": true, "total": len(cfg.Ranges), "ranges": cfg.Ranges})
+	var out []SkipRange
+	for _, rg := range cfg.Ranges {
+		// key 为空：只返回全局区间；key 指定：全局区间 + 该视频专属区间
+		if rg.Key == "" || (key != "" && rg.Key == key) {
+			out = append(out, rg)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Start < out[j].Start })
+	writeJSON(w, map[string]interface{}{"success": true, "total": len(out), "ranges": out})
 }
 
-// handleSkipAdd POST /api/skip/add {start,end,type,note} → 新增区间（自动校验）
+// handleSkipAdd POST /api/skip/add {key,start,end,type,note} → 新增区间（自动校验）
 func handleSkipAdd(w http.ResponseWriter, r *http.Request) {
 	var in struct {
+		Key   string  `json:"key"`
 		Start float64 `json:"start"`
 		End   float64 `json:"end"`
 		Type  string  `json:"type"`
@@ -5191,14 +5281,14 @@ func handleSkipAdd(w http.ResponseWriter, r *http.Request) {
 	defer skipMu.Unlock()
 	cfg := loadSkipRanges()
 	cfg.Ranges = append(cfg.Ranges, SkipRange{
-		ID: newSkipID(), Start: in.Start, End: in.End,
+		ID: newSkipID(), Key: strings.TrimSpace(in.Key), Start: in.Start, End: in.End,
 		Type: in.Type, Note: strings.TrimSpace(in.Note), Source: "manual",
 	})
 	if err := saveSkipRanges(cfg); err != nil {
 		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
 		return
 	}
-	recordCall("/api/skip/add", "", true, 0, fmt.Sprintf("添加非正片区间 %0.1f-%0.1fs (%s)", in.Start, in.End, in.Type))
+	recordCall("/api/skip/add", in.Key, true, 0, fmt.Sprintf("添加非正片区间 %0.1f-%0.1fs (%s)", in.Start, in.End, in.Type))
 	writeJSON(w, map[string]interface{}{"success": true, "message": "已添加区间", "total": len(cfg.Ranges)})
 }
 
@@ -5693,7 +5783,8 @@ func handleJX(w http.ResponseWriter, r *http.Request) {
 	case "m3u8":
 		res := cleanOne(raw, false, engine)
 		if res.Success {
-			ad := playURL(r, "/api/clean", url.Values{"url": {raw}})
+			// 统一走播放代理：/api/play 内置增强去广告 + 分片代理（无广告且不卡顿）
+			ad := playURL(r, "/api/play", url.Values{"url": {raw}})
 			resp["url"], resp["full"], resp["play"], resp["format"] = ad, ad, raw, "m3u8"
 			resp["name"] = res.Message
 			ok = true
@@ -5862,8 +5953,8 @@ func main() {
 		recordClean(res, u)
 		writeJSON(w, res)
 	})
-	// 非正片区间标注（SponsorBlock 思路，需登录）：/api/skip
-	http.HandleFunc("/api/skip", guard(handleSkipList))
+	// 非正片区间标注（SponsorBlock 思路）：列表开放（播放器读取按区间跳过），增删需登录
+	http.HandleFunc("/api/skip", handleSkipList)
 	http.HandleFunc("/api/skip/add", guard(handleSkipAdd))
 	http.HandleFunc("/api/skip/delete", guard(handleSkipDelete))
 	// 弹幕过滤规则库（独立模块，需登录）：/api/danmaku
