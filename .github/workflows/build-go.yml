@@ -35,14 +35,23 @@ jobs:
           # 单文件静态可执行（零依赖），并复制 README 说明
           TS=$(TZ=Asia/Shanghai date +%Y%m%d%H%M)
           mkdir -p release
-          # 清理 release/ 下历史遗留 zip（仓库内提交过 PHP 版 MXGT_v5.14.4_*.zip），
-          # 只上传本次构建产物，避免污染 Go Release 资产
-          rm -f release/*.zip
+          # 只清理历史 Go 构建产物，保留 PHP 发布包（MXGT_v*.zip，仓库内提交），
+          # 确保每个 Release 都同时包含两个包：Go 包 + PHP 包
+          rm -f release/MXGT_go_*.zip
           cp README.md README-go.md
           zip -j "release/MXGT_go_${VER}_${TS}.zip" mxgt-go README-go.md
           echo "VER=${VER}" >> "$GITHUB_ENV"
           echo "ZIP=MXGT_go_${VER}_${TS}.zip" >> "$GITHUB_ENV"
           ls -la mxgt-go release/
+
+      - name: 清理 Release 已存在的同名资产（PHP 包名固定，防重复上传冲突）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for f in release/*.zip; do
+            name=$(basename "$f")
+            gh release delete-asset "go-v${VER}" "$name" --repo "$GITHUB_REPOSITORY" --yes 2>/dev/null || true
+          done
 
       - name: 创建/更新 GitHub Release 并上传资产
         uses: softprops/action-gh-release@v2

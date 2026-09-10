@@ -181,6 +181,7 @@ chmod +x mxgt-go
 
 - **🔧 远程更新多镜像回退**：版本清单 `latest.json` 读取改为三源按序回退——`raw.githubusercontent.com`（主源）→ `cdn.jsdelivr.net`（CDN 兜底）→ `api.github.com/contents`（API 终兜底，内容与 git 分支 HEAD 严格一致）；任一源成功即返回，避免单个源 CDN 缓存延迟/故障导致已部署客户检测不到新版本；
 - **🚀 发布 v0.6.0 到 `go` 分支**：补齐本地未推送的提交（`be4ac25..81ce5f0`），触发 GitHub Actions 云端编译，创建 Release `go-vv0.6.0` 并更新 `latest.json → v0.6.0`，客户「检查更新」即可发现并下载；
+- **📦 发行版保持两个包**：每个 Go Release 同时提供 **Go 单文件包**（`MXGT_go_*`，供远程在线更新）与 **PHP 发布包**（`MXGT_v*`），工作流构建时只清理历史 Go 产物、保留 PHP 包并上传前清理同名资产，避免更新后只剩一个包；
 - 版本升级 `v0.6.0 → v0.6.1`。
 
 ### 验证
