@@ -2399,6 +2399,85 @@ func fetchVideoTitleWithSelector(raw, selector string) string {
 	return fetchVideoTitle(raw, "")
 }
 
+// ---- 可选增强抓取：无头 Chromium 渲染真实剧名（一次性探测 Node + 脚本可用性）----
+
+var (
+	nodeRenderOnce sync.Once
+	nodeRenderOK   bool
+	nodeRenderPath string // node 可执行文件绝对路径
+	nodeRenderJS   string // fetch-title.js 绝对路径
+)
+
+// renderTitleScriptPath 定位 render-title/fetch-title.js（可执行文件旁目录）
+func renderTitleScriptPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(exe), "render-title", "fetch-title.js")
+}
+
+// initNodeRender 探测 node 与脚本是否可用（仅探测一次）。缺 Node/脚本 → 标记不可用，调用方回退静态抓取。
+func initNodeRender() {
+	nodeRenderJS = renderTitleScriptPath()
+	if nodeRenderJS == "" {
+		return
+	}
+	if _, err := os.Stat(nodeRenderJS); err != nil {
+		nodeRenderJS = ""
+		return
+	}
+	nodeRenderPath = "node"
+	if p, err := exec.LookPath("node"); err == nil && p != "" {
+		nodeRenderPath = p
+	} else {
+		nodeRenderJS = ""
+		return
+	}
+	// 脚本存在即视为"已启用"（依赖/Chromium 是否就绪交给真正调用时判失败容错）
+	nodeRenderOK = true
+}
+
+// renderTitleViaNode 调用 Node 渲染取真实剧名。主程序在「一键映射」抓取时优先使用，
+// 缺 Node / 脚本缺失 / 未装 Chromium / 执行超时 → 返回空，由调用方回退到静态抓取。
+// 期待脚本 stdout 单行 JSON { "title": "...", "og_title": "...", "err": "" }。
+func renderTitleViaNode(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	nodeRenderOnce.Do(initNodeRender)
+	if !nodeRenderOK || nodeRenderJS == "" {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, nodeRenderPath, nodeRenderJS, raw)
+	cmd.Env = append(os.Environ(), "PLAYWRIGHT_BROWSERS_PATH=") // 用默认缓存目录
+	out, err := cmd.Output()
+	if ctx.Err() == context.DeadlineExceeded {
+		return ""
+	}
+	if err != nil {
+		return ""
+	}
+	var r struct {
+		Title   string `json:"title"`
+		OgTitle string `json:"og_title"`
+		Err     string `json:"err"`
+	}
+	if json.Unmarshal(out, &r) != nil {
+		return ""
+	}
+	if r.Err != "" {
+		return ""
+	}
+	t := strings.TrimSpace(r.Title)
+	if t == "" {
+		t = strings.TrimSpace(r.OgTitle)
+	}
+	return t
+}
+
 var epCNRe = regexp.MustCompile(`第\s*([0-9]+|[一二三四五六七八九十百千]+)\s*(集|期|话)`)
 var seasonCNRe = regexp.MustCompile(`第\s*([0-9]+|[一二三四五六七八九十百千]+)\s*(季|部|篇|卷|番)`)
 var sxxexxRe = regexp.MustCompile(`(?i)S(\d+)\s*E(\d+)`)
@@ -2438,10 +2517,64 @@ func cnToNum(s string) int {
 	return n
 }
 
+// siteSuffixRe 匹配末尾「分隔符+一段站点词」，供 trimSiteSuffix 逐段剥掉重复后缀
+var siteSuffixRe = regexp.MustCompile(`[-—_·\s]+([^\-—_·\s]{1,14})$`)
+
+// siteSuffixWords 官方 <title> 常见的站点/频道/剧集冗余词（末位段命中即剥掉）。
+// 命中词本身不作为剧名（如「电视剧」「完整版」「高清完整版」「在线观看」「爱奇艺」「芒果TV」「腾讯视频」…）。
+var siteSuffixWords = map[string]bool{
+	"电视剧": true, "连续剧": true, "全集": true, "综艺": true, "动漫": true, "电影": true, "纪录片": true,
+	"完整版": true, "高清完整版": true, "完整视频版": true, "抢先看": true, "正版": true, "高清": true,
+	"在线观看": true, "在线播放": true, "免费观看": true, "高清视频在线观看": true,
+	"爱奇艺": true, "腾讯视频": true, "芒果TV": true, "芒果tv": true, "天生青春": true, "优酷": true,
+	"优酷视频": true, "哔哩哔哩": true, "bilibili": true, "搜狐视频": true, "PP视频": true,
+	"电视剧频道": true, "其他": true, "海外": true, "片花": true, "预告片": true, "花絮": true,
+}
+
+// trimSiteSuffix 从标题末尾按分隔符逐段剥掉「站点/频道冗余词」，保留真正剧名主体。
+// 例：交锋_01_电视剧_完整版视频在线观看_腾讯视频 → 交锋_01；生逢其时-电视剧-完整版视频在线观看 → 生逢其时；
+//
+//	云游纪 (10)-其他-完整正版视频在线观看 → 云游纪 (10)；御廷谣 - 芒果TV-天生青春 → 御廷谣。
+//
+// 末端段整体命中站点词，或段内包含站点词且以站点词收尾（如「完整版视频在线观看」→ 含「在线观看」）→ 剥掉该段。
+func trimSiteSuffix(s string) string {
+	s = strings.TrimSpace(s)
+	for {
+		m := siteSuffixRe.FindStringSubmatch(s)
+		if len(m) < 2 {
+			break
+		}
+		seg := strings.TrimSpace(m[1])
+		if seg == "" {
+			break
+		}
+		lower := strings.ToLower(seg)
+		hit := siteSuffixWords[lower]
+		if !hit {
+			for w := range siteSuffixWords {
+				if strings.HasSuffix(lower, strings.ToLower(w)) {
+					hit = true
+					break
+				}
+			}
+		}
+		if hit {
+			s = strings.TrimSpace(strings.TrimSuffix(s, m[0]))
+			continue
+		}
+		break
+	}
+	return s
+}
+
 func parseVideoTitle(title string) VideoInfo {
 	// 内置 7 种官方平台标签/后缀清理：先从原始标题提取真实剧名（如「【腾讯视频】 独剑九天 01」「独剑九天_爱奇艺」）
 	title = platformTagRe.ReplaceAllString(strings.TrimSpace(title), "")
 	title = strings.TrimSpace(title)
+	// 清理官方 <title> 常见的站点/频道冗余后缀（如「交锋_01_电视剧_完整版视频在线观看」→ 保留「交锋」；
+	// 「生逢其时-电视剧-完整版视频在线观看」「云游纪 (10)-其他-完整正版视频在线观看」「御廷谣 - 芒果TV-天生青春」）。
+	// 规则：从末尾按分隔符(－-_ ·)逐段剥掉「站点频道词」，保留真正的剧名主体。
+	title = trimSiteSuffix(title)
 	vi := VideoInfo{Title: title}
 	if m := seasonCNRe.FindStringSubmatch(title); len(m) > 1 {
 		vi.SeasonNum = cnToNum(m[1])
@@ -2956,11 +3089,12 @@ type builtinOfficialLink struct {
 }
 
 // builtinOfficialLinks 各大官方平台默认链接清单，用于自动更新官方「无脑映射」
+// 这些链接在选择渲染（render-title/）启用时能解析出「真实剧名」；若未启用渲染则回退静态抓取（部分平台是 JS 壳）。
 var builtinOfficialLinks = []builtinOfficialLink{
-	{Key: "tencent", Platform: "腾讯视频", Label: "腾讯视频", URL: "https://v.qq.com/x/cover/mzc00200n3mbhnb/j0045t4yj1m.html"},
-	{Key: "iqiyi", Platform: "爱奇艺", Label: "爱奇艺", URL: "https://www.iqiyi.com/v_19rrhk9suw.html"},
-	{Key: "youku", Platform: "优酷", Label: "优酷", URL: "https://v.youku.com/v_show/id_XNTA3MjQ5NDY4NA.html"},
-	{Key: "mgtv", Platform: "芒果TV", Label: "芒果TV", URL: "https://www.mgtv.com/b/418417.html"},
+	{Key: "tencent", Platform: "腾讯视频", Label: "腾讯视频", URL: "https://v.qq.com/x/cover/mzc00200jtsx0ds.html"},
+	{Key: "iqiyi", Platform: "爱奇艺", Label: "爱奇艺", URL: "https://www.iqiyi.com/v_2bkbhy2gi2w.html"},
+	{Key: "youku", Platform: "优酷", Label: "优酷", URL: "https://v.youku.com/v_show/id_XNTA3MjQ5NDY4NA="},
+	{Key: "mgtv", Platform: "芒果TV", Label: "芒果TV", URL: "https://www.mgtv.com/b/781917.html"},
 	{Key: "bilibili", Platform: "哔哩哔哩", Label: "哔哩哔哩", URL: "https://www.bilibili.com/video/BV1GJ411x7h7"},
 	{Key: "sohu", Platform: "搜狐视频", Label: "搜狐视频", URL: "https://tv.sohu.com/"},
 	{Key: "pptv", Platform: "PP视频", Label: "PP视频", URL: "https://v.pptv.com/"},
@@ -2976,7 +3110,7 @@ func builtinLinkByKey(key string) *builtinOfficialLink {
 }
 
 // antiBotTitleWords 反爬/验证页标题黑名单：命中视为未抓到真实剧名，避免把脏标题映射进专区
-var antiBotTitleWords = []string{"验证码", "安全验证", "访问异常", "请输入", "页面不存在", "出错了", "403", "404"}
+var antiBotTitleWords = []string{"验证码", "安全验证", "访问异常", "访问出错", "请输入", "页面不存在", "页面丢失", "出错了", "出错啦", "暂时无法观看", "暂时无法播放", "403", "404"}
 
 // suspiciousTitle 判断标题是否为反爬/占位内容（过短或含验证词）
 func suspiciousTitle(t string) bool {
@@ -4258,7 +4392,12 @@ func handlePlatformsOneClick(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"success": false, "message": "未匹配到官方平台配置（' + link.Platform + '）请先配置对应平台域名"})
 		return
 	}
-	title := fetchVideoTitleWithSelector(link.URL, p.TitleSelector)
+	// 首选：无头 Chromium 渲染取真实剧名（解决平台 JS 渲染空壳问题）。
+	// 若未部署 render-title/（缺 node/Chromium）或渲染失败，则回退到现有静态抓取。
+	title := renderTitleViaNode(link.URL)
+	if title == "" {
+		title = fetchVideoTitleWithSelector(link.URL, p.TitleSelector)
+	}
 	if title == "" {
 		recordCall("/api/platforms/oneclick", link.URL, false, 0, "无法获取视频信息")
 		writeJSON(w, map[string]interface{}{"success": false, "message": "该官方页面未能获取到视频信息（可能被反爬，可换链接或配标题选择器）"})
