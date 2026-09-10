@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.5.4"
+	AppVersion = "v0.5.5"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1284,8 +1284,10 @@ async function checkSites(){
         const tail=rs.slice(-60).reverse();
         el('siteList').innerHTML='<div class="muted" style="margin-bottom:6px">已完成 '+d.done+' / 共 '+d.total+' 个站点：</div>'+
           tail.map(function(x){
-            return '<div class="siterow"><b>'+esc(x.name)+'</b>'+
-              '<span style="'+(x.usable?'color:#16a34a':'color:#dc2626')+';font-weight:700">'+(x.usable?'✓ 可用':'✗ 失效')+'</span>'+
+            const st=(x.usable?(x.search_limited?'#d97706':'#16a34a'):'#dc2626');
+            const lab=x.usable?(x.search_limited?'⚠️ 可用(搜索受限)':'✓ 可用'):'✗ 失效';
+            return '<div class="siterow" title="搜索受限：此站关键词搜索需验证/未开放，靠列表接口连通判定可用，官替搜索可能搜不到，但不影响其他站"><b>'+esc(x.name)+'</b>'+
+              '<span style="color:'+st+';font-weight:700">'+lab+'</span>'+
               '<span class="muted" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.message)+' · '+x.response_ms+'ms</span></div>';
           }).join('')||'<span class="muted">等待结果…</span>';
         if(d.finished){showProg(false);setTimeout(function(){loadSites();},600);return;}
@@ -3611,12 +3613,13 @@ func handleSiteDelete(w http.ResponseWriter, r *http.Request) {
 
 // checkResultItem 单个站点检测结果
 type checkResultItem struct {
-	Name       string `json:"name"`
-	SiteURL    string `json:"site_url"`
-	Usable     bool   `json:"usable"`
-	Blocked    bool   `json:"blocked"`
-	Message    string `json:"message"`
-	ResponseMS int64  `json:"response_ms"`
+	Name          string `json:"name"`
+	SiteURL       string `json:"site_url"`
+	Usable        bool   `json:"usable"`
+	Blocked       bool   `json:"blocked"`
+	SearchLimited bool   `json:"search_limited"` // 搜索受限/需验证但列表接口连通（仍可用，靠接口连通兜底）
+	Message       string `json:"message"`
+	ResponseMS    int64  `json:"response_ms"`
 }
 
 // siteCheckTask 一次批量检测任务的进度状态
@@ -3632,6 +3635,7 @@ type siteCheckTask struct {
 	Results   []checkResultItem `json:"results"`
 	statusMap map[string]bool   `json:"-"` // siteName -> usable
 	failMsg   map[string]string `json:"-"`
+	limited   map[string]bool   `json:"-"` // siteName -> 搜索受限/需验证但接口连通
 }
 
 var (
@@ -3648,7 +3652,7 @@ func newTaskID() string {
 
 // startSiteCheck 启动一次异步批量检测（并发执行，失败站点自动置 paused 屏蔽）
 func startSiteCheck(kw string) *siteCheckTask {
-	task := &siteCheckTask{ID: newTaskID(), Keyword: kw, StartTime: time.Now(), statusMap: map[string]bool{}, failMsg: map[string]string{}}
+	task := &siteCheckTask{ID: newTaskID(), Keyword: kw, StartTime: time.Now(), statusMap: map[string]bool{}, failMsg: map[string]string{}, limited: map[string]bool{}}
 	checkTaskMu.Lock()
 	checkTasks[task.ID] = task
 	checkTaskOrder = append(checkTaskOrder, task.ID)
@@ -3693,7 +3697,13 @@ func runSiteCheck(task *siteCheckTask, kw string) {
 			item := checkResultItem{Name: s.Name, SiteURL: s.SiteURL, ResponseMS: ms}
 			if ok {
 				item.Usable = true
-				item.Message = "正常 · " + msg
+				if strings.Contains(msg, "搜索无命中") {
+					// 搜索受限/需验证：探针词均无结果，但列表接口连通且返回有效数据 → 仍可用，靠接口连通性兜底
+					item.SearchLimited = true
+					item.Message = "可用 · 搜索受限/需验证，仅接口连通（" + msg + "）"
+				} else {
+					item.Message = "正常 · " + msg
+				}
 			} else {
 				item.Blocked = true
 				msg := err.Error()
@@ -3707,6 +3717,9 @@ func runSiteCheck(task *siteCheckTask, kw string) {
 			if ok {
 				task.Usable++
 				task.statusMap[s.Name] = true
+				if item.SearchLimited {
+					task.limited[s.Name] = true
+				}
 			} else {
 				task.Blocked++
 				task.statusMap[s.Name] = false
@@ -3730,9 +3743,20 @@ func runSiteCheck(task *siteCheckTask, kw string) {
 		if usable {
 			if cfg2.Sites[i].Status != "active" {
 				cfg2.Sites[i].Status = "active"
-				if strings.Contains(cfg2.Sites[i].Note, "自动屏蔽") {
+				if strings.Contains(cfg2.Sites[i].Note, "自动屏蔽") || strings.Contains(cfg2.Sites[i].Note, "搜索受限") {
 					cfg2.Sites[i].Note = ""
 				}
+				changed = true
+			}
+			// 搜索受限/需验证站：常驻备注提示，便于列表一眼识别（不误判失效，靠接口连通性兜底）
+			const limitedNote = "搜索受限/需验证·仅接口连通"
+			if task.limited[cfg2.Sites[i].Name] {
+				if cfg2.Sites[i].Note != limitedNote {
+					cfg2.Sites[i].Note = limitedNote
+					changed = true
+				}
+			} else if cfg2.Sites[i].Note == limitedNote {
+				cfg2.Sites[i].Note = ""
 				changed = true
 			}
 		} else {
