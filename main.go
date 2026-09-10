@@ -30,6 +30,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -54,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.0"
+	AppVersion = "v0.6.1"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -2248,6 +2249,17 @@ const (
 	updateTimeout  = 60 * time.Second
 )
 
+// manifestURLs 版本清单候选源（按序回退）：
+//   1. raw.githubusercontent.com 主源（部署方默认源）
+//   2. jsDelivr CDN（gh/仓库@分支/latest.json，GitHub 原生 CDN 缓存偶有延迟时兜底）
+//   3. GitHub API contents 接口（内容为 base64，始终与 git 分支 HEAD 一致，最终兜底）
+// 任一源成功即视为最新清单，避免单个源缓存/故障导致已部署客户检测不到新版本。
+var manifestURLs = []string{
+	manifestRawURL,
+	"https://cdn.jsdelivr.net/gh/" + repoOwner + "/" + repoName + "@" + repoBranch + "/latest.json",
+	"https://api.github.com/repos/" + repoOwner + "/" + repoName + "/contents/latest.json?ref=" + repoBranch,
+}
+
 // UpdateManifest 线上版本清单
 type UpdateManifest struct {
 	Version string `json:"version"` // 最新版本，如 v0.3.0
@@ -2284,21 +2296,52 @@ func compareVersion(a, b []int) int {
 	return 0
 }
 
-// fetchManifest 拉取线上版本清单（raw.githubusercontent，无 GitHub API 限流）
-// 用短超时的独立客户端，避免连通性差时长时间阻塞 HTTP 请求导致前端 Failed to fetch
+// manifestHTTP 用短超时的独立客户端，避免连通性差时长时间阻塞 HTTP 请求导致前端 Failed to fetch
 var manifestHTTP = &http.Client{Timeout: 8 * time.Second}
 
+// fetchManifest 拉取线上版本清单，按 manifestURLs 多镜像回退，任一路径成功即返回
 func fetchManifest() (*UpdateManifest, error) {
-	resp, err := manifestHTTP.Get(manifestRawURL)
+	var lastErr error
+	for _, u := range manifestURLs {
+		m, err := fetchManifestFrom(u)
+		if err == nil {
+			return m, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+// fetchManifestFrom 从单个源拉取并解析版本清单；GitHub API contents 源的内容为 base64
+func fetchManifestFrom(u string) (*UpdateManifest, error) {
+	resp, err := manifestHTTP.Get(u)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("manifest HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("manifest HTTP %d (%s)", resp.StatusCode, u)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	raw := string(body)
+	if strings.Contains(u, "/contents/") {
+		var enc struct {
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal(body, &enc); err != nil || enc.Content == "" {
+			return nil, fmt.Errorf("manifest API 内容为空或解析失败")
+		}
+		b, err := base64.StdEncoding.DecodeString(enc.Content)
+		if err != nil {
+			return nil, err
+		}
+		raw = string(b)
 	}
 	var m UpdateManifest
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&m); err != nil {
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
 		return nil, err
 	}
 	m.Version = strings.TrimPrefix(strings.TrimSpace(m.Version), "v")

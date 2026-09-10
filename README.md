@@ -173,6 +173,23 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.6.1 (2026-09-10) — 远程更新多镜像回退，修复已部署客户检测不到新版本
+
+> 已部署客户远程更新「获取不到最新版」根因：新版代码未推送到 `go` 分支，GitHub 上 `latest.json` 仍为旧版且无对应 Release。本次已推送并发布 v0.6.0；同时将更新检查改为**多镜像回退**，即使 GitHub 原生 CDN 缓存延迟也能拿到最新清单。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **🔧 远程更新多镜像回退**：版本清单 `latest.json` 读取改为三源按序回退——`raw.githubusercontent.com`（主源）→ `cdn.jsdelivr.net`（CDN 兜底）→ `api.github.com/contents`（API 终兜底，内容与 git 分支 HEAD 严格一致）；任一源成功即返回，避免单个源 CDN 缓存延迟/故障导致已部署客户检测不到新版本；
+- **🚀 发布 v0.6.0 到 `go` 分支**：补齐本地未推送的提交（`be4ac25..81ce5f0`），触发 GitHub Actions 云端编译，创建 Release `go-vv0.6.0` 并更新 `latest.json → v0.6.0`，客户「检查更新」即可发现并下载；
+- 版本升级 `v0.6.0 → v0.6.1`。
+
+### 验证
+
+- `go vet` / `go build` 通过；`/api/update/check` 实测返回 `latest: v0.6.x`、下载地址命中 Release 资产；
+- 三源一致性核对：raw / jsDelivr / API 均返回最新 `latest.json`。
+
+---
+
 ## v0.6.0 (2026-09-10) — 新版增强测试播放 + 非正片区间标注 + 弹幕过滤规则库 + 资源站扩充(168)
 
 > 后台新增 3 个独立面板：**🆕 新版增强测试播放**（独立增强引擎，不动原解析测试）、**⏱️ 非正片区间标注**（SponsorBlock 思路）、**💬 弹幕过滤规则库**（独立模块，将来接弹幕源即用）。资源站从「皮皮虾助手 + 萌芽采集资源」抓取扩充，站数 122 → 168。
