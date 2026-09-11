@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.19"
+	AppVersion = "v0.6.20"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -3283,6 +3283,11 @@ var ogTitleRe = regexp.MustCompile(`(?i)<meta[^>]+(?:property|name)=["'](?:og:ti
 var titleTagRe = regexp.MustCompile(`(?i)<title[^>]*>([^<]+)</title>`)
 var tencentVidRe = regexp.MustCompile(`(?i)[?&]vid=([A-Za-z0-9]+)`)
 var tencentVidJSONRe = regexp.MustCompile(`(?i)"vid"\s*:\s*"([A-Za-z0-9]+)"`)
+// tencentVidPathRe 腾讯链接从路径提取当前集 vid：
+//   - 剧集页  /x/page/{vid}.html                → vid
+//   - 封面页  /x/cover/{album_id}/{vid}.html     → 最后一段 vid
+//   - 旧式      /x/cover/{vid}.html              → vid
+var tencentVidPathRe = regexp.MustCompile(`(?i)/x/(?:page/|cover/(?:[^/.]+/)?)([A-Za-z0-9]+)(?:\.html)?(?:\?|$)`)
 var iqiyiPageIDRe = regexp.MustCompile(`(?i)v_([A-Za-z0-9]+)\.html`)
 
 // bvidRe 哔哩哔哩视频 ID（BV 号）：页面 412 反爬，但公开 API 可直接取标题
@@ -3370,9 +3375,12 @@ func fetchIqiyiTitle(raw string) string {
 	return ""
 }
 
-// fetchTencentVid 提取腾讯视频 vid：优先 URL 参数 vid=，其次页面 JSON "vid":"xxx"（cover 页为 JS 壳时靠它兜底）
+// fetchTencentVid 提取腾讯视频当前集 vid：优先 URL 参数 vid=，其次路径（/x/page/xxx、/x/cover/专辑id/xxx.html），最后页面 JSON "vid":"xxx"
 func fetchTencentVid(raw, body string) string {
 	if m := tencentVidRe.FindStringSubmatch(raw); len(m) > 1 {
+		return m[1]
+	}
+	if m := tencentVidPathRe.FindStringSubmatch(raw); len(m) > 1 {
 		return m[1]
 	}
 	if body != "" {
@@ -3458,13 +3466,24 @@ func fetchVideoTitle(raw, vidHint string) string {
 			}
 		}
 	}
-	// 腾讯无标题时用 getinfo 兜底取正式片名：优先调用方传入 vid，其次自动从 URL/页面 JSON 提取
-	if title == "" && vidHint != "" {
-		title = fetchTencentTitleByVid(vidHint)
+	// 腾讯无标题时用 getinfo 兜底取正式片名：优先调用方传入 vid，其次自动从 URL/页面 JSON 提取。
+	// 壳标题（静态只有平台名的 JS 渲染壳页，title 非空但非真实剧名）同样要走 getinfo，否则会短路为平台名。
+	isTX := strings.Contains(raw, "v.qq.com") || strings.Contains(raw, "m.v.qq.com")
+	if isTX {
+		if vidHint == "" {
+			vidHint = fetchTencentVid(raw, body)
+		}
+		if vidHint != "" && (title == "" || isShellTitle(title)) {
+			if t := fetchTencentTitleByVid(vidHint); t != "" {
+				title = t
+			}
+		}
 	}
-	if title == "" && (strings.Contains(raw, "v.qq.com") || strings.Contains(raw, "m.v.qq.com")) {
-		if vid := fetchTencentVid(raw, body); vid != "" {
-			title = fetchTencentTitleByVid(vid)
+	// 无头渲染兜底：静态/接口都只拿到壳标题或拿不到标题时，用 render-title/（Node+Chromium）执行 JS
+	// 取真实剧名（腾讯/爱奇艺等 JS 渲染壳页的可靠解法）。未部署 render-title/ 时立即返回空，零开销。
+	if title == "" || isShellTitle(title) {
+		if t := renderTitleViaNode(raw); t != "" && !suspiciousTitle(t) && !isShellTitle(t) {
+			title = t
 		}
 	}
 	return title
@@ -4410,6 +4429,39 @@ var antiBotTitleWords = []string{"验证码", "安全验证", "访问异常", "�
 var siteGenericTitleWords = []string{"综合视频网站", "正版高清视频在线观看", "高清视频在线观看", "海量正版", "在线视频网站", "原创视频上传", "全网视频搜索", "高清电影", "电视剧,电影", "视频在线观看", "客户端下载", "网络电视"}
 
 // suspiciousTitle 判断标题是否为反爬/占位/乱码内容（过短、含验证词、GBK 乱码、平台壳页标题）
+// platformDisplayNames 官方平台展示名集合（作为页面 <title> 壳标题出现时不视为真实剧名）
+var platformDisplayNames = map[string]bool{
+	"腾讯视频": true, "爱奇艺": true, "优酷": true, "优酷视频": true,
+	"芒果TV": true, "芒果tv": true, "哔哩哔哩": true, "bilibili": true,
+	"搜狐视频": true, "搜狐": true, "PP视频": true, "pptv": true, "PPTV": true,
+	"聚力视频": true,
+}
+
+// isShellTitle 判断标题是否为「平台壳标题」：整体剥离后只剩平台名/平台通用词，无任何剧名痕迹。
+// JS 渲染壳页（腾讯/爱奇艺等）静态抓取的 <title> 恒为平台名（如「腾讯视频」），这类标题绝不能被当作
+// 剧名参与匹配或写入映射，否则不同视频页会因同一壳标题→同一映射得到「不同链接返回相同结果」。
+func isShellTitle(t string) bool {
+	t = strings.TrimSpace(t)
+	if t == "" {
+		return true
+	}
+	// 整串只是平台展示名（大小写不敏感）→ 壳标题
+	if platformDisplayNames[strings.ToLower(t)] {
+		return true
+	}
+	// 「平台名 + 站点通用词」组合，且不含剧名痕迹（如「腾讯视频-高清视频在线观看」）
+	hit := 0
+	for _, w := range siteGenericTitleWords {
+		if strings.Contains(t, w) {
+			hit++
+		}
+	}
+	if hit >= 2 && !epCNRe.MatchString(t) && !sxxexxRe.MatchString(t) && len([]rune(t)) < 10 {
+		return true
+	}
+	return false
+}
+
 func suspiciousTitle(t string) bool {
 	t = strings.TrimSpace(t)
 	if t == "" || len([]rune(t)) < 2 {
@@ -4544,7 +4596,22 @@ func loadTitleMaps() *TitleMaps {
 	if b, err := os.ReadFile(titleMapsPath()); err == nil {
 		c2 := &TitleMaps{}
 		if json.Unmarshal(b, c2) == nil && len(c2.NameMaps) > 0 {
-			return c2
+			// 清洗历史脏映射：删除「壳标题」作键的映射（如某次把「腾讯视频」自动学成某剧名），
+			// 避免不同视频页因同一壳标题→同一映射得到「不同链接返回相同结果」，并避免后台继续展示失效映射。
+			orig := len(c2.NameMaps)
+			clean := c2.NameMaps[:0]
+			for _, m := range c2.NameMaps {
+				if !isShellTitle(m.From) && !isShellTitle(m.To) {
+					clean = append(clean, m)
+				}
+			}
+			c2.NameMaps = clean
+			if len(clean) != orig {
+				_ = saveTitleMaps(c2)
+			}
+			if len(c2.NameMaps) > 0 {
+				return c2
+			}
 		}
 	}
 	// 首次运行/文件缺失：落盘内置默认映射
@@ -4566,7 +4633,12 @@ func autoLearnTitleMap(platform string, vi VideoInfo, matched ResourceVideo) str
 	f := strings.TrimSpace(vi.BaseTitle)
 	rvi := parseVideoTitle(matched.Name)
 	t := strings.TrimSpace(rvi.BaseTitle)
+	// 脏映射防护：官方剧名解析为空、为平台壳标题、或过于可疑（反爬/乱码）时绝不自动学习，
+	// 否则会把「腾讯视频」这类壳标题学成某剧名，导致不同视频页匹配到同一资源（不同链接返回相同结果）。
 	if f == "" || t == "" || f == t {
+		return ""
+	}
+	if isShellTitle(f) || isShellTitle(t) || suspiciousTitle(f) {
 		return ""
 	}
 	// 资源站剧名可能是多条拼接（如「独剑九天|HD|国语」），只取首个分隔后的基础剧名
@@ -4598,6 +4670,11 @@ func titleMapCandidates(name string) []string {
 	cfg := loadTitleMaps()
 	titleMapsMu.Unlock()
 	for _, m := range cfg.NameMaps {
+		// 跳过「壳标题」键的脏映射（如某次把「腾讯视频」自动学成某剧名的映射），
+		// 否则不同视频页会因同一壳标题→同一映射得到「不同链接返回相同结果」。
+		if isShellTitle(m.From) || isShellTitle(m.To) {
+			continue
+		}
 		for _, cand := range []string{m.From, m.To} {
 			if cand == "" {
 				continue
@@ -4851,7 +4928,7 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 		vidHint = m[1]
 	}
 	title := fetchVideoTitle(raw, vidHint)
-	if title == "" {
+	if title == "" || isShellTitle(title) {
 		res.Message = "无法获取视频信息"
 		steps = append(steps, replaceStep{"fetch_meta", "获取官方页面信息", "fail", "未能从页面/Meta获取标题"})
 		res.Steps = steps
@@ -6639,6 +6716,9 @@ func main() {
 		return
 	}
 	loadAuth() // 初始化后台账号密码（默认 admin/admin123）
+	titleMapsMu.Lock()
+	loadTitleMaps() // 启动时即清洗历史脏映射（壳标题作键的映射），无需等首次访问
+	titleMapsMu.Unlock()
 	// 登录页
 	http.HandleFunc("/mxadmin/login", handleLogin)
 	// 首页固定进了后台；后台入口为 /mxadmin
