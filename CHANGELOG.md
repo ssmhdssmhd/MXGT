@@ -1,5 +1,53 @@
 # 更新日志
 
+## Go 分支 v0.6.19 (2026-09-11) — 官方自动映射修复：腾讯/爱奇艺/B站/搜狐/PP 全部可取真实剧名
+
+> 用户诉求：一键映射/自动抓取在多个官方平台失败（腾讯/爱奇艺 JS 渲染壳只有平台标题、B 站反爬「验证码/出错啦」、搜狐 GBK 乱码、PP 链接失效、爱奇艺拿不到剧名），并支持官替映射专区**自定义字段提取**。
+
+### 1. 哔哩哔哩走公开 API（[main.go](file:///workspace/main.go)）
+
+- 视频页对数据中心 IP 反爬（412/「出错啦!」），新增 `fetchBilibiliTitle` 直接调 `api.bilibili.com/x/web-interface/view?bvid=` 取真实标题（无需登录）；
+- 一键映射中无头渲染结果若为反爬/出错页自动回退静态抓取 + 公开 API。
+
+### 2. 爱奇艺改用 /adv/ SEO 静态页（[main.go](file:///workspace/main.go)）
+
+- PC 播放页为纯 JS 壳（`<title>` 只有平台名），改抓 `iqiyi.com/adv/v_xxx.html` 内嵌 JSON「"name":"剧名第N集"」取真实剧名；decode+baseinfo 接口保留兜底。
+
+### 3. 搜狐乱码修复（[main.go](file:///workspace/main.go)）
+
+- 新增编码感知抓取（`fetchPageBytes`/`fetchPageBytesDecoded`/`detectCharset`/`decodeBytesByCharset`）：从 Content-Type / `<meta charset>` 探测字符集，GBK/GB2312 页面经系统 iconv 转 UTF-8；
+- 标题含乱码替换符（U+FFFD）时自动按页面字符集重抓，避免脏数据；内置搜狐链接换成具体视频页（UTF-8 无乱码）。
+
+### 4. PP 视频换内置链接 + 无头渲染兜底（[main.go](file:///workspace/main.go)）
+
+- 旧链接失效（567 反爬），更新为当前可访问的具体视频页；一键映射优先走 render-title/ 无头 Chromium 渲染取真实剧名。
+
+### 5. 反爬/壳页/乱码标题拦截（[main.go](file:///workspace/main.go)）
+
+- `suspiciousTitle` 增强：GBK 乱码（U+FFFD）、平台首页/壳页通用标题（如搜狐首页「综合视频网站/正版高清视频在线观看…」）命中即拒绝映射；
+- `/api/maps/fetch`、`/api/platforms/fetch` 均增加反爬/壳页拦截，未解析出剧名时明确报错。
+
+### 6. 官替映射专区自定义字段提取（[main.go](file:///workspace/main.go)）
+
+- `/api/maps/fetch` 新增 `selector` 参数（页面字段提取正则，第 1 捕获组为标题/字段值，如 `"name":"([^"]+)"`），正则无效时明确报错；
+- 前端「官替映射专区」新增「自定义提取字段」输入框，页面结构变化时无需改代码即可提取。
+
+### 7. 剧名后缀剥离增强（[main.go](file:///workspace/main.go)）
+
+- `siteSuffixWords` 补充「音乐视频/聚力视频/原PPTV聚力视频/蓝光/超清」等，PP「林则徐_电影_在线观看-PP视频-原PPTV聚力视频」→「林则徐」、搜狐「…-音乐视频」正确剥离。
+
+### 8. render-title 无头渲染增强（[render-title/fetch-title.js](file:///workspace/render-title/fetch-title.js)）
+
+- 新增 JSON-LD（VideoObject/Episode.name）、og:title/twitter:title、h1 兜底提取；B 站链接直接走公开 API 不再无谓渲染。
+
+### 9. 版本与验证
+
+- 版本升级 `v0.6.18 → v0.6.19`；
+- 一键映射 7 平台全通：腾讯「金色」/ 爱奇艺「生逢其时」/ 优酷「云游纪 (10)」/ 芒果TV「御廷谣」/ B站「Never Gonna Give You Up - Rick Astley」/ 搜狐「永远不要忘记的就是你的初心by孟美岐」/ PP「林则徐」；
+- 反爬拦截验证：搜狐首页（平台壳页标题）、腾讯 cover 壳页（仅「腾讯视频」）均被拒绝映射。
+
+---
+
 ## Go 分支 v0.5.6 (2026-09-10) — 失效站可折叠 + 自动更新官方「一键映射」内置链接
 
 > 用户诉求：① 资源站管理需要一个**显示失效**的可折叠区域；② 自动更新官方内置各大官方链接，点击即**无脑映射**（无需输入链接），从每个官方实时抓取并自动映射到专区。

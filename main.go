@@ -52,10 +52,11 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode/utf8"
 )
 
 const (
-	AppVersion = "v0.6.18"
+	AppVersion = "v0.6.19"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1082,6 +1083,8 @@ const adminPageHTML = `<!DOCTYPE html>
     <div class="row" style="flex-wrap:wrap">
       <input id="mapUrl" placeholder="粘贴真实官方视频页链接，如腾讯/爱奇艺/优酷…，自动抓取剧名与集数" style="flex:1;min-width:280px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
       <button class="btn" style="padding:7px 14px;font-size:12px" onclick="fetchMap()">🔍 从链接抓取</button>
+      <span class="muted">自定义提取字段</span>
+      <input id="mapSel" placeholder="可选：页面字段提取正则（第1捕获组），如 \"name\":\"([^\"]+)\"、<h1>([^<]+)</h1>" style="flex:1;min-width:240px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db" title="页面结构变化时，可自定义正则从真实页面提取标题/剧名（第 1 捕获组），留空自动识别">
       <span class="muted" id="mapFetchInfo" style="width:100%"></span>
     </div>
     <div class="row" style="flex-wrap:wrap">
@@ -1829,9 +1832,12 @@ async function loadMaps(){
 async function fetchMap(){
   const url=(el('mapUrl').value||'').trim();
   if(!url){alert('请先粘贴真实官方视频页链接');return;}
+  const sel=(el('mapSel').value||'').trim();
   el('mapFetchInfo').textContent='抓取中…';
   try{
-    const r=await fetch('/api/maps/fetch?url='+encodeURIComponent(url));
+    let q='/api/maps/fetch?url='+encodeURIComponent(url);
+    if(sel)q+='&selector='+encodeURIComponent(sel);
+    const r=await fetch(q);
     if(r.status===401){location.href='/mxadmin/login';return;}
     const j=await r.json();
     if(!j.success){el('mapFetchInfo').textContent='抓取失败: '+(j.message||'');return;}
@@ -2875,9 +2881,10 @@ const (
 )
 
 // manifestURLs 版本清单候选源（按序回退）：
-//   1. raw.githubusercontent.com 主源（部署方默认源）
-//   2. jsDelivr CDN（gh/仓库@分支/latest.json，GitHub 原生 CDN 缓存偶有延迟时兜底）
-//   3. GitHub API contents 接口（内容为 base64，始终与 git 分支 HEAD 一致，最终兜底）
+//  1. raw.githubusercontent.com 主源（部署方默认源）
+//  2. jsDelivr CDN（gh/仓库@分支/latest.json，GitHub 原生 CDN 缓存偶有延迟时兜底）
+//  3. GitHub API contents 接口（内容为 base64，始终与 git 分支 HEAD 一致，最终兜底）
+//
 // 任一源成功即视为最新清单，避免单个源缓存/故障导致已部署客户检测不到新版本。
 var manifestURLs = []string{
 	manifestRawURL,
@@ -3278,10 +3285,19 @@ var tencentVidRe = regexp.MustCompile(`(?i)[?&]vid=([A-Za-z0-9]+)`)
 var tencentVidJSONRe = regexp.MustCompile(`(?i)"vid"\s*:\s*"([A-Za-z0-9]+)"`)
 var iqiyiPageIDRe = regexp.MustCompile(`(?i)v_([A-Za-z0-9]+)\.html`)
 
+// bvidRe 哔哩哔哩视频 ID（BV 号）：页面 412 反爬，但公开 API 可直接取标题
+var bvidRe = regexp.MustCompile(`(?i)/video/(BV[0-9A-Za-z]{10,12})`)
+
+// iqiyiJSONNameRe 爱奇艺 /adv/ SEO 静态页内嵌 JSON 的视频名（第一个 name 即视频名，形如「生逢其时第1集」）
+var iqiyiJSONNameRe = regexp.MustCompile(`"name"\s*:\s*"([^"]+)"`)
+
+// mojibakeRe 匹配 GBK 被当 UTF-8 解码产生的替换字符 U+FFFD（乱码标题标记）
+var mojibakeRe = regexp.MustCompile(`\x{FFFD}`)
+
 // fetchIqiyiTitle 用爱奇艺无需登录的公开接口从 v_xxx.html 页面 id 解析真实剧名：
-//  1) 爱奇艺《视频页》是纯 JS 渲染壳 —— 静态 HTML 里 <title> 恒为平台通用标题、无 og:title、无内嵌剧名；
+//  1. 爱奇艺《视频页》是纯 JS 渲染壳 —— 静态 HTML 里 <title> 恒为平台通用标题、无 og:title、无内嵌剧名；
 //     直接抓页面永远拿不到真实剧名（这是「官替映射专区」爱奇艺无法获取的根因）。
-//  2) 方案：pcw-api.iq.com/api/decode/<页面id> 把页面 id 解码成真实 tvid，
+//  2. 方案：pcw-api.iq.com/api/decode/<页面id> 把页面 id 解码成真实 tvid，
 //     再请求 pcw-api.iqiyi.com/video/video/baseinfo/<tvid> 取 data.name（如「利剑·玫瑰第1集」）。
 func fetchIqiyiTitle(raw string) string {
 	m := iqiyiPageIDRe.FindStringSubmatch(raw)
@@ -3289,7 +3305,17 @@ func fetchIqiyiTitle(raw string) string {
 		return ""
 	}
 	pageID := m[1]
-	// ① 页面 id → 真实 tvid
+	// ① 爱奇艺 /adv/ SEO 静态页（搜索引擎收录页）：真实剧名以内嵌 JSON「"name":"剧名第N集"」输出，
+	//    非 JS 壳、无编码问题、无需登录。PC 播放页为 JS 渲染壳（<title> 只有平台名），此页是静态的。
+	if body, err := newClient().fetch("https://www.iqiyi.com/adv/v_" + pageID + ".html"); err == nil {
+		if name := iqiyiJSONNameRe.FindStringSubmatch(body); len(name) > 1 {
+			t := strings.TrimSpace(name[1])
+			if t != "" && !mojibakeRe.MatchString(t) {
+				return t
+			}
+		}
+	}
+	// ② 兜底：decode 接口 page id → tvid，再用 baseinfo 取真实剧名（部分视频 decode 失败/无数据）
 	tvid := ""
 	body, err := newClient().fetch("https://pcw-api.iq.com/api/decode/" + url.QueryEscape(pageID) +
 		"?platformId=3&modeCode=intl&langCode=sg")
@@ -3314,7 +3340,7 @@ func fetchIqiyiTitle(raw string) string {
 	if tvid == "" {
 		return ""
 	}
-	// ② tvid → 视频基础信息（剧名）
+	// ③ tvid → 视频基础信息（剧名）
 	bi, err := newClient().fetch("https://pcw-api.iqiyi.com/video/video/baseinfo/" + url.QueryEscape(tvid))
 	if err != nil {
 		return ""
@@ -3372,6 +3398,28 @@ func fetchTencentTitleByVid(vid string) string {
 	return ""
 }
 
+// fetchBilibiliTitle 用 B 站公开 API 按 BV 号取真实标题：
+// 视频页对数据中心 IP 反爬（412 或「出错啦!」壳），但 x/web-interface/view API 无需登录即可返回 title。
+func fetchBilibiliTitle(bvid string) string {
+	if bvid == "" {
+		return ""
+	}
+	body, err := newClient().fetch("https://api.bilibili.com/x/web-interface/view?bvid=" + url.QueryEscape(bvid))
+	if err != nil {
+		return ""
+	}
+	var res struct {
+		Code int `json:"code"`
+		Data struct {
+			Title string `json:"title"`
+		} `json:"data"`
+	}
+	if json.Unmarshal([]byte(body), &res) == nil && res.Code == 0 && strings.TrimSpace(res.Data.Title) != "" {
+		return strings.TrimSpace(res.Data.Title)
+	}
+	return ""
+}
+
 func fetchVideoTitle(raw, vidHint string) string {
 	// 爱奇艺：页面是纯 JS 渲染壳，静态只能拿到平台通用标题 → 优先用公开接口解析真实剧名（无需登录）
 	if isIqiyiURL(raw) {
@@ -3379,20 +3427,34 @@ func fetchVideoTitle(raw, vidHint string) string {
 			return t
 		}
 	}
+	// 哔哩哔哩：视频页对数据中心 IP 反爬（412/「出错啦!」），但公开 API 可直接取标题
+	if m := bvidRe.FindStringSubmatch(raw); len(m) > 1 {
+		if t := fetchBilibiliTitle(m[1]); t != "" {
+			return t
+		}
+	}
 	title := ""
 	body := ""
-	if b, err := newClient().fetch(raw); err == nil {
-		body = b
-		if m := ogTitleRe.FindStringSubmatch(b); len(m) > 1 {
+	if b, err := fetchPageBytes(raw); err == nil {
+		body = string(b)
+		if m := ogTitleRe.FindStringSubmatch(body); len(m) > 1 {
 			title = strings.TrimSpace(m[1])
 		}
 		if title == "" {
-			if m := titleTagRe.FindStringSubmatch(b); len(m) > 1 {
+			if m := titleTagRe.FindStringSubmatch(body); len(m) > 1 {
 				title = strings.TrimSpace(m[1])
 				// 去掉 "xxx_腾讯视频" 类冗余后缀
 				if i := strings.LastIndex(title, "_"); i > 0 {
 					title = title[:i]
 				}
+			}
+		}
+	}
+	// 乱码兜底：GBK 页面被当 UTF-8 解码时标题会含替换字符（�），尝试按页面字符集重新解码
+	if title != "" && mojibakeRe.MatchString(title) {
+		if b, err := fetchPageBytesDecoded(raw); err == nil {
+			if t := parseTitleFromBytes(b); t != "" {
+				title = t
 			}
 		}
 	}
@@ -3423,10 +3485,10 @@ func fetchVideoTitleWithSelector(raw, selector string) string {
 	if selector != "" {
 		re, err := regexp.Compile(selector)
 		if err == nil {
-			if body, err2 := newClient().fetch(raw); err2 == nil {
-				if m := re.FindStringSubmatch(body); len(m) > 1 {
+			if body, err2 := fetchPageBytes(raw); err2 == nil {
+				if m := re.FindStringSubmatch(string(body)); len(m) > 1 {
 					t := strings.TrimSpace(m[1])
-					if t != "" {
+					if t != "" && !mojibakeRe.MatchString(t) {
 						return t
 					}
 				}
@@ -3434,6 +3496,121 @@ func fetchVideoTitleWithSelector(raw, selector string) string {
 		}
 	}
 	return fetchVideoTitle(raw, "")
+}
+
+// ---- 编码感知抓取：解决搜狐等 GBK/GB2312 页面被当 UTF-8 读导致的乱码 ----
+
+// detectCharset 从 HTTP Content-Type 与 HTML <meta charset> 探测页面字符集（返回小写名，如 gbk/utf-8）
+func detectCharset(header string, body []byte) string {
+	// 优先 HTTP 头
+	if header != "" {
+		lower := strings.ToLower(header)
+		if i := strings.Index(lower, "charset="); i >= 0 {
+			cs := strings.TrimSpace(lower[i+len("charset="):])
+			if j := strings.IndexAny(cs, " \t;"); j >= 0 {
+				cs = cs[:j]
+			}
+			cs = strings.Trim(cs, `"'`)
+			if cs != "" && cs != "utf-8" && cs != "utf8" && cs != "us-ascii" && cs != "ascii" {
+				return cs
+			}
+		}
+	}
+	// 其次 <meta charset>
+	if m := regexp.MustCompile(`(?i)<meta[^>]+charset\s*=\s*["']?\s*([a-z0-9\-]+)`).FindSubmatch(body); len(m) > 1 {
+		cs := strings.ToLower(string(m[1]))
+		if cs != "utf-8" && cs != "utf8" && cs != "us-ascii" && cs != "ascii" {
+			return cs
+		}
+	}
+	return ""
+}
+
+// decodeBytesByCharset 按字符集把字节流转 UTF-8：优先系统 iconv 命令（Linux 一般自带），
+// 无 iconv 时返回原样（调用方自行用 mojibakeRe 判定丢弃乱码标题）
+func decodeBytesByCharset(b []byte, charset string) []byte {
+	if len(b) == 0 || charset == "" {
+		return b
+	}
+	cmd := exec.Command("iconv", "-f", charset, "-t", "UTF-8//IGNORE")
+	cmd.Stdin = bytes.NewReader(b)
+	out, err := cmd.Output()
+	if err != nil || len(out) == 0 {
+		return b
+	}
+	return out
+}
+
+// fetchPageBytes 抓取页面原始字节（保持原始编码，不做转换）
+func fetchPageBytes(u string) ([]byte, error) {
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", siteFetchUA)
+	if base, e := url.Parse(u); e == nil {
+		req.Header.Set("Referer", base.Scheme+"://"+base.Host+"/")
+	}
+	resp, err := siteHTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+}
+
+// fetchPageBytesDecoded 抓取页面并按探测到的字符集解码为 UTF-8（GBK/GB2312/Big5 页面不乱码）
+func fetchPageBytesDecoded(u string) ([]byte, error) {
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", siteFetchUA)
+	if base, e := url.Parse(u); e == nil {
+		req.Header.Set("Referer", base.Scheme+"://"+base.Host+"/")
+	}
+	resp, err := siteHTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, err
+	}
+	cs := detectCharset(resp.Header.Get("Content-Type"), b)
+	if cs != "" {
+		return decodeBytesByCharset(b, cs), nil
+	}
+	// 无 charset 声明但字节不是合法 UTF-8 → 按 GBK 试解（搜狐旧页面常见）
+	if !utf8.Valid(b) {
+		return decodeBytesByCharset(b, "GBK"), nil
+	}
+	return b, nil
+}
+
+// parseTitleFromBytes 从（已解码的）页面字节提取标题（og:title 优先，其次 <title>）
+func parseTitleFromBytes(b []byte) string {
+	s := string(b)
+	if m := ogTitleRe.FindStringSubmatch(s); len(m) > 1 {
+		if t := strings.TrimSpace(m[1]); t != "" {
+			return t
+		}
+	}
+	if m := titleTagRe.FindStringSubmatch(s); len(m) > 1 {
+		t := strings.TrimSpace(m[1])
+		if i := strings.LastIndex(t, "_"); i > 0 {
+			t = t[:i]
+		}
+		return strings.TrimSpace(t)
+	}
+	return ""
 }
 
 // ---- 可选增强抓取：无头 Chromium 渲染真实剧名（一次性探测 Node + 脚本可用性）----
@@ -3566,6 +3743,7 @@ var siteSuffixWords = map[string]bool{
 	"爱奇艺": true, "腾讯视频": true, "芒果TV": true, "芒果tv": true, "天生青春": true, "优酷": true,
 	"优酷视频": true, "哔哩哔哩": true, "bilibili": true, "搜狐视频": true, "PP视频": true,
 	"电视剧频道": true, "其他": true, "海外": true, "片花": true, "预告片": true, "花絮": true,
+	"音乐视频": true, "聚力视频": true, "pptv聚力视频": true, "原pptv聚力视频": true, "蓝光": true, "超清": true,
 }
 
 // trimSiteSuffix 从标题末尾按分隔符逐段剥掉「站点/频道冗余词」，保留真正剧名主体。
@@ -4202,14 +4380,17 @@ type builtinOfficialLink struct {
 
 // builtinOfficialLinks 各大官方平台默认链接清单，用于自动更新官方「无脑映射」
 // 这些链接在选择渲染（render-title/）启用时能解析出「真实剧名」；若未启用渲染则回退静态抓取（部分平台是 JS 壳）。
+// 注：腾讯/爱奇艺/搜狐/PP 播页均为 JS 渲染壳或反爬（静态只有平台标题），一键映射首选无头渲染；
+//
+//	哔哩哔哩走公开 API；搜狐/PP 已换成当前可访问的具体视频页。
 var builtinOfficialLinks = []builtinOfficialLink{
 	{Key: "tencent", Platform: "腾讯视频", Label: "腾讯视频", URL: "https://v.qq.com/x/cover/mzc002001tyxcdm.html"},
 	{Key: "iqiyi", Platform: "爱奇艺", Label: "爱奇艺", URL: "https://www.iqiyi.com/v_2bkbhy2gi2w.html"},
 	{Key: "youku", Platform: "优酷", Label: "优酷", URL: "https://v.youku.com/v_show/id_XNTA3MjQ5NDY4NA="},
 	{Key: "mgtv", Platform: "芒果TV", Label: "芒果TV", URL: "https://www.mgtv.com/b/781917.html"},
 	{Key: "bilibili", Platform: "哔哩哔哩", Label: "哔哩哔哩", URL: "https://www.bilibili.com/video/BV1GJ411x7h7"},
-	{Key: "sohu", Platform: "搜狐视频", Label: "搜狐视频", URL: "https://tv.sohu.com/"},
-	{Key: "pptv", Platform: "PP视频", Label: "PP视频", URL: "http://v.pptv.com/show/xBv0ctpAsO5Rzzc.html"},
+	{Key: "sohu", Platform: "搜狐视频", Label: "搜狐视频", URL: "https://tv.sohu.com/v/dXMvMzU4MTE2MDYvMzE4MTYwMDUwLnNodG1s.html"},
+	{Key: "pptv", Platform: "PP视频", Label: "PP视频", URL: "https://v.pptv.com/show/2zzxb9c9retOzDQ.html"},
 }
 
 func builtinLinkByKey(key string) *builtinOfficialLink {
@@ -4222,16 +4403,40 @@ func builtinLinkByKey(key string) *builtinOfficialLink {
 }
 
 // antiBotTitleWords 反爬/验证页标题黑名单：命中视为未抓到真实剧名，避免把脏标题映射进专区
-var antiBotTitleWords = []string{"验证码", "安全验证", "访问异常", "访问出错", "请输入", "页面不存在", "页面丢失", "出错了", "出错啦", "暂时无法观看", "暂时无法播放", "403", "404"}
+var antiBotTitleWords = []string{"验证码", "安全验证", "访问异常", "访问出错", "请输入", "页面不存在", "页面丢失", "出错了", "出错啦", "暂时无法观看", "暂时无法播放", "403", "404", "error", "出错", "域名不正确"}
 
-// suspiciousTitle 判断标题是否为反爬/占位内容（过短或含验证词）
+// siteGenericTitleWords 平台通用首页/壳标题特征词：命中且整体过短/无剧集痕迹时视为平台壳页，
+// 避免把「搜狐视频-领先的综合视频网站,正版高清视频在线观看…」这类平台首页标题当作剧名映射进专区
+var siteGenericTitleWords = []string{"综合视频网站", "正版高清视频在线观看", "高清视频在线观看", "海量正版", "在线视频网站", "原创视频上传", "全网视频搜索", "高清电影", "电视剧,电影", "视频在线观看", "客户端下载", "网络电视"}
+
+// suspiciousTitle 判断标题是否为反爬/占位/乱码内容（过短、含验证词、GBK 乱码、平台壳页标题）
 func suspiciousTitle(t string) bool {
 	t = strings.TrimSpace(t)
 	if t == "" || len([]rune(t)) < 2 {
 		return true
 	}
+	// GBK 被当 UTF-8 解码产生的替换字符（�）→ 乱码，未抓到有效标题
+	if mojibakeRe.MatchString(t) {
+		return true
+	}
 	for _, w := range antiBotTitleWords {
 		if strings.Contains(t, w) {
+			return true
+		}
+	}
+	// 平台壳页标题（如搜狐首页「搜狐视频-领先的综合视频网站,正版高清视频在线观看…」）：
+	// 命中 ≥2 个平台通用词，且标题不含任何剧集痕迹（第N集/S01E01/末尾数字）→ 视为平台首页/壳页标题，
+	// 避免把平台首页标题当作剧名映射进专区。真实剧集标题（如「金色_01_电视剧_高清完整版视频在线观看_腾讯视频」）命中不足 2 词，不受影响。
+	hit := 0
+	for _, w := range siteGenericTitleWords {
+		if strings.Contains(t, w) {
+			hit++
+		}
+	}
+	if hit >= 2 {
+		hasEpisode := epCNRe.MatchString(t) || sxxexxRe.MatchString(t) || seasonCNRe.MatchString(t) ||
+			regexp.MustCompile(`[_-]\s*\d{1,4}$`).MatchString(t) || len([]rune(t)) < 8
+		if !hasEpisode {
 			return true
 		}
 	}
@@ -5377,12 +5582,21 @@ func handleMapsDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"success": true, "message": "映射删除成功"})
 }
 
-// handleMapsFetch POST /api/maps/fetch?url=<真实官方视频页> 抓取官方平台/剧名/集数，供添加映射
+// handleMapsFetch POST /api/maps/fetch?url=<真实官方视频页>[&selector=<自定义标题提取正则>] 抓取官方平台/剧名/集数，供添加映射
 func handleMapsFetch(w http.ResponseWriter, r *http.Request) {
 	raw := strings.TrimSpace(r.URL.Query().Get("url"))
 	if raw == "" {
 		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少 url 参数"})
 		return
+	}
+	// 自定义字段提取：官替映射专区支持自定义「标题选择器」（正则，第 1 捕获组为标题/字段值），
+	// 页面结构变化时无需改代码即可按真实页面字段提取，如 "name":"([^"]+)" 取 JSON 内嵌剧名。
+	selector := strings.TrimSpace(r.URL.Query().Get("selector"))
+	if selector != "" {
+		if _, err := regexp.Compile(selector); err != nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "自定义选择器正则无效: " + err.Error()})
+			return
+		}
 	}
 	platform := detectPlatform(raw)
 	if platform == "" {
@@ -5394,13 +5608,23 @@ func handleMapsFetch(w http.ResponseWriter, r *http.Request) {
 	if m := tencentVidRe.FindStringSubmatch(raw); len(m) > 1 {
 		vidHint = m[1]
 	}
-	title := fetchVideoTitle(raw, vidHint)
-	if title == "" {
-		recordCall("/api/maps/fetch", raw, false, 0, "无法获取视频信息")
-		writeJSON(w, map[string]interface{}{"success": false, "message": "无法获取官方视频信息，请检查链接是否有效"})
+	var title string
+	if selector != "" {
+		title = fetchVideoTitleWithSelector(raw, selector)
+	} else {
+		title = fetchVideoTitle(raw, vidHint)
+	}
+	if title == "" || suspiciousTitle(title) {
+		recordCall("/api/maps/fetch", raw, false, 0, "疑似反爬/JS壳/平台首页标题")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "该链接返回疑似反爬/JS 渲染壳/平台首页标题（「" + title + "」），未映射以避免脏数据；可换其它链接、配置平台标题选择器、使用「自定义提取字段」，或部署 render-title/ 无头渲染"})
 		return
 	}
 	vi := parseVideoTitle(title)
+	if strings.TrimSpace(vi.BaseTitle) == "" {
+		recordCall("/api/maps/fetch", raw, false, 0, "JS壳页未解析出剧名")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未能从标题解析出剧名: " + title + "。该页面为 JS 渲染壳（静态抓取只有平台标题），建议部署 render-title/（Node+Chromium 无头渲染）或配置该平台标题选择器后重试"})
+		return
+	}
 	recordCall("/api/maps/fetch", raw, true, 0, fmt.Sprintf("%s · %s · 第%d集", platform, vi.BaseTitle, vi.EpisodeNum))
 	// title_raw：官方原始标题（可能直接包含当前剧集，如「独剑九天01」「独剑九天 第01集」）
 	// base_title：拆出的剧名字段；episode_raw/episode_num：拆出的剧集字段
@@ -5585,9 +5809,9 @@ func handlePlatformsFetch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	title := fetchVideoTitleWithSelector(raw, p.TitleSelector)
-	if title == "" {
-		recordCall("/api/platforms/fetch", raw, false, 0, "无法获取视频信息")
-		writeJSON(w, map[string]interface{}{"success": false, "message": "无法获取官方视频信息，请检查链接或标题选择器"})
+	if title == "" || suspiciousTitle(title) {
+		recordCall("/api/platforms/fetch", raw, false, 0, "疑似反爬/JS壳/平台首页标题")
+		writeJSON(w, map[string]interface{}{"success": false, "message": "该链接返回疑似反爬/JS 渲染壳/平台首页标题（「" + title + "」），未映射以避免脏数据；可换其它链接、配置平台标题选择器或部署 render-title/ 无头渲染"})
 		return
 	}
 	vi := parseVideoTitle(title)
@@ -5630,8 +5854,9 @@ func handlePlatformsOneClick(w http.ResponseWriter, r *http.Request) {
 	}
 	// 首选：无头 Chromium 渲染取真实剧名（解决平台 JS 渲染空壳问题）。
 	// 若未部署 render-title/（缺 node/Chromium）或渲染失败，则回退到现有静态抓取。
+	// 渲染结果若为反爬/出错页（如哔哩哔哩对数据中心 IP 返回「出错啦!」壳），同样回退静态+公开 API（B 站 API 可取标题）。
 	title := renderTitleViaNode(link.URL)
-	if title == "" {
+	if title == "" || suspiciousTitle(title) {
 		title = fetchVideoTitleWithSelector(link.URL, p.TitleSelector)
 	}
 	if title == "" {
@@ -6432,7 +6657,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "ok %s\n", AppVersion)
 	})
-	http.HandleFunc("/player", handlePlayer) // 独立外置播放页（开放，供官替 external_url 新窗口播放）
+	http.HandleFunc("/player", handlePlayer)      // 独立外置播放页（开放，供官替 external_url 新窗口播放）
 	http.HandleFunc("/api/play", handlePlayProxy) // 播放代理：m3u8 改写 + 分片透传（解决跨域/限速卡顿）
 	http.HandleFunc("/api/audit", handleAudit)    // 广告核查：列出不连贯片段供人工核查（开放）
 	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
