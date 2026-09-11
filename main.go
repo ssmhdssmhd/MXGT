@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.12"
+	AppVersion = "v0.6.13"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1150,6 +1150,7 @@ const adminPageHTML = `<!DOCTYPE html>
       <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="loadSites()">⟳ 刷新</button>
       <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="setAllSites(false)">全部折叠</button>
       <button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="setAllSites(true)">全部展开</button>
+      <label class="sw"><input type="checkbox" id="siteM3U8" onchange="toggleSiteM3U8(this.checked)"> 仅 m3u8 播放地址</label>
       <span class="muted" id="siteKwLabel">失效站见下方折叠区</span>
       <span class="muted">测试词</span>
       <input id="siteKw" value="庆余年" style="width:110px;padding:6px;border-radius:8px;border:1px solid #d1d5db">
@@ -1641,9 +1642,18 @@ async function loadSites(){
     const j=await r.json();
     sitesData=(j&&j.sites)?j.sites:[];
     sitesStats=j.stats||null;
+    const m3=el('siteM3U8'); if(m3)m3.checked=!!(j&&j.only_m3u8);
     renderSites();
   }catch(e){el('siteList').innerHTML='<span class="muted">加载失败: '+esc(e.message)+'</span>';}
   showProg(false);
+}
+async function toggleSiteM3U8(v){
+  try{
+    const r=await fetch('/api/sites/m3u8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({only_m3u8:!!v})});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    if(!j.success)alert(j.message||'保存失败');
+  }catch(e){alert('网络错误: '+e.message);}
 }
 function isFailedSite(x){return !x||x.status!=='active'}
 function renderSites(){
@@ -3143,6 +3153,8 @@ type SitesConfig struct {
 	Version    string `json:"version"`
 	UpdateDate string `json:"update_date"`
 	Sites      []Site `json:"sites"`
+	// OnlyM3U8 资源站搜索/采集返回时只保留 m3u8 播放地址（过滤 mp4 等其它格式），后台「资源站管理」可开关
+	OnlyM3U8 bool `json:"only_m3u8"`
 }
 
 var sitesMu sync.Mutex
@@ -3902,7 +3914,32 @@ func searchSiteOne(s Site, kw string) ([]ResourceVideo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return itemsToVideos(items, s.Name), nil
+	vs := itemsToVideos(items, s.Name)
+	return filterM3U8Only(vs, loadSites().OnlyM3U8), nil
+}
+
+// filterM3U8Only 资源站搜索返回过滤：开启「仅 m3u8」后，丢弃 mp4 等非 m3u8 播放地址；
+// 某条视频没有任何 m3u8 地址则整条丢弃。仅过滤播放地址，不改变匹配/去广告逻辑。
+func filterM3U8Only(vs []ResourceVideo, only bool) []ResourceVideo {
+	if !only {
+		return vs
+	}
+	var out []ResourceVideo
+	for _, v := range vs {
+		var urls []PlayItem
+		for _, it := range v.URLs {
+			if strings.Contains(strings.ToLower(it.URL), "m3u8") {
+				urls = append(urls, it)
+			}
+		}
+		if len(urls) == 0 {
+			continue
+		}
+		v.URLs = urls
+		v.FirstURL = urls[0].URL
+		out = append(out, v)
+	}
+	return out
 }
 
 // parseMaccmsItems 解析采集接口响应为通用条目列表（JSON / 标准 XML / 自定义 XML）
@@ -4748,7 +4785,39 @@ func handleSitesList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{
 		"version": cfg.Version, "update_date": cfg.UpdateDate,
 		"sites": sites, "stats": stats, "hiding_failed": !showAll,
+		"only_m3u8": cfg.OnlyM3U8,
 	})
+}
+
+// handleSiteM3U8 GET/POST /api/sites/m3u8：读取/设置「资源站搜索仅返回 m3u8 播放地址」（写需登录）
+func handleSiteM3U8(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		if !isAuthed(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			writeJSON(w, map[string]interface{}{"success": false, "message": "请先登录"})
+			return
+		}
+		var in struct {
+			OnlyM3U8 bool `json:"only_m3u8"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "参数错误"})
+			return
+		}
+		sitesMu.Lock()
+		cfg := loadSites()
+		cfg.OnlyM3U8 = in.OnlyM3U8
+		err := saveSites(cfg)
+		sitesMu.Unlock()
+		if err != nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+			return
+		}
+		recordCall("/api/sites/m3u8", fmt.Sprintf("%v", in.OnlyM3U8), true, 0, "仅m3u8 开关已保存")
+		writeJSON(w, map[string]interface{}{"success": true, "only_m3u8": in.OnlyM3U8})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"success": true, "only_m3u8": loadSites().OnlyM3U8})
 }
 
 func handleSiteToggle(w http.ResponseWriter, r *http.Request) {
@@ -6375,6 +6444,7 @@ func main() {
 	http.HandleFunc("/api/sites/delete", guard(handleSiteDelete))
 	http.HandleFunc("/api/sites/check", guard(handleSiteCheck))
 	http.HandleFunc("/api/sites/check/progress", guard(handleSiteCheckProgress))
+	http.HandleFunc("/api/sites/m3u8", guard(handleSiteM3U8)) // 资源站搜索仅返回 m3u8 播放地址 开关（读写需登录）
 	// 官替映射专区（需登录）
 	http.HandleFunc("/api/maps", guard(handleMapsList))
 	http.HandleFunc("/api/maps/add", guard(handleMapsAdd))

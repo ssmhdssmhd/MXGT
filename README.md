@@ -173,6 +173,27 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.6.13 (2026-09-11) — 资源站搜索返回仅保留 m3u8 播放地址（后台可开关）
+
+> 后台「🏢 资源站管理」新增开关「☑ 仅 m3u8 播放地址」。开启后，资源站搜索/采集返回时**只保留 m3u8 播放地址**，过滤 mp4 等其它格式；某条视频没有任何 m3u8 地址则整条丢弃。默认关闭（保持原所有格式返回），可随时后台切换并持久化。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **➕ 开关配置**：`SitesConfig.OnlyM3U8`（`resource_sites.json` 持久化，默认 false）；
+- **➕ 过滤逻辑** `filterM3U8Only`：在 `searchSiteOne` 收口处应用（同时覆盖 `/api/sites/test` 测试采集、官替 `/api/replace` 的资源匹配、失效站检测），只过滤播放地址，不改变匹配/去广告逻辑；
+- **➕ 后台设置**：
+  - 资源站面板新增复选框「☑ 仅 m3u8 播放地址」，`loadSites()` 时回显当前状态；
+  - 新接口 `GET/POST /api/sites/m3u8`（写需登录）读取/保存开关；
+  - `/api/sites` 列表响应新增 `only_m3u8` 字段供前端回显；
+- 版本升级 `v0.6.12 → v0.6.13`。
+
+### 验证
+
+- 单测 `filterM3U8Only`：关闭→保留全部；开启→丢弃纯 mp4 视频、保留 m3u8 地址并刷新 `FirstURL`；
+- `go vet` / `go build` 通过。
+
+---
+
 ## v0.6.12 (2026-09-11) — /api/jx 成功返回 code=200（原 code=1）
 
 > `/api/jx`（JSON 通用兼容接口，供影视 App / TVBox / 盒子等调用）此前成功时返回 `code:1`、失败返回 `code:0`。调用方普遍按「HTTP 语义」用 200 判断成功，因此改为**成功返回 `code=200`**（与 HTTP 语义一致），失败仍返回 `code=0`；`success` 字段值与 URL 输出不变，兼容既有调用方。
