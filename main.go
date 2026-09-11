@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.10"
+	AppVersion = "v0.6.11"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -128,7 +128,13 @@ func (c *client) fetch(u string) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("HTTP %d from %s", resp.StatusCode, u)
+		// 死链提示：资源站/解析接口动态生成的 m3u8 有有效期，过期后源站文件被删即返回 404/410。
+		// 这类地址无法本地复活，需从资源站重新解析/重新采集获取新地址。
+		hint := ""
+		if resp.StatusCode == 404 || resp.StatusCode == 410 {
+			hint = "（该播放地址已失效/过期，源站返回404：请从资源站重新解析或重新采集获取新的有效地址）"
+		}
+		return "", fmt.Errorf("HTTP %d from %s%s", resp.StatusCode, u, hint)
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
@@ -4424,6 +4430,71 @@ func findBestMatch(vi VideoInfo, videos []ResourceVideo) (matchItem, bool) {
 	return best, ok
 }
 
+// m3u8Reachable 快速探测 m3u8 是否可达：用 Range 请求头只取 1 字节，源站返回 2xx=可用，4xx=死链/已过期。
+// 短超时；网络异常（超时/被墙）按「不可用」处理，由调用方决定是否换线路。
+func m3u8Reachable(u string) bool {
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Range", "bytes=0-0")
+	req.Header.Set("User-Agent", UserAgent)
+	if ru, err2 := url.Parse(u); err2 == nil {
+		req.Header.Set("Referer", ru.Scheme+"://"+ru.Host)
+	}
+	cl := &http.Client{Timeout: 8 * time.Second}
+	resp, err := cl.Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode >= 200 && resp.StatusCode < 400
+}
+
+// pickReachablePlayURL 选一个「可达」的播放地址（死链自动切换）：
+// 优先级=当前命中视频的记录（先目标集数、再任意）、其它匹配视频的同类记录。全部失效则回退首个候选（与原行为一致，不引入回归）。
+func pickReachablePlayURL(best ResourceVideo, others []ResourceVideo, ep int) string {
+	var cand, first string
+	for i, it := range best.URLs {
+		if first == "" {
+			first = it.URL
+		}
+		if ep > 0 && episodeNumOfPlayItem(it.Name) == ep {
+			if cand == "" {
+				cand = it.URL
+			}
+			if i < 12 { // 同视频内有限探测，避免请求过多
+				if m3u8Reachable(it.URL) {
+					return it.URL
+				}
+			}
+		}
+	}
+	if cand == "" {
+		cand = first
+	}
+	if cand != "" && m3u8Reachable(cand) {
+		return cand
+	}
+	// 主视频全部失效 → 尝试其它搜索命中的视频（其它站点/线路），最多探测 4 条
+	tried := 0
+	for _, v := range others {
+		for _, it := range v.URLs {
+			if ep > 0 && episodeNumOfPlayItem(it.Name) != ep {
+				continue
+			}
+			if tried >= 4 {
+				return cand
+			}
+			tried++
+			if m3u8Reachable(it.URL) {
+				return it.URL
+			}
+		}
+	}
+	return cand
+}
+
 func pickEpisodeURL(v ResourceVideo, ep int) (string, string) {
 	if ep > 0 {
 		for _, it := range v.URLs {
@@ -4605,7 +4676,8 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 	steps = append(steps, replaceStep{"search", "资源站搜索", "ok",
 		fmt.Sprintf("命中站点 %s · score=%.1f · 关键词 %s", best.Video.Site, best.Score, used)})
 
-	m3u8, _ := pickEpisodeURL(best.Video, vi.EpisodeNum)
+	// 死链自动切换：选择「可达」的播放地址（当前线路源站已删/过期 404 时，自动探测并切换到该资源其它线路或其它命中站点；全部失效才回退原地址）
+	m3u8 := pickReachablePlayURL(best.Video, allVideos, vi.EpisodeNum)
 	if m3u8 == "" {
 		res.Message = "匹配到的视频没有可用播放地址"
 		res.Steps = steps
