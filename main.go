@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.13"
+	AppVersion = "v0.6.14"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -6227,7 +6227,7 @@ func detectDirectFormat(raw string) string {
 //
 //	GET /api/jx?url=<m3u8|mp4|官方视频页>&engine=basic|auto|ai
 //	返回 {code:0/200, success, msg, url(可播放/去广告地址), full, play, name, pic, header, format}
-//	code=200 表示成功（与 HTTP 语义一致），0 表示失败
+//	code=200 表示成功（与 HTTP 语义一致），0 表示失败；成功时 msg 与 url 一致（同为可播放地址）
 //	url 用请求 Host 动态拼接，不硬编码；响应已带全局 CORS 头。
 func handleJX(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
@@ -6271,7 +6271,9 @@ func handleJX(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if ok {
-		resp["code"], resp["success"], resp["msg"] = 200, true, "ok"
+		resp["code"], resp["success"] = 200, true
+		// msg 与 url 一致：部分影视/TVBox 调用方取 msg 作为可播放地址
+		resp["msg"] = resp["url"]
 	} else {
 		resp["code"], resp["msg"] = 0, msg
 	}
