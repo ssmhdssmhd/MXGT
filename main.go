@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.17"
+	AppVersion = "v0.6.18"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1260,34 +1260,34 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
-    <h2>📚 HTTP 接口说明</h2>
+    <h2>📚 HTTP 接口说明 <span class="muted">（类型：🟢客户端 / 🟣服务端 / 🟠后台管理 / ⚪通用）</span></h2>
     <table>
-      <tr><th>接口</th><th>说明</th></tr>
-      <tr><td><code>GET /</code> / <code>GET /mxadmin</code></td><td>落地页（不进入后台）/ 后台管理页（本页）</td></tr>
-      <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;</code></td><td>返回过滤后的无广告 M3U8 纯文本（绝对地址）</td></tr>
-      <tr><td><code>GET /api/clean/json?url=&lt;m3u8&gt;</code></td><td>返回 JSON：统计 + 过滤后文本 + 每个片段明细</td></tr>
-      <tr><td><code>GET /api/clean?url=&lt;m3u8&gt;&amp;opt=aggresive</code></td><td>开启聚合聚类识别（可能误伤统一切片正片）</td></tr>
-      <tr><td><code>GET /api/clean/enhanced[/json]?url=&lt;m3u8&gt;</code></td><td>🆕 新版增强测试播放：独立引擎，叠加平台广告域关键词 + 片头片尾超短簇高置信检测</td></tr>
-      <tr><td><code>GET /api/replace?url=&lt;官方视频页&gt;</code></td><td>官替链路：资源站匹配后返回无广告直链 ad_skip_url</td></tr>
-      <tr><td><code>GET /api/jx?url=&lt;链接&gt;&amp;engine=basic/auto/ai</code></td><td>影视 App / TVBox 等通用兼容接口（JSON，带跨域）</td></tr>
-      <tr><td><code>GET /api/jx/client?url=&lt;链接&gt;&amp;engine=basic/auto/ai</code></td><td>🆕 客户端调用接口：精简播放字段，msg=url 可播放地址，体积小响应快</td></tr>
-      <tr><td><code>GET /api/jx/server?url=&lt;链接&gt;&amp;engine=basic/auto/ai</code></td><td>🆕 服务器调用 API：附带 detail 完整明细（去广告统计 / 官替全过程）</td></tr>
-      <tr><td><code>GET /api/play?url=&lt;m3u8/分片/密钥&gt;</code></td><td>播放代理：服务端内置增强去广告 + 分片同源代理（解决跨域/限速卡顿）</td></tr>
-      <tr><td><code>GET /api/audit?url=&lt;m3u8&gt;</code></td><td>广告核查：列出所有不连贯片段（拼接点/时长突变/偏短），供人工逐段核对</td></tr>
-      <tr><td><code>GET /player?url=&lt;去广告直链&gt;&amp;title=&lt;剧名&gt;</code></td><td>独立外置播放页（开放，hls.js/原生播放，全站跨域）</td></tr>
-      <tr><td><code>GET /api/maps</code> / <code>/add</code> / <code>/delete</code> / <code>/fetch</code></td><td>官替映射列表 / 添加 / 删除 / 从真实链接抓取剧名集数</td></tr>
-      <tr><td><code>GET /api/platforms</code> / <code>/add</code> / <code>/update</code> / <code>/delete</code> / <code>/fetch</code> / <code>/links</code> / <code>/oneclick</code></td><td>官方平台自动更新配置：列表 / 增 / 改 / 删 / 抓取 / 内置一键映射 / 无脑映射</td></tr>
-      <tr><td><code>GET /api/skip</code> / <code>/add</code> / <code>/delete</code></td><td>⏱️ 非正片区间标注：列表 / 添加 / 删除时间戳区间</td></tr>
-      <tr><td><code>GET /api/danmaku</code> / <code>/add</code> / <code>/toggle</code> / <code>/delete</code> / <code>/test</code></td><td>💬 弹幕过滤规则库：列表 / 添加 / 启停 / 删除 / 单条命中测试</td></tr>
-      <tr><td><code>GET /api/sites</code> / <code>/toggle</code> / <code>/test</code></td><td>资源站列表（默认隐藏失效）/ 启停 / 搜索测试</td></tr>
-      <tr><td><code>POST /api/sites/add</code> / <code>/update</code> / <code>/delete</code> / <code>/check</code></td><td>添加 / 编辑 / 删除资源站 / 异步批量检测（并发）并屏蔽失效站</td></tr>
-      <tr><td><code>GET /api/sites/m3u8</code> / <code>POST /api/sites/m3u8</code></td><td>🆕 资源站搜索「仅 m3u8 播放地址」开关：读取 / 设置（设置需登录）</td></tr>
-      <tr><td><code>GET /api/sites/check/progress?task=</code></td><td>查询批量检测任务进度（供进度条轮询）</td></tr>
-      <tr><td><code>GET /api/update/check</code></td><td>检查远程是否有新版本（读取线上 latest.json）</td></tr>
-      <tr><td><code>POST /api/update/apply</code></td><td>下载新版本 zip 并自动替换重启（需登录）</td></tr>
-      <tr><td><code>GET /api/ai/config</code> / <code>POST /api/ai/config</code></td><td>查看（key 打码）/ 更新 AI 去广告配置（更新需登录）</td></tr>
-      <tr><td><code>GET /api/stats</code></td><td>运行统计（JSON）</td></tr>
-      <tr><td><code>GET /healthz</code></td><td>健康检查</td></tr>
+      <tr><th>类型</th><th>接口</th><th>说明</th></tr>
+      <tr><td>⚪ 通用</td><td><code>GET /</code> / <code>GET /mxadmin</code></td><td>落地页（不进入后台）/ 后台管理页（本页）</td></tr>
+      <tr><td>⚪ 通用</td><td><code>GET /api/clean?url=&lt;m3u8&gt;</code></td><td>返回过滤后的无广告 M3U8 纯文本（绝对地址）——客户端可直接喂播放器，服务端可抓取无广告地址</td></tr>
+      <tr><td>🟣 服务端</td><td><code>GET /api/clean/json?url=&lt;m3u8&gt;</code></td><td>返回 JSON：统计 + 过滤后文本 + 每个片段明细——服务端二次分析/审计</td></tr>
+      <tr><td>🟣 服务端</td><td><code>GET /api/clean?url=&lt;m3u8&gt;&amp;opt=aggresive</code></td><td>开启聚合聚类识别（可能误伤统一切片正片）</td></tr>
+      <tr><td>🟣 服务端</td><td><code>GET /api/clean/enhanced[/json]?url=&lt;m3u8&gt;</code></td><td>🆕 新版增强测试播放：独立引擎，叠加平台广告域关键词 + 片头片尾超短簇高置信检测</td></tr>
+      <tr><td>🟣 服务端</td><td><code>GET /api/replace?url=&lt;官方视频页&gt;</code></td><td>官替链路：资源站匹配后返回无广告直链 ad_skip_url——服务端从官方页解析直链供下发</td></tr>
+      <tr><td>🟢 客户端</td><td><code>GET /api/jx?url=&lt;链接&gt;&amp;engine=basic/auto/ai</code></td><td>影视 App / TVBox 等通用兼容接口（JSON，带跨域）</td></tr>
+      <tr><td>🟢 客户端</td><td><code>GET /api/jx/client?url=&lt;链接&gt;&amp;engine=basic/auto/ai</code></td><td>🆕 客户端调用接口：精简播放字段，msg=url 可播放地址，体积小响应快</td></tr>
+      <tr><td>🟣 服务端</td><td><code>GET /api/jx/server?url=&lt;链接&gt;&amp;engine=basic/auto/ai</code></td><td>🆕 服务器调用 API：附带 detail 完整明细（去广告统计 / 官替全过程）</td></tr>
+      <tr><td>🟢 客户端</td><td><code>GET /api/play?url=&lt;m3u8/分片/密钥&gt;</code></td><td>播放代理：服务端内置增强去广告 + 分片同源代理（解决跨域/限速卡顿）</td></tr>
+      <tr><td>🟣 服务端</td><td><code>GET /api/audit?url=&lt;m3u8&gt;</code></td><td>广告核查：列出所有不连贯片段（拼接点/时长突变/偏短），供人工逐段核对</td></tr>
+      <tr><td>🟢 客户端</td><td><code>GET /player?url=&lt;去广告直链&gt;&amp;title=&lt;剧名&gt;</code></td><td>独立外置播放页（开放，hls.js/原生播放，全站跨域）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>GET /api/maps</code> / <code>/add</code> / <code>/delete</code> / <code>/fetch</code></td><td>官替映射列表 / 添加 / 删除 / 从真实链接抓取剧名集数（需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>GET /api/platforms</code> / <code>/add</code> / <code>/update</code> / <code>/delete</code> / <code>/fetch</code> / <code>/links</code> / <code>/oneclick</code></td><td>官方平台自动更新配置：列表 / 增 / 改 / 删 / 抓取 / 内置一键映射 / 无脑映射（需登录）</td></tr>
+      <tr><td>⚪ 通用</td><td><code>GET /api/skip</code> / <code>/add</code> / <code>/delete</code></td><td>⏱️ 非正片区间标注：客户端播放器读取跳过区间，服务端增删标注（增删需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>GET /api/danmaku</code> / <code>/add</code> / <code>/toggle</code> / <code>/delete</code> / <code>/test</code></td><td>💬 弹幕过滤规则库：列表 / 添加 / 启停 / 删除 / 单条命中测试（需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>GET /api/sites</code> / <code>/toggle</code> / <code>/test</code></td><td>资源站列表（默认隐藏失效）/ 启停 / 搜索测试（需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>POST /api/sites/add</code> / <code>/update</code> / <code>/delete</code> / <code>/check</code></td><td>添加 / 编辑 / 删除资源站 / 异步批量检测（并发）并屏蔽失效站（需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>GET /api/sites/m3u8</code> / <code>POST /api/sites/m3u8</code></td><td>🆕 资源站搜索「仅 m3u8 播放地址」开关：读取 / 设置（设置需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>GET /api/sites/check/progress?task=</code></td><td>查询批量检测任务进度（供进度条轮询，需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>GET /api/update/check</code></td><td>检查远程是否有新版本（读取线上 latest.json，需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>POST /api/update/apply</code></td><td>下载新版本 zip 并自动替换重启（需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>GET /api/ai/config</code> / <code>POST /api/ai/config</code></td><td>查看（key 打码）/ 更新 AI 去广告配置（更新需登录）</td></tr>
+      <tr><td>⚪ 通用</td><td><code>GET /api/stats</code></td><td>运行统计（JSON）——监控服务状态与调用量</td></tr>
+      <tr><td>⚪ 通用</td><td><code>GET /healthz</code></td><td>健康检查——探活/负载均衡健康检测</td></tr>
     </table>
     <p class="muted" style="margin-top:12px">命令行模式：<code>./mxgt-go "&lt;m3u8地址&gt;"</code></p>
   </div>
@@ -2254,9 +2254,16 @@ const frontPageHTML = `<!DOCTYPE html>
   a{color:#fff;background:#c026d3;padding:9px 18px;border-radius:10px;text-decoration:none}
   .api-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #eee}
   .api-row:last-child{border-bottom:none}
-  .api-meta{min-width:150px;flex-shrink:0}
+  .api-meta{min-width:200px;flex-shrink:0}
   .api-meta b{color:#581c87;font-size:13.5px}
+  .api-badge{display:inline-block;font-size:10.5px;font-weight:700;color:#fff;border-radius:999px;
+             padding:1px 8px;margin-left:6px;vertical-align:1px}
+  .api-badge.client{background:#0891b2}
+  .api-badge.server{background:#7e22ce}
+  .api-badge.admin{background:#d97706}
+  .api-badge.both{background:#16a34a}
   .api-meta .d{font-size:11.5px;color:#9ca3af;margin-top:3px;line-height:1.5}
+  .api-meta .use{font-size:11px;color:#b45309;margin-top:2px;line-height:1.5}
   .api-cmd{flex:1;background:#1f2937;color:#e5e7eb;border-radius:8px;padding:8px 11px;font-size:12px;
            overflow-x:auto;white-space:nowrap;word-break:break-all;min-width:0}
   .api-cmd .muted{color:#9ca3af}
@@ -2302,34 +2309,41 @@ function el(id){return document.getElementById(id)}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function card(lab,val,sub){return '<div class="card"><div class="lab">'+lab+'</div><div class="val">'+val+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';}
 // —— API 调用方式（地址基于当前访问域名动态生成，支持一键复制）——
+// t 标注接口用途：client=客户端调用（播放器/影视App/TVBox）、server=服务端调用（服务器间/二次处理）、
+// admin=后台管理（需登录）、both=客户端与服务端通用
 var APIS=[
-  {n:'去广告 M3U8',d:'传入 m3u8 链接，返回过滤后无广告 M3U8 纯文本，可直接播放',p:'/api/clean?url=<m3u8链接>'},
-  {n:'去广告 JSON',d:'同上去广告，返回 JSON（统计 + 过滤后文本 + 广告明细）',p:'/api/clean/json?url=<m3u8链接>'},
-  {n:'增强去广告',d:'独立引擎：平台广告域关键词 + 片头片尾超短簇高置信检测',p:'/api/clean/enhanced?url=<m3u8链接>'},
-  {n:'播放代理',d:'服务端代理 m3u8/分片/密钥，内置增强去广告，解决跨域与限速卡顿',p:'/api/play?url=<m3u8链接>'},
-  {n:'广告核查',d:'列出所有不连贯片段（拼接点/时长突变/偏短），供人工逐段核对广告',p:'/api/audit?url=<m3u8链接>'},
-  {n:'官替链路',d:'官方视频页链接 → 资源站匹配 → 返回无广告直链',p:'/api/replace?url=<官方视频页链接>'},
-  {n:'影视/TVBox 兼容',d:'影视 App / TVBox 等通用解析接口（JSON，带跨域）',p:'/api/jx?url=<播放链接>'},
-  {n:'客户端调用',d:'播放器/盒子调用：精简播放字段，msg=url 可播放地址',p:'/api/jx/client?url=<播放链接>'},
-  {n:'服务器调用',d:'服务端二次处理：附带 detail 完整明细（去广告统计/官替全过程）',p:'/api/jx/server?url=<播放链接>'},
-  {n:'非正片区间',d:'非正片区间标注列表（SponsorBlock 思路，播放器按区间跳过）',p:'/api/skip'},
-  {n:'弹幕规则库',d:'弹幕过滤规则库列表',p:'/api/danmaku'},
-  {n:'官替映射',d:'官替映射列表（官方剧名 ↔ 资源站标准剧名）',p:'/api/maps'},
-  {n:'官方平台配置',d:'官方平台自动更新配置列表',p:'/api/platforms'},
-  {n:'资源站列表',d:'资源站列表（默认隐藏失效站）',p:'/api/sites'},
-  {n:'资源站搜索测试',d:'搜索测试单个资源站是否可用/命中',p:'/api/sites/test?name=<站名>&kw=<词>'},
-  {n:'检查更新',d:'检查远程是否有新版本（读取线上 latest.json）',p:'/api/update/check'},
-  {n:'AI 去广告配置',d:'查看 AI 去广告配置（key 打码）',p:'/api/ai/config'},
-  {n:'运行统计',d:'接口调用次数 / 广告统计 / 运行时长（JSON）',p:'/api/stats'},
-  {n:'健康检查',d:'服务存活状态与版本号',p:'/healthz'}
+  {n:'去广告 M3U8',t:'both',d:'传入 m3u8 链接，返回过滤后无广告 M3U8 纯文本，可直接播放',u:'客户端：直接喂播放器；服务端：抓取过滤后的无广告地址',p:'/api/clean?url=<m3u8链接>'},
+  {n:'去广告 JSON',t:'server',d:'同上去广告，返回 JSON（统计 + 过滤后文本 + 广告明细）',u:'服务端：二次分析广告片段、统计与审计',p:'/api/clean/json?url=<m3u8链接>'},
+  {n:'增强去广告',t:'server',d:'独立引擎：平台广告域关键词 + 片头片尾超短簇高置信检测',u:'服务端：更高召回的去广告解析（/json 返回结构化结果）',p:'/api/clean/enhanced?url=<m3u8链接>'},
+  {n:'播放代理',t:'client',d:'服务端代理 m3u8/分片/密钥，内置增强去广告，解决跨域与限速卡顿',u:'客户端：播放器直接播放本服务拼接的代理地址',p:'/api/play?url=<m3u8链接>'},
+  {n:'广告核查',t:'server',d:'列出所有不连贯片段（拼接点/时长突变/偏短），供人工逐段核对广告',u:'服务端/人工：审核可疑片段，辅助广告标记',p:'/api/audit?url=<m3u8链接>'},
+  {n:'官替链路',t:'server',d:'官方视频页链接 → 资源站匹配 → 返回无广告直链',u:'服务端：从官方视频页解析出无广告直链供下发',p:'/api/replace?url=<官方视频页链接>'},
+  {n:'影视/TVBox 兼容',t:'client',d:'影视 App / TVBox 等通用解析接口（JSON，带跨域）',u:'客户端：影视App/TVBox/盒子配置解析接口',p:'/api/jx?url=<播放链接>'},
+  {n:'客户端调用',t:'client',d:'播放器/盒子调用：精简播放字段，msg=url 可播放地址',u:'客户端：专用精简接口，体积小响应快',p:'/api/jx/client?url=<播放链接>'},
+  {n:'服务器调用',t:'server',d:'服务端二次处理：附带 detail 完整明细（去广告统计/官替全过程）',u:'服务端：需要完整明细做二次处理时调用',p:'/api/jx/server?url=<播放链接>'},
+  {n:'非正片区间',t:'both',d:'非正片区间标注列表（SponsorBlock 思路，播放器按区间跳过）',u:'客户端：播放器读取跳过区间；服务端：增删标注',p:'/api/skip'},
+  {n:'弹幕规则库',t:'admin',d:'弹幕过滤规则库列表',u:'后台管理：查看/增删弹幕过滤规则（需登录）',p:'/api/danmaku'},
+  {n:'官替映射',t:'admin',d:'官替映射列表（官方剧名 ↔ 资源站标准剧名）',u:'后台管理：官替映射专区数据（需登录）',p:'/api/maps'},
+  {n:'官方平台配置',t:'admin',d:'官方平台自动更新配置列表',u:'后台管理：官方平台自动更新配置（需登录）',p:'/api/platforms'},
+  {n:'资源站列表',t:'admin',d:'资源站列表（默认隐藏失效站）',u:'后台管理：资源站启停与状态（需登录）',p:'/api/sites'},
+  {n:'资源站搜索测试',t:'admin',d:'搜索测试单个资源站是否可用/命中',u:'后台管理：验证采集站可用性（需登录）',p:'/api/sites/test?name=<站名>&kw=<词>'},
+  {n:'检查更新',t:'admin',d:'检查远程是否有新版本（读取线上 latest.json）',u:'后台管理：版本检查（需登录应用更新）',p:'/api/update/check'},
+  {n:'AI 去广告配置',t:'admin',d:'查看 AI 去广告配置（key 打码）',u:'后台管理：AI 引擎参数查看/更新（需登录）',p:'/api/ai/config'},
+  {n:'运行统计',t:'both',d:'接口调用次数 / 广告统计 / 运行时长（JSON）',u:'通用：监控服务状态与调用量',p:'/api/stats'},
+  {n:'健康检查',t:'both',d:'服务存活状态与版本号',u:'通用：探活/负载均衡健康检测',p:'/healthz'}
 ];
+function badgeOf(t){
+  var m={client:['客户端','api-badge client'],server:['服务端','api-badge server'],admin:['后台管理','api-badge admin'],both:['通用','api-badge both']};
+  var b=m[t]||m.both;
+  return '<span class="'+b[1]+'">'+b[0]+'</span>';
+}
 function renderApis(){
   var base=location.origin;
   el('apiList').innerHTML=APIS.map(function(a){
     var u=base+a.p;
     var c='curl -s "'+u+'"';
     return '<div class="api-row">'+
-      '<div class="api-meta"><b>'+a.n+'</b><div class="d">'+a.d+'</div></div>'+
+      '<div class="api-meta"><b>'+a.n+badgeOf(a.t)+'</b><div class="d">'+a.d+'</div>'+(a.u?'<div class="use">用途：'+a.u+'</div>':'')+'</div>'+
       '<div class="api-cmd"><span class="muted">URL </span>'+esc(u)+'<br><span class="muted">CURL </span>'+esc(c)+'</div>'+
       '<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">'+
       '<button class="copy-btn" onclick="copyApi(this)" data-t="'+esc(u)+'">复制URL</button>'+
