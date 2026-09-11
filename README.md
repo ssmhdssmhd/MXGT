@@ -52,6 +52,8 @@ go run main.go "https://示例.com/playlist.m3u8"
 | `GET /api/platforms/links` | 内置官方平台一键映射链接清单（腾讯/爱奇艺/优酷/芒果TV/哔哩哔哩/搜狐/PP） |
 | `POST /api/platforms/oneclick?key=<内置key>` | **无脑映射**：内置官方链接实时抓取→解析剧名→自动映射到专区，无需输入链接（含反爬标题过滤） |
 | `GET /api/jx?url=<m3u8/官方页/直链>&engine=basic/auto/ai` | **JSON 通用兼容接口**（供影视 / TVBox / 盒子等调用）：返回 `{code,success,msg,url(去广告可播),full,play,name,pic,header,format}`，已带跨域、URL 基于请求 Host 动态拼接不硬编码 |
+| `GET /api/jx/client?url=<m3u8/官方页/直链>&engine=basic/auto/ai` | **客户端调用接口**（播放器/盒子，独立）：返回精简播放字段 `{code,success,msg,url,full,play,name,pic,format}`，`msg=url` 可播放地址，体积更小响应更快 |
+| `GET /api/jx/server?url=<m3u8/官方页/直链>&engine=basic/auto/ai` | **服务器调用 API 接口**（独立）：在客户端字段基础上附带 `detail` 完整明细（m3u8 为去广告统计，官方页为官替全过程），供服务端二次处理 |
 | `GET/POST /api/ai/config` | 查看(仅GET,key打码)/更新(POST需登录) AI 去广告配置，返回 `ai_version`（见 `ai/` 独立目录） |
 | `GET /api/sites` | 资源站列表（`resource_sites.json`，默认全部禁用，后台按需启用） |
 | `POST /api/sites/toggle?name=<站名>&enabled=1/0` | 启用/禁用某个采集站并持久化 |
@@ -172,6 +174,34 @@ chmod +x mxgt-go
 ---
 
 ## Go 版更新日志（branch `go`）
+
+## v0.6.15 (2026-09-11) — 调用接口拆分为服务器调用 / 客户端调用两个独立接口
+
+> 在 `/api/jx`（保留兼容，行为不变）之外新增两个独立调用接口：
+>
+> - **`GET /api/jx/client?url=...&engine=...`（客户端调用接口）**：供播放器 / 盒子等客户端调用，仅返回精简播放字段 `{code,success,msg,url,full,play,name,pic,format}`，`msg=url` 可播放地址，体积更小响应更快；
+> - **`GET /api/jx/server?url=...&engine=...`（服务器调用 API 接口）**：供服务端二次处理，在客户端字段基础上附带 `detail` 完整明细——m3u8 输入为去广告统计（段数/广告数/保留数/比例/过滤后列表），官方视频页为官替全过程（ReplaceResult）。
+>
+> 三者共用同一解析核心 `jxResolve`，行为一致、结果稳定；原 `/api/jx` 响应格式不变（不附加 `detail`），完全向后兼容。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- 新增 `jxResolve`：抽取调用接口公共解析核心（m3u8 去广告 / 直链 / 官方页官替），返回基础播放字段 + 可选完整明细；
+- 新增 `jxWrite`：统一组装成功/失败响应并记录调用；
+- 新增 `handleJXServer`（`/api/jx/server`）：附带 `detail` 完整明细，供服务器调用；
+- 新增 `handleJXClient`（`/api/jx/client`）：精简播放字段（去掉 `remarks`/`header`），供客户端调用；
+- `handleJX`（`/api/jx`）重构为调用 `jxResolve`，响应格式与之前完全一致（不附加 `detail`）；
+- 路由注册 `/api/jx/server`、`/api/jx/client` 两个新接口；
+- 版本升级 `v0.6.14 → v0.6.15`。
+
+### 验证
+
+- `go build` 通过；本地起服实测三个接口：
+  - `/api/jx` → `{"code":200,"success":true,"msg":"<可播放地址>","url":"<可播放地址>",...}`（无 detail，与旧版一致）；
+  - `/api/jx/client` → 精简字段，`msg=url`，无 `remarks`/`header`；
+  - `/api/jx/server` → 附带 `detail`（m3u8 返回 `total_segments`/`ad_count`/`kept_segments`/`filtered_m3u8` 等）。
+
+---
 
 ## v0.6.14 (2026-09-11) — /api/jx 成功时 msg 返回与 url 一致（可播放地址）
 

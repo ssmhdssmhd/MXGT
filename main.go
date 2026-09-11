@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.14"
+	AppVersion = "v0.6.15"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -6223,53 +6223,72 @@ func detectDirectFormat(raw string) string {
 	return ""
 }
 
-// handleJX JSON 通用兼容接口（供影视 / TVBox / 盒子等调用）
+// jxResolve 调用接口公共解析核心：按输入类型返回基础播放信息与完整明细
+//   - base：客户端/服务端共用的可播字段（url/full/play/name/pic/format 等）
+//   - detail：服务端扩展明细（m3u8 为去广告统计；官方页为官替完整信息；直链为 nil）
+func jxResolve(r *http.Request, raw, engine string) (base map[string]interface{}, detail interface{}, ok bool, msg string) {
+	base = map[string]interface{}{
+		"code": 0, "success": false, "msg": "参数缺失", "url": "",
+		"play": "", "full": "", "name": "", "pic": "", "header": "", "format": "",
+	}
+	if raw == "" {
+		return base, nil, false, "参数缺失"
+	}
+	switch detectDirectFormat(raw) {
+	case "m3u8":
+		res := cleanOne(raw, false, engine)
+		if !res.Success {
+			return base, nil, false, res.Message
+		}
+		// 统一走播放代理：/api/play 内置增强去广告 + 分片代理（无广告且不卡顿）
+		ad := playURL(r, "/api/play", url.Values{"url": {raw}})
+		base["url"], base["full"], base["play"], base["format"] = ad, ad, raw, "m3u8"
+		base["name"] = res.Message
+		res.Segments = nil // 逐段明细仅 /api/clean/json 提供，此处减小体积
+		detail = &res
+		return base, detail, true, "ok"
+	case "direct":
+		base["url"], base["full"], base["play"], base["format"] = raw, raw, raw, "direct"
+		return base, nil, true, "ok"
+	default:
+		// 官方视频页 → 官替链路（自动得到基于本机 Host 的无广告直链）
+		rr := replaceOne(r, raw)
+		if !rr.Success || rr.ADSkipURL == "" {
+			return base, nil, false, rr.Message
+		}
+		base["url"], base["full"], base["play"] = rr.ADSkipURL, rr.ADSkipURL, rr.M3U8URL
+		base["format"], base["name"], base["pic"], base["remarks"] = "m3u8", rr.VideoName, rr.VideoPic, rr.VideoRemarks
+		detail = &rr
+		return base, detail, true, "ok"
+	}
+}
+
+// jxWrite 统一组装响应并记录调用
+func jxWrite(w http.ResponseWriter, r *http.Request, api string, resp map[string]interface{}, detail interface{}, ok bool, msg string) {
+	if ok {
+		resp["code"], resp["success"] = 200, true
+		// msg 与 url 一致：部分影视/TVBox 调用方取 msg 作为可播放地址
+		resp["msg"] = resp["url"]
+		if detail != nil {
+			resp["detail"] = detail
+		}
+	} else {
+		resp["code"], resp["msg"] = 0, msg
+	}
+	recordCall(api, r.URL.Query().Get("url"), ok, 0, resp["msg"].(string))
+	writeJSON(w, resp)
+}
+
+// handleJX JSON 通用兼容接口（供影视 / TVBox / 盒子等调用，保留向后兼容，不附加 detail）
 //
 //	GET /api/jx?url=<m3u8|mp4|官方视频页>&engine=basic|auto|ai
 //	返回 {code:0/200, success, msg, url(可播放/去广告地址), full, play, name, pic, header, format}
 //	code=200 表示成功（与 HTTP 语义一致），0 表示失败；成功时 msg 与 url 一致（同为可播放地址）
 //	url 用请求 Host 动态拼接，不硬编码；响应已带全局 CORS 头。
 func handleJX(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
 	raw := r.URL.Query().Get("url")
 	engine := r.URL.Query().Get("engine")
-	resp := map[string]interface{}{
-		"code": 0, "success": false, "msg": "参数缺失", "url": "",
-		"play": "", "full": "", "name": "", "pic": "", "header": "", "format": "",
-	}
-	if raw == "" {
-		writeJSON(w, resp)
-		return
-	}
-	f := detectDirectFormat(raw)
-	ok := false
-	msg := ""
-	switch f {
-	case "m3u8":
-		res := cleanOne(raw, false, engine)
-		if res.Success {
-			// 统一走播放代理：/api/play 内置增强去广告 + 分片代理（无广告且不卡顿）
-			ad := playURL(r, "/api/play", url.Values{"url": {raw}})
-			resp["url"], resp["full"], resp["play"], resp["format"] = ad, ad, raw, "m3u8"
-			resp["name"] = res.Message
-			ok = true
-		} else {
-			msg = res.Message
-		}
-	case "direct":
-		resp["url"], resp["full"], resp["play"], resp["format"] = raw, raw, raw, "direct"
-		ok, msg = true, "ok"
-	default:
-		// 官方视频页 → 官替链路（自动得到基于本机 Host 的无广告直链）
-		rr := replaceOne(r, raw)
-		if rr.Success && rr.ADSkipURL != "" {
-			resp["url"], resp["full"], resp["play"] = rr.ADSkipURL, rr.ADSkipURL, rr.M3U8URL
-			resp["format"], resp["name"], resp["pic"], resp["remarks"] = "m3u8", rr.VideoName, rr.VideoPic, rr.VideoRemarks
-			ok = true
-		} else {
-			msg = rr.Message
-		}
-	}
+	resp, _, ok, msg := jxResolve(r, raw, engine)
 	if ok {
 		resp["code"], resp["success"] = 200, true
 		// msg 与 url 一致：部分影视/TVBox 调用方取 msg 作为可播放地址
@@ -6277,7 +6296,34 @@ func handleJX(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resp["code"], resp["msg"] = 0, msg
 	}
-	recordCall("/api/jx", raw, ok, time.Since(start).Seconds()*1000, resp["msg"].(string))
+	recordCall("/api/jx", raw, ok, 0, resp["msg"].(string))
+	writeJSON(w, resp)
+}
+
+// handleJXServer GET /api/jx/server?url=...&engine=...：服务器调用 API 接口
+// 返回客户端全部字段 + detail 完整明细（去广告统计 / 官替全过程），供服务端二次处理
+func handleJXServer(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("url")
+	engine := r.URL.Query().Get("engine")
+	resp, detail, ok, msg := jxResolve(r, raw, engine)
+	jxWrite(w, r, "/api/jx/server", resp, detail, ok, msg)
+}
+
+// handleJXClient GET /api/jx/client?url=...&engine=...：客户端调用接口（播放器/盒子）
+// 仅返回播放所需精简字段（code/success/msg/url/name/pic/format），msg=url 可播放地址，体积更小响应更快
+func handleJXClient(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("url")
+	engine := r.URL.Query().Get("engine")
+	resp, _, ok, msg := jxResolve(r, raw, engine)
+	if ok {
+		resp["code"], resp["success"] = 200, true
+		resp["msg"] = resp["url"]
+		delete(resp, "remarks")
+		delete(resp, "header")
+	} else {
+		resp["code"], resp["msg"] = 0, msg
+	}
+	recordCall("/api/jx/client", raw, ok, 0, resp["msg"].(string))
 	writeJSON(w, resp)
 }
 
@@ -6437,6 +6483,9 @@ func main() {
 	http.HandleFunc("/api/replace", handleReplace)
 	// JSON 通用兼容接口（影视 / TVBox / 盒子等调用）
 	http.HandleFunc("/api/jx", handleJX)
+	// 独立调用接口：服务器调用 API（返回完整明细 detail）/ 客户端调用（仅返回精简播放字段）
+	http.HandleFunc("/api/jx/server", handleJXServer)
+	http.HandleFunc("/api/jx/client", handleJXClient)
 	// 资源站管理（需登录）
 	http.HandleFunc("/api/sites", guard(handleSitesList))
 	http.HandleFunc("/api/sites/toggle", guard(handleSiteToggle))
