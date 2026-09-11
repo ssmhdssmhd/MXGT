@@ -175,6 +175,23 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.6.17 (2026-09-11) — 前台补齐全部 API 调用方式展示
+
+> 前台「🔌 API 调用方式」列表此前只展示 6 个接口，现已补齐为 19 个，覆盖全部公开调用接口：去广告（M3U8/JSON/增强）、播放代理、广告核查、官替链路、影视/TVBox 兼容、客户端调用、服务器调用、非正片区间、弹幕规则库、官替映射、官方平台配置、资源站列表/搜索测试、检查更新、AI 去广告配置、运行统计、健康检查。后台「📚 HTTP 接口说明」同步补齐 `jx/client`、`jx/server`、`api/play`、`api/audit`、`api/sites/m3u8` 等新增接口。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- 前台 `frontPageHTML`：`APIS` 数组由 6 项扩展为 19 项（含全部公开调用接口，地址仍基于访问域名动态生成、支持一键复制）；
+- 后台 `adminPageHTML`：HTTP 接口说明表格补齐 `GET /api/jx/client`、`GET /api/jx/server`、`GET /api/play`、`GET /api/audit`、`GET/POST /api/sites/m3u8` 等条目；
+- 版本升级 `v0.6.16 → v0.6.17`。
+
+### 验证
+
+- `go vet` / `go build` 通过；
+- 本地起服实测：`GET /` 页面渲染出 19 个 API 调用卡片（`api/clean`、`api/jx/client`、`api/jx/server`、`api/audit`、`api/play` 等均出现）。
+
+---
+
 ## v0.6.16 (2026-09-11) — 修复更新后重启等待时间过长（快速重启）
 
 > 更新后重启耗时由「最坏十几秒~60 秒」降至「秒级」。优化三个环节：
