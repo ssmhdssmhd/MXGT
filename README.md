@@ -173,6 +173,27 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.6.10 (2026-09-11) — 修复官替映射专区「爱奇艺无法获取」：用公开接口解析真实剧名
+
+> 官替映射专区（`/api/maps/fetch`）抓爱奇艺视频页一直拿不到真实剧名。根因：**爱奇艺视频页是纯 JS 渲染壳** —— 静态 HTML 里 `<title>` 恒为平台通用标题「爱奇艺-在线视频网站…」、无 `og:title`、无内嵌剧信息，抓包也拿不到，必须走 JS 渲染或官方接口。本次新增**爱奇艺专用解析**（无需登录、无需 Chromium）：页面 id → 公开接口解码成真实 tvId → 取 `data.name` 真实剧名。
+
+### 更新内容（[main.go](file:///workspace/main.go)）
+
+- **➕ 爱奇艺真实剧名解析** `fetchIqiyiTitle` + `isIqiyiURL`：
+  - 路由：`https://pcw-api.iq.com/api/decode/<页面id>?platformId=3&modeCode=intl&langCode=sg` 把 `v_xxx.html` 页面 id 解码成真实 tvid；
+  - 再请求 `https://pcw-api.iqiyi.com/video/video/baseinfo/<tvid>` 取 `data.name`（如「利剑·玫瑰第1集」），兜底字段 `shortTitle`/`albumName`；
+  - `fetchVideoTitleWithSelector` 爱奇艺选择器为空时 → 走 `fetchVideoTitle` → iqiyi 分支优先用接口解析，失败才回退静态抓取；
+- 兼容性：`golang.org/x` 零依赖，纯标准库 `encoding/json`，`json.Number` 兼容接口返回数字字符串/纯数字两种格式；
+- 版本升级 `v0.6.9 → v0.6.10`。
+
+### 验证（真实源 `https://www.iqiyi.com/v_jlpasi6nms.html`）
+
+- `/api/maps/fetch` 完整链路（本机单测等效）：`fetchIqiyiTitle` → `"利剑·玫瑰第1集"` → `parseVideoTitle` → `BaseTitle="利剑·玫瑰"`、`Episode="第1集"`、`EpisodeNum=1`，可直接用于生成/匹配官替映射；
+- 之前该链接 `title` 只会返回平台通用标题，`parseVideoTitle` 拆不出剧名；修复后可得到正确官替映射；
+- `go build` 通过。
+
+---
+
 ## v0.6.9 (2026-09-10) — 后台新增「广告核查」侧边栏：逐段核查每一个不连贯片段，人工确认广告一键写入跳过区间
 
 > 完全杜绝漏检的兜底手段：规则引擎（时长/URL/关键词/成对 DISCONTINUITY）判不了的广告（时长与正片相同、无任何特征），交给人工在后台逐段核查。新增 `🔍 广告核查` 面板：粘贴 M3U8 即列出**每一个不连贯片段**（拼接点 / 时长突变 / 偏短），逐段「播放核对」定位到主播放器时间轴查看上下文，确认广告「⛔ 标广告」一键写入跳过区间（按视频标识绑定，播放时自动跳过）——即使规则漏检，人工核查后实际播放也不再出现。

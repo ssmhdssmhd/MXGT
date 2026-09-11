@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.9"
+	AppVersion = "v0.6.10"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -3224,6 +3224,73 @@ var ogTitleRe = regexp.MustCompile(`(?i)<meta[^>]+(?:property|name)=["'](?:og:ti
 var titleTagRe = regexp.MustCompile(`(?i)<title[^>]*>([^<]+)</title>`)
 var tencentVidRe = regexp.MustCompile(`(?i)[?&]vid=([A-Za-z0-9]+)`)
 var tencentVidJSONRe = regexp.MustCompile(`(?i)"vid"\s*:\s*"([A-Za-z0-9]+)"`)
+var iqiyiPageIDRe = regexp.MustCompile(`(?i)v_([A-Za-z0-9]+)\.html`)
+
+// fetchIqiyiTitle 用爱奇艺无需登录的公开接口从 v_xxx.html 页面 id 解析真实剧名：
+//  1) 爱奇艺《视频页》是纯 JS 渲染壳 —— 静态 HTML 里 <title> 恒为平台通用标题、无 og:title、无内嵌剧名；
+//     直接抓页面永远拿不到真实剧名（这是「官替映射专区」爱奇艺无法获取的根因）。
+//  2) 方案：pcw-api.iq.com/api/decode/<页面id> 把页面 id 解码成真实 tvid，
+//     再请求 pcw-api.iqiyi.com/video/video/baseinfo/<tvid> 取 data.name（如「利剑·玫瑰第1集」）。
+func fetchIqiyiTitle(raw string) string {
+	m := iqiyiPageIDRe.FindStringSubmatch(raw)
+	if len(m) < 2 {
+		return ""
+	}
+	pageID := m[1]
+	// ① 页面 id → 真实 tvid
+	tvid := ""
+	body, err := newClient().fetch("https://pcw-api.iq.com/api/decode/" + url.QueryEscape(pageID) +
+		"?platformId=3&modeCode=intl&langCode=sg")
+	if err == nil {
+		var d struct {
+			Code string          `json:"code"`
+			Data json.RawMessage `json:"data"`
+		}
+		if e := json.Unmarshal([]byte(body), &d); e == nil && d.Code == "0" && len(d.Data) > 0 {
+			// data 可能为数字字符串或纯数字
+			var num json.Number
+			if e2 := json.Unmarshal(d.Data, &num); e2 == nil {
+				tvid = num.String()
+			} else {
+				var s string
+				if e2 := json.Unmarshal(d.Data, &s); e2 == nil {
+					tvid = s
+				}
+			}
+		}
+	}
+	if tvid == "" {
+		return ""
+	}
+	// ② tvid → 视频基础信息（剧名）
+	bi, err := newClient().fetch("https://pcw-api.iqiyi.com/video/video/baseinfo/" + url.QueryEscape(tvid))
+	if err != nil {
+		return ""
+	}
+	var b struct {
+		Data struct {
+			Name        string `json:"name"`
+			ShortTitle  string `json:"shortTitle"`
+			AlbumName   string `json:"albumName"`
+			Subtitle    string `json:"subtitle"`
+			EpisodeNum  int    `json:"episode"`
+			AllTimeName string `json:"allTimeName"`
+		} `json:"data"`
+	}
+	if e := json.Unmarshal([]byte(bi), &b); e != nil {
+		return ""
+	}
+	if b.Data.Name != "" {
+		return strings.TrimSpace(b.Data.Name)
+	}
+	if b.Data.ShortTitle != "" {
+		return strings.TrimSpace(b.Data.ShortTitle)
+	}
+	if b.Data.AlbumName != "" {
+		return strings.TrimSpace(b.Data.AlbumName)
+	}
+	return ""
+}
 
 // fetchTencentVid 提取腾讯视频 vid：优先 URL 参数 vid=，其次页面 JSON "vid":"xxx"（cover 页为 JS 壳时靠它兜底）
 func fetchTencentVid(raw, body string) string {
@@ -3254,6 +3321,12 @@ func fetchTencentTitleByVid(vid string) string {
 }
 
 func fetchVideoTitle(raw, vidHint string) string {
+	// 爱奇艺：页面是纯 JS 渲染壳，静态只能拿到平台通用标题 → 优先用公开接口解析真实剧名（无需登录）
+	if isIqiyiURL(raw) {
+		if t := fetchIqiyiTitle(raw); t != "" {
+			return t
+		}
+	}
 	title := ""
 	body := ""
 	if b, err := newClient().fetch(raw); err == nil {
@@ -3281,6 +3354,15 @@ func fetchVideoTitle(raw, vidHint string) string {
 		}
 	}
 	return title
+}
+
+// isIqiyiURL 判断是否为爱奇艺视频页链接
+func isIqiyiURL(raw string) bool {
+	host := ""
+	if u, err := url.Parse(raw); err == nil {
+		host = strings.ToLower(u.Host)
+	}
+	return strings.Contains(host, "iqiyi.com") && iqiyiPageIDRe.MatchString(raw)
 }
 
 // fetchVideoTitleWithSelector 按官方平台配置的「标题选择器」从真实页面提取标题：
