@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.15"
+	AppVersion = "v0.6.16"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -3045,9 +3045,11 @@ func waitPortFree(addr string, timeout time.Duration) {
 }
 
 // replaceAndRestart 用新二进制替换当前文件并重启进程。
-// 修复「更新后不自动重启」：
-//  1. 先关闭当前 HTTP 服务释放端口，再启动新进程，避免新进程绑定失败(Address already in use)直接退出；
-//  2. 新进程用 Setsid 脱离当前会话，避免老进程退出时 SIGHUP 把新进程一起带走（nohup/setsid 部署场景）。
+// 修复「更新后不自动重启」+「重启等待时间过长」：
+//  1. 先快速关闭当前 HTTP 服务释放端口（Shutdown 短超时 + 端口轮询限时），
+//     避免长时间阻塞（Shutdown 立即关闭 listener，活跃连接最多等 2s）；
+//  2. 新进程用 Setsid 脱离当前会话，避免老进程退出时 SIGHUP 把新进程一起带走（nohup/setsid 部署场景）；
+//  3. 新进程端口占用时 300ms 快速重试（见 main 内绑定循环），旧进程释放端口后新进程几乎立即绑定成功。
 func replaceAndRestart(newBin string) error {
 	exe, err := os.Executable()
 	if err != nil {
@@ -3063,15 +3065,15 @@ func replaceAndRestart(newBin string) error {
 	if err := os.Rename(newBin, exe); err != nil {
 		return err
 	}
-	// 1) 停当前服务，释放监听端口（异步 Shutdown，避免阻塞正在处理本请求的连接）
+	// 1) 停当前服务，释放监听端口（短超时 Shutdown：listener 立即关闭，活跃连接最多等 2s）
 	listenAddr := ""
 	if httpServer != nil {
 		listenAddr = httpServer.Addr
 		if listenAddr != "" {
-			ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-			go httpServer.Shutdown(ctx) // 关闭 listener 并等待活跃连接结束
-			waitPortFree(listenAddr, 8*time.Second)
-			_ = cancel
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			go httpServer.Shutdown(ctx) // 关闭 listener 并等待活跃连接结束（最多 2s）
+			waitPortFree(listenAddr, 3*time.Second)
+			cancel()
 		}
 	}
 	// 2) 启动新进程（继承参数与工作目录；Setsid 脱离会话防 SIGHUP）
@@ -3086,7 +3088,7 @@ func replaceAndRestart(newBin string) error {
 		return err
 	}
 	log.Printf("已启动新进程 pid=%d，本进程即将退出", cmd.Process.Pid)
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 	os.Exit(0)
 	return nil
 }
@@ -6513,15 +6515,16 @@ func main() {
 	// 使用全局 httpServer 句柄：更新重启时可优雅关闭释放端口（修复更新后不自动重启）
 	httpServer = &http.Server{Addr: *addr, Handler: withCORS(http.DefaultServeMux)}
 	// 端口占用自动重试：避免「更新/重启后不能启动」（旧进程未退出 / TIME_WAIT / 端口被其它程序占用）
-	const maxBindRetry = 30
+	// 300ms 快速重试：更新重启时旧进程释放端口后新进程几乎立即绑定成功，避免 2s/次 的长等待
+	const maxBindRetry = 100
 	for i := 0; i < maxBindRetry; i++ {
 		err := httpServer.ListenAndServe()
 		if err == nil || err == http.ErrServerClosed {
 			return // 被优雅关闭（如更新重启），退出
 		}
 		if strings.Contains(err.Error(), "address already in use") {
-			log.Printf("端口 %s 被占用，2s 后重试(%d/%d)...", *addr, i+1, maxBindRetry)
-			time.Sleep(2 * time.Second)
+			log.Printf("端口 %s 被占用，300ms 后重试(%d/%d)...", *addr, i+1, maxBindRetry)
+			time.Sleep(300 * time.Millisecond)
 			continue
 		}
 		log.Fatal(err)
