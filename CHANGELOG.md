@@ -1,5 +1,30 @@
 # 更新日志
 
+## Go 分支 v0.6.25 (2026-09-12) — 补丁修复1：AI 智能官替（AI识别剧名+集数、扫全部资源站、AI挑最优播放链接）
+
+> 用户诉求：用户输入官方链接时，利用 AI 自动识别影视剧名和链接是哪一集，调用当前所有资源站搜索匹配，取用匹配度最高、AI 自动判断并调用对应链接。
+
+### 1. 功能（[main.go](file:///workspace/main.go)）
+
+- **AI 识别剧名 + 集数**：新增 `aiExtractVideoInfo`——把官方标题/页面描述交给 AI（OpenAI Compatible），输出 `{"name":"剧名","episode":集数}`，比正则更鲁棒（异名/多字幕/特殊集表述），秒级替换 `parseVideoTitle` 的解析结果；
+- **调用当前所有资源站**：官替搜索由「8 站上限」改为 **全部启用资源站** 并发搜索匹配（`searchSites(cfg,kw,0)`）；
+- **AI 判定最优匹配**：新增 `aiPickPlay`——把所有资源站候选（站点/影视名/备注/各集播放地址）打包给 AI，返回 `{"video":编号,"play_ep":集数}`，命中目标剧名+期望集数、取匹配度最高的那条并调用对应播放链接；
+- **可复用 AI 封装**：新增 `aiChatComplete`（通用 Chat Completions 调用）与 `aiExtractFirstJSON`（从返回里解析 JSON），后续 AI 功能复用；
+- **AI 判定不死链兜底**：AI 选中的链接仍做 `m3u8Reachable` 探测，失效自动回退规则可达线路，保证能播。
+
+### 2. 启用方式
+
+- 在可执行文件旁 `ai/config.json`（或 `POST /api/ai/config`）配置：`enabled:true` + `api_url`/`api_key`/`model`，并 `replace_enabled:true`；
+- 官替链路「⚡ 官替解析」旁新增 **「☑ AI 智能判定」** 复选框，勾选后携带 `&ai=1`；也可直接在 `GET /api/replace?url=<官方页>&ai=1` 请求；
+- **未配置 AI 或 AI 调用失败时自动静默回退**到现有规则匹配，不影响既有行为。
+
+### 3. 验证与版本
+
+- `go vet` + 全量编译通过；本地 fake AI 服务单元验证：`aiExtractVideoInfo` 从「庆余年 第二季 第2集」识别出 name=庆余年/episode=2；`aiPickPlay` 从多站候选命中「量子·庆余年·第2集」并返回正确播放链接；`/api/replace?ai=1` 在未配置 AI 时正常回退（成功返回 ad_skip_url）。
+- 版本升级 `v0.6.24 → v0.6.25`。
+
+---
+
 ## Go 分支 v0.6.24 (2026-09-12) — 修复 /api/clean 返回的无广告 M3U8 不能正常播放
 
 > 用户诉求：`http://<host>:8080/api/clean?url=<m3u8>&opt=aggresive` 返回成功但喂给播放器「不能播放」。

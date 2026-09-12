@@ -178,6 +178,12 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.6.25 (2026-09-12) — 补丁修复1：AI 智能官替（AI识别剧名+集数、扫全部资源站、AI挑最优播放链接）
+
+> 用户输入官方链接时：① 用 AI 自动识别影视剧名和是哪一集；② 调用当前**所有**资源站搜索匹配；③ AI 自动判定「匹配度最高」的那条并调用对应播放链接。实现：`aiExtractVideoInfo`（AI抽剧名+集数）+ `aiPickPlay`（AI跨站挑最优链接）+ 官替搜索扩展到全部资源站，`/api/play` 仍做去广告+代理。启用：`ai/config.json` 设 `enabled:true`+`api_url/api_key`，并 `replace_enabled:true`，前端「官替解析」旁勾选「☑ AI 智能判定」（或 `/api/replace?url=<官方页>&ai=1`）；未配置 AI 时自动静默回退规则匹配。版本 `v0.6.24 → v0.6.25`。
+
+---
+
 ## v0.6.24 (2026-09-12) — 修复 /api/clean 返回的无广告 M3U8 不能正常播放
 
 > `/api/clean?url=<m3u8>&opt=aggresive` 之前把过滤后的无广告 M3U8 直接返回**源站绝对地址**，播放器跨域拉源站 CDN 分片被跨域/反爬/IP 限制卡住 → 「返回成功却不能播放」。现新增 `outCleanM3U8`：把分片/密钥地址统一改写为**本服务 `/api/play` 代理地址**（附带正确 UA/Referer、支持 Range 拖动），`/api/clean` 与 `/api/clean/enhanced` 直接出 M3U8 均走代理输出，`format=json` 仍返回源站结构化结果。实测报告 URL 返回 687 段全为代理地址，端到端可正常播放。版本 `v0.6.23 → v0.6.24`。
