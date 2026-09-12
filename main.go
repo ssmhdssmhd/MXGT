@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.27"
+	AppVersion = "v0.6.28"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -93,6 +93,7 @@ type ParseResult struct {
 	DurationSec   float64   `json:"duration_sec"`
 	Engine        string    `json:"engine,omitempty"`
 	AiHits        int       `json:"ai_hits,omitempty"`
+	AiMessage     string    `json:"ai_message,omitempty"` // AI 审核状态/未生效原因（便于排查免费模型接入）
 }
 
 // Variant master playlist 备选流
@@ -749,9 +750,6 @@ func aiDetectAdIndexes(rawURL string, segs []Segment, cfg *AIConfig) ([]int, err
 	if prompt == "" {
 		prompt = "识别以下视频片段中的广告，返回广告片段索引 JSON 数组，仅返回数组。"
 	}
-	if codeHint := regexp.MustCompile(`[【}]`).MatchString(prompt); codeHint {
-		// 已有返回格式引导则保留原文
-	}
 	user := strings.Join(lines, "\n")
 	content, err := aiChatCompleteEx(prompt+" 只输出 JSON 数组，如 [2,5,8]，不含其它文字。", user, cfg)
 	if err != nil {
@@ -971,8 +969,8 @@ func aiExtractFirstJSON(text string, v interface{}) bool {
 	return json.Unmarshal([]byte(m), v) == nil
 }
 
-// aiExtractVideoInfo 用 AI 从官方标题/页面文本识别「影视剧名 + 集数」，返回 (剧名, 集数N, 是否成功)。
-func aiExtractVideoInfo(text string, cfg *AIConfig) (string, int, bool) {
+// aiExtractVideoInfo 用 AI 从官方标题/页面文本识别「影视剧名 + 集数」，返回 (剧名, 集数N, 是否成功, 失败原因)。
+func aiExtractVideoInfo(text string, cfg *AIConfig) (string, int, bool, error) {
 	p := cfg.ReplacePrompt
 	if strings.TrimSpace(p) == "" {
 		p = "你是精确的影视检索助手。从给定的官方视频标题或页面描述中，识别出准确的『影视剧名』（不含栏目名/平台名/集数/分辨率/年份等冗余）和『当前集数』。只输出一个 JSON 对象，格式 {\"name\":\"剧名\",\"episode\":集数}；无法确定集数时 episode 填 0，无法确定剧名时 name 填空字符串。"
@@ -983,30 +981,30 @@ func aiExtractVideoInfo(text string, cfg *AIConfig) (string, int, bool) {
 	}
 	out, err := aiChatComplete(p+"\n\n标题/描述：\n"+text, cfg)
 	if err != nil {
-		return "", 0, false
+		return "", 0, false, err
 	}
 	var r struct {
 		Name    string `json:"name"`
 		Episode int    `json:"episode"`
 	}
 	if !aiExtractFirstJSON(out, &r) {
-		return "", 0, false
+		return "", 0, false, fmt.Errorf("AI 返回无法解析: %s", shortURL(out, 80))
 	}
 	r.Name = strings.TrimSpace(r.Name)
 	if r.Name == "" || len([]rune(r.Name)) > 40 {
-		return "", 0, false
+		return "", 0, false, fmt.Errorf("AI 未识别出有效剧名: %s", shortURL(out, 80))
 	}
 	if r.Episode < 0 {
 		r.Episode = 0
 	}
-	return r.Name, r.Episode, true
+	return r.Name, r.Episode, true, nil
 }
 
 // aiPickPlay 用 AI 在全部资源站候选中判定「最佳匹配」并选出要调用的播放链接。
-// 返回 (videos 下标, 该视频播放下标, 是否成功)。
-func aiPickPlay(videos []ResourceVideo, targetName string, targetEp int, cfg *AIConfig) (int, int, bool) {
+// 返回 (videos 下标, 该视频播放下标, 是否成功, 失败原因)。
+func aiPickPlay(videos []ResourceVideo, targetName string, targetEp int, cfg *AIConfig) (int, int, bool, error) {
 	if len(videos) == 0 {
-		return 0, 0, false
+		return 0, 0, false, fmt.Errorf("无候选可判定")
 	}
 	lines := []string{"目标是影视剧名：" + targetName + "，期望集数：" + strconv.Itoa(targetEp),
 		"以下是各资源站候选（格式：编号|站点|影视名|备注|集数=播放地址）。请从编号挑选与目标剧名最匹配且含期望集数的那个："}
@@ -1042,30 +1040,30 @@ func aiPickPlay(videos []ResourceVideo, targetName string, targetEp int, cfg *AI
 	prompt := "你是影视资源匹配助手。匹配要求以最准确为准：1) 影视名要和目标剧名高度一致（去除版本/年份/格式差异）；2) 若目标期望集数>0，必须选择含该集数的候选。只输出 JSON：{\"video\":候选编号,\"play_ep\":集数}，play_ep 是你要调用的播放集数（期望集数>0时取期望集数）。若没有任何候选匹配，输出 {\"video\":-1}。\n\n" + strings.Join(lines, "\n")
 	out, err := aiChatComplete(prompt, cfg)
 	if err != nil {
-		return 0, 0, false
+		return 0, 0, false, err
 	}
 	var r struct {
 		Video  int `json:"video"`
 		PlayEP int `json:"play_ep"`
 	}
 	if !aiExtractFirstJSON(out, &r) {
-		return 0, 0, false
+		return 0, 0, false, fmt.Errorf("AI 返回无法解析: %s", shortURL(out, 80))
 	}
 	if r.Video < 0 || r.Video >= len(videos) {
-		return 0, 0, false
+		return 0, 0, false, fmt.Errorf("AI 判定编号越界(%d)", r.Video)
 	}
 	v := videos[r.Video]
 	if len(v.URLs) == 0 {
-		return 0, 0, false
+		return 0, 0, false, fmt.Errorf("AI 选中项无播放地址")
 	}
 	if r.PlayEP > 0 {
 		for pi, it := range v.URLs {
 			if episodeNumOfPlayItem(it.Name) == r.PlayEP {
-				return r.Video, pi, true
+				return r.Video, pi, true, nil
 			}
 		}
 	}
-	return r.Video, 0, true
+	return r.Video, 0, true, nil
 }
 
 // buildFilteredM3U8 输出过滤后 M3U8（绝对地址、保留 KEY/MAP/不连续标签）
@@ -1174,7 +1172,7 @@ func runClean(rawURL string, aggresive bool, engine string, enhanced func(segs [
 		enhanced(segs)
 	}
 
-	// AI 去广告：规则检测后追加 AI 识别标记（失败自动回退到规则结果，不影响播放）
+	// AI 去广告：规则检测后追加 AI 识别标记（失败时记录原因到 AiMessage，方便排查免费模型接入；不影响播放）
 	if eng == "ai" && len(segs) > 0 {
 		if idx, err := aiDetectAdIndexes(rawURL, segs, aiCfg); err == nil {
 			for _, i := range idx {
@@ -1184,6 +1182,13 @@ func runClean(rawURL string, aggresive bool, engine string, enhanced func(segs [
 					res.AiHits++
 				}
 			}
+			if res.AiHits > 0 {
+				res.AiMessage = fmt.Sprintf("AI 审核命中 %d 段", res.AiHits)
+			} else {
+				res.AiMessage = "AI 审核完成，未新增命中"
+			}
+		} else {
+			res.AiMessage = "AI 审核未生效: " + err.Error()
 		}
 	}
 	// 播放安全兜底：启发式把整部误删过大比例时回退，宁可不删广告也要能正常播放
@@ -1208,6 +1213,9 @@ func runClean(rawURL string, aggresive bool, engine string, enhanced func(segs [
 		msg := fmt.Sprintf("解析 %d 段，识别广告 %d 段（%.1f%%），保留 %d 段", len(segs), adCount, res.AdRatio, res.KeptSegments)
 		if eng == "ai" {
 			msg += " · 引擎=AI"
+			if res.AiMessage != "" {
+				msg += " · " + res.AiMessage
+			}
 		}
 		res.Message = msg
 	}
@@ -5509,7 +5517,7 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 		useAI = true // 显式请求 AI 智能官替（未配置 AI 时静默回退规则匹配）
 	}
 	if useAI {
-		if n, e, ok := aiExtractVideoInfo(title, aiCfg); ok && n != "" {
+		if n, e, ok, aerr := aiExtractVideoInfo(title, aiCfg); ok && n != "" {
 			if e > 0 {
 				vi.BaseTitle, vi.EpisodeNum, vi.Episode = n, e, "第"+strconv.Itoa(e)+"集"
 			} else {
@@ -5517,6 +5525,8 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 			}
 			steps = append(steps, replaceStep{"ai_meta", "AI 识别剧名/集数", "ok",
 				fmt.Sprintf("AI 判定 base=%s · 第%d集", vi.BaseTitle, vi.EpisodeNum)})
+		} else if aerr != nil {
+			steps = append(steps, replaceStep{"ai_meta", "AI 识别剧名/集数", "fail", "AI 未生效: " + aerr.Error()})
 		}
 	}
 
@@ -5604,7 +5614,7 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 
 	// AI 智能官替：跨全部资源站候选，由 AI 判定「匹配度最高」并选出要调用的播放链接
 	if useAI && len(allVideos) > 0 {
-		if vi2, pi, ok := aiPickPlay(allVideos, vi.BaseTitle, vi.EpisodeNum, aiCfg); ok {
+		if vi2, pi, ok, aerr := aiPickPlay(allVideos, vi.BaseTitle, vi.EpisodeNum, aiCfg); ok {
 			if vi2 >= 0 && vi2 < len(allVideos) {
 				chosen := allVideos[vi2]
 				if pi >= 0 && pi < len(chosen.URLs) {
@@ -5616,6 +5626,8 @@ func replaceOne(r *http.Request, raw string) ReplaceResult {
 				steps = append(steps, replaceStep{"ai_rank", "AI 判定最优资源", "ok",
 					fmt.Sprintf("AI 选中 %s「%s」第%d集", chosen.Site, chosen.Name, aiChosenEp)})
 			}
+		} else if aerr != nil {
+			steps = append(steps, replaceStep{"ai_rank", "AI 判定最优资源", "fail", "AI 未生效: " + aerr.Error()})
 		}
 	}
 
