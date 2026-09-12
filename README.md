@@ -181,6 +181,12 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.6.29 (2026-09-12) — 实测智谱免费模型：修复 adjump 广告漏检 + AI 幻觉保护 + 官替 panic
+
+> 用智谱 GLM-4-Flash 实测两个真实链接：① 腾讯官替「交锋/第1集」识别+匹配+无广告直链 ✅；② 951 段 m3u8 识别删除 18 段真实 `/video/adjump/` 插播广告（100-108、809-817）+超短片段共 32 段 ✅。修复：① `adURLRe` 补齐 `adjump|jumpad|adtime|adinsert` 关键词（原规则漏检该广告路径）；② 新增 AI 幻觉保护两道防线——`filterAIRuns`（只保留≤20 连续标记簇）+ `aiAdRatioGuard`（AI 判定占比>20% 整体丢弃，防免费小模型整段误标正片）；③ 修复 `episodeNumOfPlayItem` 纯剧名 nil 切片 panic（官替链路实测崩溃）。版本 `v0.6.28 → v0.6.29`。
+
+---
+
 ## v0.6.28 (2026-09-12) — AI 参与/失败状态可见：免费模型接入可排查
 
 > 用免费 AI 测试「AI 智能官替」与「AI 去广告」时，AI 失败此前是静默的，无法判断 AI 是否参与、失败原因。修复：① `ParseResult` 新增 `ai_message` 字段，`engine=ai` 时回填「AI 审核命中 N 段 / 审核完成未新增 / 审核未生效: 原因」，同步拼入 message，JSON 接口直接可见；② 官替链路 `aiExtractVideoInfo`/`aiPickPlay` 返回 error，失败时步骤里记录「AI 未生效: 原因」（未启用/未配 Key/HTTP 错误/返回无法解析等）；③ 典型坑：m3u8 分段超过「AI 审核最大分段」（默认 300）时 AI 不参与，只会显示原因，调大即可。版本 `v0.6.27 → v0.6.28`。

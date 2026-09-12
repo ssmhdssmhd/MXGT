@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.28"
+	AppVersion = "v0.6.29"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -108,7 +108,8 @@ type client struct {
 	keySeen map[string]bool
 }
 
-var adURLRe = regexp.MustCompile(`(?i)(^|[\/_\-\.])(ad|ads|advert|ad_v|ad0|ad_0|a0_|_ad|\.ad\.|gdt|bd_ad|sp_ad|tvc|promo|300x250|600x90|960x90|f_r0|zh_ad)([\/_\-\.]|$)`)
+// 广告 URL 关键词（保守高置信：仅匹配路径分隔符边界的整词；adjump/jumpad 等为实测漏检补齐）
+var adURLRe = regexp.MustCompile(`(?i)(^|[\/_\-\.])(ad|ads|advert|ad_v|ad0|ad_0|a0_|_ad|\.ad\.|gdt|bd_ad|sp_ad|tvc|promo|adjump|jumpad|adtime|adinsert|300x250|600x90|960x90|f_r0|zh_ad)([\/_\-\.]|$)`)
 
 func newClient() *client {
 	return &client{
@@ -730,6 +731,29 @@ func stripCodeFence(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// filterAIRuns AI 幻觉保护：只保留长度 ≤20 的连续标记簇。
+// 免费小模型送长列表时偶发「整段幻觉」——把大段连续正片标成广告；真实广告插入通常为短簇（几秒~1分钟），
+// 丢弃长簇可防止误删整段正片（符合项目「保守防误删」原则）。相邻索引视为同一簇。
+func filterAIRuns(idx []int) []int {
+	if len(idx) < 2 {
+		return idx
+	}
+	sort.Ints(idx)
+	out := make([]int, 0, len(idx))
+	i := 0
+	for i < len(idx) {
+		j := i
+		for j+1 < len(idx) && idx[j+1] == idx[j]+1 {
+			j++
+		}
+		if j-i+1 <= 20 {
+			out = append(out, idx[i:j+1]...)
+		}
+		i = j + 1
+	}
+	return out
+}
+
 // aiDetectAdIndexes 调用外部 AI（OpenAI Chat Completions 兼容）识别广告片段索引
 func aiDetectAdIndexes(rawURL string, segs []Segment, cfg *AIConfig) ([]int, error) {
 	if !cfg.Enabled || cfg.APIURL == "" || cfg.APIKey == "" {
@@ -769,7 +793,24 @@ func aiDetectAdIndexes(rawURL string, segs []Segment, cfg *AIConfig) ([]int, err
 			}
 		}
 	}
+	idx = filterAIRuns(idx)
+	if err := aiAdRatioGuard(idx, len(segs)); err != nil {
+		return nil, err
+	}
 	return idx, nil
+}
+
+// aiAdRatioGuard AI 幻觉总闸：AI 判定占比过高视为幻觉（免费小模型送长列表时偶发大面积误标），
+// 保守丢弃全部 AI 结果，宁可不删也不能误删整段正片。真实广告插入占比通常很低（<20%）。
+func aiAdRatioGuard(idx []int, total int) error {
+	if total <= 0 {
+		return nil
+	}
+	if len(idx) > total*20/100 {
+		return fmt.Errorf("AI 判定占比 %.0f%%（%d/%d 段）疑似幻觉，已忽略（保守兜底）",
+			float64(len(idx))*100/float64(total), len(idx), total)
+	}
+	return nil
 }
 
 // ============================================================
@@ -4544,9 +4585,11 @@ func episodeNumOfPlayItem(name string) int {
 		return 0
 	}
 	m := regexp.MustCompile(`第\s*0*(\d+)\s*[集期话]|EP?\s*0*(\d+)|E\s*0*(\d+)\s*$`).FindStringSubmatch(name)
-	for _, g := range m[1:] {
-		if n, err := strconv.Atoi(g); err == nil && n > 0 {
-			return n
+	if len(m) > 1 {
+		for _, g := range m[1:] {
+			if n, err := strconv.Atoi(g); err == nil && n > 0 {
+				return n
+			}
 		}
 	}
 	// 整串为纯数字（含前导零，如 "01"、"1"）→ 视为集数
