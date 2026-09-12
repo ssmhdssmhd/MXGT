@@ -1,15 +1,15 @@
 {
-  "version": "v0.1.0",
-  "enabled": false,
-  "mode": "basic",
+  "version": "v0.1.1",
+  "enabled": true,
+  "mode": "auto",
   "provider": "zhipu",
   "api_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-  "api_key": "",
+  "api_key": "674c8fddfbf5421d84b9a78135a24e55.dw61Fp7fQCvp020Y",
   "model": "glm-4-flash",
   "prompt": "你是视频去广告助手。下面是一次 M3U8 播放列表的片段列表（索引|时长秒|URL）。请识别其中属于广告/预告片/插播/水印节点 的片段，只返回一个 JSON 数组，元素为该片段的索引（整数），不要任何其他文字。",
-  "max_segments": 300,
-  "timeout": 25,
-  "replace_enabled": false,
+  "max_segments": 1500,
+  "timeout": 60,
+  "replace_enabled": true,
   "replace_prompt": "",
   "format": "openai"
 }
