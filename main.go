@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.21"
+	AppVersion = "v0.6.22"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1018,8 +1018,13 @@ const adminPageHTML = `<!DOCTYPE html>
   details.site[open] summary::before{content:"▾ "}
   details.site summary::-webkit-details-marker{display:none}
   details.site[open] summary{border-bottom:1px solid #f0f0f0}
-  .siterow{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid #f6f6f6;font-size:13px}
+  .siterow{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid #f6f6f6;font-size:13px;min-width:0;flex-wrap:wrap}
   .siterow:last-child{border-bottom:0}
+  .siterow label.sw{flex:0 0 auto}
+  .siterow b{flex:0 1 auto;min-width:0;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .siterow .note{flex:1 1 120px;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .siterow .btn{flex-shrink:0;white-space:nowrap}
+  #siteList{max-width:100%;overflow:hidden}
   .sitedtl{display:none;padding:8px 12px 12px;background:#fafafa;font-size:12.5px;color:#374151;word-break:break-all}
   .sitedtl code{background:#f3f4f6;padding:2px 6px;border-radius:6px;color:#7e22ce}
   .btn.gh{background:#fff;color:#581c87;border:1px solid #d1d5db;box-shadow:none;padding:3px 10px;font-size:12px}
@@ -1145,6 +1150,17 @@ const adminPageHTML = `<!DOCTYPE html>
       <input id="nsNote" placeholder="备注（可选）" style="width:150px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
       <button class="btn" style="padding:7px 14px;font-size:12px" onclick="addSite()">➕ 添加资源站</button>
     </div>
+    <div class="row" style="flex-wrap:wrap;align-items:center">
+      <input id="impUrl" placeholder="⚡ 从链接自动导入：粘贴含资源站列表的网址（含 https://），点一下自动抓取并批量添加" style="flex:1;min-width:320px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="importSites(false)">⚡ 一键从链接导入</button>
+      <span class="muted">或</span>
+      <button class="btn ghost" style="padding:7px 14px;font-size:12px" onclick="toggleImportText(this)">📋 粘贴文本</button>
+    </div>
+    <div class="row" id="impTextWrap" style="flex-wrap:wrap;display:none">
+      <textarea id="impText" rows="6" placeholder="粘贴资源站文本（每行一个，格式：名称：官网 采集：接口 备注；支持 kdocs 表格文本「序号|名：官网 | 采集：接口 | 备注」）" style="flex:1 1 100%;min-width:100%;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db;box-sizing:border-box;font-family:inherit"></textarea>
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="importSites(true)">⚡ 从粘贴文本导入</button>
+    </div>
+    <div class="muted" id="impMsg" style="margin-top:6px;word-break:break-all"></div>
     <div class="row" style="flex-wrap:wrap">
       <input id="siteSearch" placeholder="🔍 搜索站点/备注/接口…" style="flex:0 0 260px;padding:9px 12px;border-radius:10px;border:1px solid #d1d5db" onkeyup="renderSites()">
       <span class="muted" id="siteCount"></span>
@@ -1284,6 +1300,7 @@ const adminPageHTML = `<!DOCTYPE html>
       <tr><td>🟠 后台管理</td><td><code>GET /api/danmaku</code> / <code>/add</code> / <code>/toggle</code> / <code>/delete</code> / <code>/test</code></td><td>💬 弹幕过滤规则库：列表 / 添加 / 启停 / 删除 / 单条命中测试（需登录）</td></tr>
       <tr><td>🟠 后台管理</td><td><code>GET /api/sites</code> / <code>/toggle</code> / <code>/test</code></td><td>资源站列表（默认隐藏失效）/ 启停 / 搜索测试（需登录）</td></tr>
       <tr><td>🟠 后台管理</td><td><code>POST /api/sites/add</code> / <code>/update</code> / <code>/delete</code> / <code>/check</code></td><td>添加 / 编辑 / 删除资源站 / 异步批量检测（并发）并屏蔽失效站（需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>POST /api/sites/import</code></td><td>🆕 一键自动导入资源站：从链接抓取或粘贴文本（支持 kdocs 表格文本）解析并批量添加（需登录）</td></tr>
       <tr><td>🟠 后台管理</td><td><code>GET /api/sites/m3u8</code> / <code>POST /api/sites/m3u8</code></td><td>🆕 资源站搜索「仅 m3u8 播放地址」开关：读取 / 设置（设置需登录）</td></tr>
       <tr><td>🟠 后台管理</td><td><code>GET /api/sites/check/progress?task=</code></td><td>查询批量检测任务进度（供进度条轮询，需登录）</td></tr>
       <tr><td>🟠 后台管理</td><td><code>GET /api/update/check</code></td><td>检查远程是否有新版本（读取线上 latest.json，需登录）</td></tr>
@@ -1688,7 +1705,7 @@ function renderSites(){
       return '<div class="siterow">'+
         '<label class="sw"><input type="checkbox" '+(x.enabled?'checked':'')+' onchange="toggleSite(\''+x.name.replace(/'/g,"\\'")+'\',this.checked)"></label>'+
         '<b>'+esc(x.name)+'</b>'+
-        '<span class="muted" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.note)+'</span>'+
+        '<span class="muted note">'+esc(x.note)+'</span>'+
         '<button class="btn gh" onclick="siteDetail(\''+x.name.replace(/'/g,"\\'")+'\')">🔍 测试采集</button>'+
         '<button class="btn gh" onclick="editSite(\''+x.name.replace(/'/g,"\\'")+'\')">✏️ 编辑</button>'+
         '<button class="btn gh" style="color:#dc2626" onclick="deleteSite(\''+x.name.replace(/'/g,"\\'")+'\')">🗑 删除</button>'+
@@ -1704,7 +1721,7 @@ function renderSites(){
       return '<div class="siterow">'+
         '<label class="sw"><input type="checkbox" '+(x.enabled?'checked':'')+' onchange="toggleSite(\''+x.name.replace(/'/g,"\\'")+'\',this.checked)"></label>'+
         '<b style="color:#dc2626">'+esc(x.name)+'</b>'+
-        '<span class="muted" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.note||'')+'</span>'+
+        '<span class="muted note">'+esc(x.note||'')+'</span>'+
         '<button class="btn gh" onclick="editSite(\''+x.name.replace(/'/g,"\\'")+'\')">✏️ 编辑</button>'+
         '<button class="btn gh" style="color:#dc2626" onclick="deleteSite(\''+x.name.replace(/'/g,"\\'")+'\')">🗑 删除</button>'+
         '</div><div class="sitedtl" id="edt_'+esc(x.name)+'" style="display:none"></div>';
@@ -1712,6 +1729,25 @@ function renderSites(){
     html+='</details>';
   }
   el('siteList').innerHTML=html||'<span class="muted">无匹配站点</span>';
+}
+function toggleImportText(btn){
+  const w=document.getElementById('impTextWrap');
+  if(!w)return;
+  w.style.display=w.style.display==='none'?'block':'none';
+}
+async function importSites(fromText){
+  const url=(el('impUrl').value||'').trim();
+  const text=fromText?((el('impText').value||'').trim()):'';
+  if(!url && !text){alert('请填写链接或粘贴文本');return;}
+  const msg=el('impMsg');showProg(true);msg.innerHTML='导入中…';
+  try{
+    const r=await fetch('/api/sites/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,text:text})});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    if(j.success){msg.innerHTML='<span style="color:#16a34a">✅ '+esc(j.message)+'</span><div class="muted" style="font-size:12px">如需启用在「已启用/未启用」里勾选开启；失效站与需停用站可点 🗑 删除。</div>';await loadSites();}
+    else{msg.innerHTML='<span style="color:#dc2626">❌ '+esc(j.message)+'</span>';}
+  }catch(e){msg.innerHTML='<span style="color:#dc2626">❌ 网络错误: '+esc(e.message)+'</span>';}
+  showProg(false);
 }
 async function addSite(){
   const name=(el('nsName').value||'').trim();
@@ -5136,6 +5172,263 @@ func handleSiteM3U8(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"success": true, "only_m3u8": loadSites().OnlyM3U8})
 }
 
+// ================================
+// 资源站一键自动导入（从链接自动抓取 / 粘贴文本解析，自动批量添加）
+// ================================
+
+var importURLRe = regexp.MustCompile(`(?i)https?://[^\s<>"']+`)
+var importTagRe = regexp.MustCompile(`<[^>]{1,300}>`)
+var importSeqRe = regexp.MustCompile(`(?m)^\s*(?:\d+|[一二三四五六七八九十]+)\s*[、.．\)\)】\s:-]\s*`)
+var importKwRe = regexp.MustCompile(`采集|接口|官网|备注|接口号|playurl|url|：|:`)
+
+// isImportAPIURL 判断某 URL 更像「采集接口」而非「官网」
+func isImportAPIURL(u string) bool {
+	lu := strings.ToLower(u)
+	return strings.Contains(lu, "provide/vod") || strings.Contains(lu, "inc/api") || strings.Contains(lu, "api.php")
+}
+
+func importHost(u string) string {
+	if i := strings.Index(u, "://"); i >= 0 {
+		u = u[i+3:]
+	}
+	if i := strings.IndexAny(u, "/?#"); i >= 0 {
+		u = u[:i]
+	}
+	return strings.TrimSpace(u)
+}
+
+// importGroupToSkip 解析到「停更/移除以下」分组标题后，其后站点行不再导入（避免把死链/待移除站加进来）
+func importGroupToSkip(line string) (skip bool, isHeader bool) {
+	noURL := !importURLRe.MatchString(line)
+	if !noURL {
+		return false, false
+	}
+	lower := strings.ToLower(line)
+	switch {
+	case strings.Contains(lower, "移除"), strings.Contains(lower, "停更"), strings.Contains(lower, "丢弃"):
+		return true, true
+	case strings.Contains(lower, "推荐"), strings.Contains(lower, "多合一"),
+		strings.Contains(lower, "大水印"), strings.Contains(lower, "同类"):
+		return false, true
+	}
+	return false, false
+}
+
+// extractResourceSitesFromContent 解析文本/HTML 中的资源站
+// 支持 kdocs 表格文本：「序号|名：官网 | 采集：接口 | 备注」以及平铺「名：官网 采集：接口 备注」。
+func extractResourceSitesFromContent(content string) []Site {
+	text := importTagRe.ReplaceAllString(content, " ") // 若为网页则去掉标签
+	out := []Site{}
+	seen := map[string]bool{}
+	skip := false
+
+	trimClean := func(s string) string {
+		s = strings.TrimSpace(s)
+		s = strings.Trim(s, " -—–·|:：,，。")
+		return strings.TrimSpace(s)
+	}
+	token := func(s string) []string {
+		// 去掉 kdocs 竖线分隔（｜/|）后再按关键词/空白分词，避免「|」成为首段污染名称
+		s = strings.NewReplacer("|", " ", "｜", " ").Replace(s)
+		s = importKwRe.ReplaceAllString(s, " ")
+		return strings.Fields(s)
+	}
+	hostSeen := map[string]bool{}
+	add := func(name, siteURL, apiURL, note string) {
+		name = trimClean(name)
+		apiURL = strings.TrimSpace(apiURL)
+		if apiURL == "" {
+			return
+		}
+		if name == "" {
+			name = importHost(apiURL)
+			if name == "" {
+				name = "采集站"
+			}
+		}
+		name = trimClean(name)
+		if len([]rune(name)) > 24 {
+			name = string([]rune(name)[:24])
+		}
+		if len([]rune(note)) > 80 {
+			note = string([]rune(note)[:80])
+		}
+		note = trimClean(note)
+		key := strings.ToLower(name)
+		if seen[key] {
+			key += strings.ToLower(apiURL)
+		}
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		host := importHost(apiURL)
+		if host != "" {
+			if hostSeen[host] {
+				// 官网/接口同源（可能是同一站多个线路），允许同名不同接口，但同源同名跳过
+				key2 := strings.ToLower(name) + host
+				if seen[key2] {
+					return
+				}
+				seen[key2] = true
+			} else {
+				hostSeen[host] = true
+			}
+		}
+		out = append(out, Site{Name: name, SiteURL: trimClean(siteURL), APIURL: apiURL,
+			Type: "maccms", Status: "active", Enabled: true, Note: note, Priority: 60})
+	}
+
+	for _, raw := range strings.Split(text, "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+		line = strings.TrimSpace(importSeqRe.ReplaceAllString(line, " "))
+		if line == "" {
+			continue
+		}
+		// 分组标题（无 URL 的短行）：识别「移除/停更」分组则其后站点跳过
+		if s, isHeader := importGroupToSkip(line); isHeader {
+			skip = s
+			continue
+		}
+		if skip {
+			continue
+		}
+		urls := importURLRe.FindAllString(line, -1)
+		if len(urls) == 0 {
+			continue
+		}
+		api, site := "", ""
+		for _, u := range urls {
+			if isImportAPIURL(u) {
+				if api == "" {
+					api = u
+				}
+			} else if site == "" {
+				site = u
+			}
+		}
+		if api == "" {
+			// 只有一个 URL 或全部不像接口：把第一个当接口，官网留空
+			api = urls[0]
+			if len(urls) > 1 {
+				site = urls[1]
+			}
+		}
+		tmp := line
+		for _, u := range urls {
+			tmp = strings.ReplaceAll(tmp, u, " ")
+		}
+		parts := token(tmp)
+		name := ""
+		note := ""
+		if len(parts) > 0 {
+			name = parts[0]
+		}
+		if len(parts) > 1 {
+			note = parts[len(parts)-1]
+		}
+		add(name, site, api, note)
+	}
+	return out
+}
+
+// handleSiteImport POST /api/sites/import：一键自动导入资源站。
+// body: { "url": "https://… 含资源站列表的链接", "text": "粘贴的文本（二选一；url 为空时用 text）" }
+// 自动抓取→解析→追加；已存在同名/同接口则跳过。返回新增/跳过/解析数。
+func handleSiteImport(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		URL  string `json:"url"`
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&in); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "参数错误: " + err.Error()})
+		return
+	}
+	content := strings.TrimSpace(in.Text)
+	src := "text"
+	if content == "" && in.URL != "" {
+		src = "url:" + in.URL
+		body, err := fetchImportBytes(in.URL)
+		if err != nil {
+			writeJSON(w, map[string]interface{}{"success": false, "message": "抓取链接失败: " + err.Error()})
+			return
+		}
+		content = string(body)
+	}
+	if strings.TrimSpace(content) == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "链接或文本为空"})
+		return
+	}
+	found := extractResourceSitesFromContent(content)
+	added, skipped := 0, 0
+	sitesMu.Lock()
+	cfg := loadSites()
+	byName := map[string]*Site{}
+	for i := range cfg.Sites {
+		byName[strings.ToLower(cfg.Sites[i].Name)] = &cfg.Sites[i]
+	}
+	for _, s := range found {
+		key := strings.ToLower(s.Name)
+		if ex, ok := byName[key]; ok {
+			// 同名已存在：仅当原接口为空时补齐接口（不覆盖用户已有配置）
+			if strings.TrimSpace(ex.APIURL) == "" {
+				ex.APIURL = s.APIURL
+				ex.SiteURL = s.SiteURL
+				ex.Status = "active"
+				ex.Enabled = true
+				added++
+			} else {
+				skipped++
+			}
+			continue
+		}
+		cfg.Sites = append(cfg.Sites, s)
+		byName[strings.ToLower(s.Name)] = &cfg.Sites[len(cfg.Sites)-1]
+		added++
+	}
+	err := saveSites(cfg)
+	sitesMu.Unlock()
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	msg := fmt.Sprintf("解析 %d 条，新增 %d，跳过 %d（已存在同名/同接口）", len(found), added, skipped)
+	recordCall("/api/sites/import", src, added > 0, 0, msg)
+	writeJSON(w, map[string]interface{}{"success": true, "message": msg, "parsed": len(found), "added": added, "skipped": skipped})
+}
+
+// fetchImportBytes 抓取资源站列表源（浏览器 UA + 编码兜底）。返回原始字节（HTML 则交给解析器去标签）
+func fetchImportBytes(u string) ([]byte, error) {
+	if !strings.HasPrefix(u, "http") {
+		u = "https://" + u
+	}
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", siteFetchUA)
+	resp, err := siteHTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return nil, err
+	}
+	cs := detectCharset(resp.Header.Get("Content-Type"), b)
+	if cs != "" {
+		return decodeBytesByCharset(b, cs), nil
+	}
+	return b, nil
+}
+
 func handleSiteToggle(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	en := r.URL.Query().Get("enabled") == "1"
@@ -6835,6 +7128,7 @@ func main() {
 	http.HandleFunc("/api/sites/check", guard(handleSiteCheck))
 	http.HandleFunc("/api/sites/check/progress", guard(handleSiteCheckProgress))
 	http.HandleFunc("/api/sites/m3u8", guard(handleSiteM3U8)) // 资源站搜索仅返回 m3u8 播放地址 开关（读写需登录）
+	http.HandleFunc("/api/sites/import", guard(handleSiteImport)) // 一键自动导入（从链接抓取/粘贴文本解析批量添加）
 	// 官替映射专区（需登录）
 	http.HandleFunc("/api/maps", guard(handleMapsList))
 	http.HandleFunc("/api/maps/add", guard(handleMapsAdd))
