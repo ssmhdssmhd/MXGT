@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.33"
+	AppVersion = "v0.6.34"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1773,6 +1773,34 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
+    <h2>🧱 压字广告遮挡 <span class="muted">（画面内烧录的水印/压字/顶部底部滚动字幕删不掉片段，只能前端遮挡：半透明遮罩条盖住顶部/底部 + 可选放大裁边把边缘压字挤出画面；保存后所有播放器即时生效，播放链接可用 <code>overlay=…</code> 参数临时覆盖）</span></h2>
+    <div class="row" style="flex-wrap:wrap;align-items:center">
+      <label class="sw"><input type="checkbox" id="ovlEnabled"> 全局启用遮挡</label>
+      <label class="sw"><input type="checkbox" id="ovlTop"> 顶部遮罩条</label>
+      <span class="muted">高度</span>
+      <input id="ovlTopH" type="number" min="2" max="40" value="8" style="width:64px;padding:6px 8px;border-radius:8px;border:1px solid #d1d5db">%
+      <label class="sw"><input type="checkbox" id="ovlBot"> 底部遮罩条</label>
+      <span class="muted">高度</span>
+      <input id="ovlBotH" type="number" min="2" max="40" value="6" style="width:64px;padding:6px 8px;border-radius:8px;border:1px solid #d1d5db">%
+    </div>
+    <div class="row" style="flex-wrap:wrap;align-items:center">
+      <label class="sw"><input type="checkbox" id="ovlZoom"> 放大裁边（挤出边缘压字）</label>
+      <span class="muted">倍数</span>
+      <input id="ovlZoomS" type="number" min="1" max="1.3" step="0.01" value="1.08" style="width:70px;padding:6px 8px;border-radius:8px;border:1px solid #d1d5db">
+      <span class="muted">透明度</span>
+      <input id="ovlOpacity" type="number" min="0" max="1" step="0.05" value="0.55" style="width:70px;padding:6px 8px;border-radius:8px;border:1px solid #d1d5db">
+      <span class="muted">颜色</span>
+      <input id="ovlColor" type="text" value="#000000" style="width:90px;padding:6px 8px;border-radius:8px;border:1px solid #d1d5db" placeholder="#000000">
+    </div>
+    <div class="row" style="flex-wrap:wrap;align-items:center">
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="saveOverlayCfg()">💾 保存遮挡配置</button>
+      <button class="btn ghost" style="padding:7px 14px;font-size:12px" onclick="loadOverlayCfg()">⟳ 刷新</button>
+      <span class="muted" id="ovlStatus"></span>
+    </div>
+    <div class="muted" style="margin-top:4px;line-height:1.7">播放链接临时覆盖：<code>/player?url=…&amp;overlay=on</code> 强制启用全局 · <code>overlay=off</code> 关闭 · <code>overlay=top:10,bottom:8,zoom:1.1,opacity:0.5,color:000</code> 精确指定（逗号/分号分隔）。</div>
+  </div>
+
+  <div class="panel">
     <h2>🔄 远程在线更新</h2>
     <div class="row">
       <div class="stat-line" id="updInfo" style="display:block"><!--UPD_BLOCK--></div>
@@ -1811,6 +1839,7 @@ const adminPageHTML = `<!DOCTYPE html>
       <tr><td>🟠 后台管理</td><td><code>GET /api/update/check</code></td><td>检查远程是否有新版本（读取线上 latest.json，需登录）</td></tr>
       <tr><td>🟠 后台管理</td><td><code>POST /api/update/apply</code></td><td>下载新版本 zip 并自动替换重启（需登录）</td></tr>
       <tr><td>🟠 后台管理</td><td><code>GET /api/ai/config</code> / <code>POST /api/ai/config</code></td><td>查看（key 打码）/ 更新 AI 去广告配置（更新需登录）</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>GET /api/overlay</code> / <code>POST /api/overlay/save</code></td><td>🧱 压字广告遮挡：读取全局遮挡配置（播放器用）/ 保存（需登录）——盖顶部底部滚动字幕条 + 放大裁边</td></tr>
       <tr><td>⚪ 通用</td><td><code>GET /api/stats</code></td><td>运行统计（JSON）——监控服务状态与调用量</td></tr>
       <tr><td>⚪ 通用</td><td><code>GET /healthz</code></td><td>健康检查——探活/负载均衡健康检测</td></tr>
     </table>
@@ -1874,7 +1903,7 @@ function applyUpdate(){
     setTimeout(function(){location.reload();},4000);
   }).catch(function(e){el('updInfo').textContent='发起失败: '+e.message});
 }
-refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms(); loadOneClickLinks(); loadSkips(); loadDanmaku(); initSkipAuto(); loadAIConfigUI();
+refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms(); loadOneClickLinks(); loadSkips(); loadDanmaku(); initSkipAuto(); loadAIConfigUI(); loadOverlayCfg();
 
 // —— AI 大模型接入（/api/ai/config + /api/ai/test）——
 let aiProviders=[];
@@ -1947,6 +1976,45 @@ async function testAIConnect(){
     const j=await r.json();
     el('aiStatus').innerHTML=j.success?('✅ '+esc(j.message)+'：<code>'+esc(j.reply||'')+'</code>'):('✕ '+esc(j.message||'测试失败'));
   }catch(e){el('aiStatus').textContent='测试失败: '+e.message;}
+}
+// —— 压字广告遮挡（/api/overlay）——
+async function loadOverlayCfg(){
+  try{
+    const r=await fetch('/api/overlay');
+    const j=await r.json();
+    if(!j.success||!j.config)return;
+    const c=j.config;
+    el('ovlEnabled').checked=!!c.enabled;
+    el('ovlTop').checked=!!c.enable_top;
+    el('ovlBot').checked=!!c.enable_bottom;
+    el('ovlZoom').checked=!!c.enable_zoom;
+    el('ovlTopH').value=c.top_height_pct||8;
+    el('ovlBotH').value=c.bot_height_pct||6;
+    el('ovlZoomS').value=c.zoom_scale||1.08;
+    el('ovlOpacity').value=c.mask_opacity==null?0.55:c.mask_opacity;
+    el('ovlColor').value=c.mask_color||'#000000';
+  }catch(e){el('ovlStatus').textContent='加载失败: '+e.message;}
+}
+async function saveOverlayCfg(){
+  el('ovlStatus').textContent='保存中…';
+  const body={
+    enabled:el('ovlEnabled').checked,
+    enable_top:el('ovlTop').checked,
+    enable_bottom:el('ovlBot').checked,
+    enable_zoom:el('ovlZoom').checked,
+    top_height_pct:parseFloat(el('ovlTopH').value)||8,
+    bot_height_pct:parseFloat(el('ovlBotH').value)||6,
+    zoom_scale:parseFloat(el('ovlZoomS').value)||1.08,
+    mask_opacity:parseFloat(el('ovlOpacity').value)||0.55,
+    mask_color:el('ovlColor').value.trim()||'#000000'
+  };
+  try{
+    const r=await fetch('/api/overlay/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    el('ovlStatus').textContent=j.success?('✅ '+j.message):('✕ '+j.message);
+    if(j.success){applyOverlayInit();}
+  }catch(e){el('ovlStatus').textContent='保存失败: '+e.message;}
 }
 
 // —— 新版增强测试播放（/api/clean/enhanced）——
@@ -2748,6 +2816,48 @@ function playClean(){
   });
   refreshStats();
 }
+// —— 压字广告遮挡（画面内水印/压字/顶部底部滚动字幕，删不掉只能前端遮挡）——
+// 后台内播放器同样叠加：读 /api/overlay 全局配置；后台「压字广告遮挡」设置区保存后播放器即时生效。
+function applyOverlayInit(){
+  const v=el('player'); if(!v)return;
+  fetch('/api/overlay').then(function(r){return r.json()}).then(function(d){
+    const c=(d&&d.config)||{};
+    if(!c.enabled){clearOverlay(v);return;}
+    applyOverlay(v,c);
+  }).catch(function(){});
+}
+function clearOverlay(v){
+  const wrap=v.parentElement;
+  if(wrap&&wrap.className.indexOf('ovl-wrap')>=0){
+    const old=wrap.querySelectorAll('.ovl-mask');
+    for(let i=0;i<old.length;i++)old[i].remove();
+    v.style.transform='';
+  }
+}
+function applyOverlay(v,c){
+  const col=c.mask_color||'#000', op=c.mask_opacity==null?0.55:c.mask_opacity;
+  let wrap=v.parentElement;
+  if(!wrap||wrap.className.indexOf('ovl-wrap')<0){
+    wrap=document.createElement('div');
+    wrap.className='ovl-wrap'; wrap.style.cssText='position:relative;width:100%;';
+    v.parentNode.insertBefore(wrap,v);
+    wrap.appendChild(v);
+  }
+  const old=wrap.querySelectorAll('.ovl-mask');
+  for(let i=0;i<old.length;i++)old[i].remove();
+  function addMask(h,sty){
+    const d=document.createElement('div');
+    d.className='ovl-mask';
+    d.style.cssText='position:absolute;left:0;right:0;height:'+h+'%;'+sty+'z-index:2;pointer-events:none;background:'+col+';opacity:'+op+';border-radius:12px;';
+    wrap.appendChild(d);
+  }
+  if(c.enable_top&&c.top_height_pct>0)addMask(c.top_height_pct,'top:0;');
+  if(c.enable_bottom&&c.bot_height_pct>0)addMask(c.bot_height_pct,'bottom:0;');
+  const z=(c.enable_zoom&&c.zoom_scale>1)?c.zoom_scale:1;
+  v.style.transformOrigin='center center';
+  v.style.transform=z>1?'scale('+z+')':'';
+}
+applyOverlayInit();
 </script>
 </body>
 </html>
@@ -3111,6 +3221,74 @@ if(src){
     });
   }
 }
+</script>
+<script>
+// ── 压字广告遮挡（画面内水印/压字/顶部底部滚动字幕，无法删片段，只能前端遮挡）──
+// 叠加半透明遮罩条 + 可选放大裁边（把边缘压字挤出画面）。调用 /api/overlay 读全局配置，
+// URL 参数 overlay 可覆盖：overlay=on|1 强制启用全局；off|0 禁用；
+// overlay=top:8,bottom:6,zoom:1.08,opacity:0.5,color:000000 精确指定（分号/逗号分隔）。
+function applyOverlayInit(){
+  var el=document.getElementById('player');
+  if(!el)return;
+  var p=new URLSearchParams(location.search);
+  var ov=p.get('overlay');
+  fetch('/api/overlay').then(function(r){return r.json()}).then(function(d){
+    var c=d&&d.config||{}; var forced=false;
+    if(ov&&ov!=='%'){ // URL 参数覆盖全局
+      if(ov==='off'||ov==='0'){c.enabled=false;}
+      else if(ov==='on'||ov==='1'){c.enabled=true;forced=true;}
+      else if(ov.indexOf(':')>=0){ // top:8,bottom:6,zoom:1.08,opacity:0.5,color:000000
+        c.enabled=true;forced=true;
+        var seg=ov.split(/[;,]/);
+        for(var i=0;i<seg.length;i++){var kv=seg[i].split(':');if(kv.length<2)continue;var k=kv[0].trim().toLowerCase(),v=kv[1].trim();
+          if(k==='top'){c.enable_top=true;c.top_height_pct=parseFloat(v)||8;}
+          else if(k==='bottom'||k==='bot'){c.enable_bottom=true;c.bot_height_pct=parseFloat(v)||6;}
+          else if(k==='zoom'){c.enable_zoom=true;c.zoom_scale=parseFloat(v)||1.08;}
+          else if(k==='opacity'){c.mask_opacity=parseFloat(v)||0.55;}
+          else if(k==='color'){c.mask_color='#'+v.replace(/^#/,'');}
+        }
+      }
+    }
+    if(!c.enabled){clearOverlay(el);return;}
+    if(forced||c.enable_top||c.enable_bottom||c.enable_zoom){applyOverlay(el,c);}
+  }).catch(function(){});
+}
+function clearOverlay(el){
+  var wrap=el.parentElement;
+  if(wrap&&wrap.className.indexOf('ovl-wrap')>=0){
+    var old=wrap.querySelectorAll('.ovl-mask');
+    for(var i=0;i<old.length;i++)old[i].remove();
+    el.style.transform='';
+  }
+}
+function applyOverlay(el,c){
+  var col=c.mask_color||'#000', op=c.mask_opacity==null?0.55:c.mask_opacity;
+  var wrap=el.parentElement;
+  if(!wrap||wrap.className.indexOf('ovl-wrap')<0){
+    wrap=document.createElement('div');
+    wrap.className='ovl-wrap';
+    // 与 video 同宽（100% / max-width:960px），保证遮罩条覆盖范围与画面一致
+    wrap.style.cssText='position:relative;width:100%;max-width:960px;';
+    el.parentNode.insertBefore(wrap,el);
+    wrap.appendChild(el);
+  }
+  var old=wrap.querySelectorAll('.ovl-mask');
+  for(var i=0;i<old.length;i++)old[i].remove();
+  function addMask(cls,h,sty){
+    var d=document.createElement('div');
+    d.className='ovl-mask '+cls;
+    d.style.cssText='position:absolute;left:0;right:0;height:'+h+'%;'+sty+
+      'border-radius:12px;z-index:2;pointer-events:none;background:'+col+';opacity:'+op+';';
+    wrap.appendChild(d);
+  }
+  if(c.enable_top&&c.top_height_pct>0)addMask('ovl-top',c.top_height_pct,'top:0;');
+  if(c.enable_bottom&&c.bot_height_pct>0)addMask('ovl-bot',c.bot_height_pct,'bottom:0;');
+  // 放大裁边：transform scale 让画面四边各被裁掉 (scale-1)/2，把边缘压字挤出画面
+  var z=(c.enable_zoom&&c.zoom_scale>1)?c.zoom_scale:1;
+  el.style.transformOrigin='center center';
+  el.style.transform=z>1?'scale('+z+')':'';
+}
+applyOverlayInit();
 </script>
 </body>
 </html>
@@ -7108,6 +7286,126 @@ func handleSkipDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // ============================================================
+// 压字广告遮挡（Overlay）：视频画面内烧录的水印/压字/顶部底部滚动字幕无法靠删片段去除，
+// 只能前端遮挡。这里维护全局遮挡参数（顶部/底部遮罩条高度、颜色透明度、放大裁边开关），
+// 播放器前端（内置/外置/URL 参数）据此在视频上叠遮罩条或放大裁掉边缘压字。
+// 持久化 overlay_masks.json；GET 开放（播放器读取），POST 需登录（后台保存）。
+// ============================================================
+
+// OverlayMaskConfig 压字广告遮挡全局配置
+type OverlayMaskConfig struct {
+	Version      string  `json:"version"`
+	UpdateDate   string  `json:"update_date"`
+	Enabled      bool    `json:"enabled"`       // 总开关
+	EnableTop    bool    `json:"enable_top"`    // 顶部遮罩条
+	TopHeightPct float64 `json:"top_height_pct"` // 顶部遮罩条高度（占画面高度 %，0=自动按 8）
+	EnableBottom bool    `json:"enable_bottom"` // 底部遮罩条
+	BotHeightPct float64 `json:"bot_height_pct"` // 底部遮罩条高度（%）
+	MaskColor    string  `json:"mask_color"`   // 遮罩条颜色，默认 #000
+	MaskOpacity  float64 `json:"mask_opacity"` // 遮罩条透明度 0~1，默认 0.55
+	EnableZoom   bool    `json:"enable_zoom"`  // 放大裁边（把边缘压字挤出画面）
+	ZoomScale    float64 `json:"zoom_scale"`   // 放大倍数，默认 1.08
+}
+
+func defaultOverlayConfig() *OverlayMaskConfig {
+	return &OverlayMaskConfig{
+		Version: "1.0", UpdateDate: time.Now().Format("2006-01-02"),
+		Enabled: false, EnableTop: true, TopHeightPct: 8, EnableBottom: true, BotHeightPct: 6,
+		MaskColor: "#000000", MaskOpacity: 0.55, EnableZoom: false, ZoomScale: 1.08,
+	}
+}
+
+var overlayMu sync.Mutex
+
+func overlayMaskPath() string {
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "overlay_masks.json")
+	}
+	return "overlay_masks.json"
+}
+
+func loadOverlayMask() *OverlayMaskConfig {
+	cfg := defaultOverlayConfig()
+	if b, err := os.ReadFile(overlayMaskPath()); err == nil {
+		c2 := &OverlayMaskConfig{}
+		if json.Unmarshal(b, c2) == nil {
+			// 容错：缺失字段回退默认
+			if c2.MaskColor == "" {
+				c2.MaskColor = "#000000"
+			}
+			if c2.MaskOpacity <= 0 {
+				c2.MaskOpacity = 0.55
+			}
+			if c2.TopHeightPct <= 0 {
+				c2.TopHeightPct = 8
+			}
+			if c2.BotHeightPct <= 0 && c2.EnableBottom {
+				c2.BotHeightPct = 6
+			}
+			if c2.ZoomScale < 1 {
+				c2.ZoomScale = 1.08
+			}
+			return c2
+		}
+	}
+	return cfg
+}
+
+func saveOverlayMask(cfg *OverlayMaskConfig) error {
+	cfg.UpdateDate = time.Now().Format("2006-01-02")
+	b, _ := json.MarshalIndent(cfg, "", "    ")
+	return os.WriteFile(overlayMaskPath(), b, 0o644)
+}
+
+// handleOverlayGet GET /api/overlay → 全局遮挡配置（开放，播放器读取）
+func handleOverlayGet(w http.ResponseWriter, r *http.Request) {
+	overlayMu.Lock()
+	defer overlayMu.Unlock()
+	writeJSON(w, map[string]interface{}{"success": true, "config": loadOverlayMask()})
+}
+
+// handleOverlaySet POST /api/overlay（需登录）→ 保存全局遮挡配置
+func handleOverlaySet(w http.ResponseWriter, r *http.Request) {
+	overlayMu.Lock()
+	defer overlayMu.Unlock()
+	var in OverlayMaskConfig
+	if r.Body != nil {
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in)
+	}
+	cur := loadOverlayMask()
+	// 只更新允许的字段（避免前端误传破坏结构）
+	if in.Enabled {
+		cur.Enabled = true
+	} else {
+		cur.Enabled = false
+	}
+	cur.EnableTop = in.EnableTop
+	cur.EnableBottom = in.EnableBottom
+	cur.EnableZoom = in.EnableZoom
+	if in.TopHeightPct > 0 && in.TopHeightPct <= 40 {
+		cur.TopHeightPct = in.TopHeightPct
+	}
+	if in.BotHeightPct > 0 && in.BotHeightPct <= 40 {
+		cur.BotHeightPct = in.BotHeightPct
+	}
+	if in.ZoomScale >= 1 && in.ZoomScale <= 1.3 {
+		cur.ZoomScale = in.ZoomScale
+	}
+	if in.MaskColor != "" {
+		cur.MaskColor = in.MaskColor
+	}
+	if in.MaskOpacity >= 0 && in.MaskOpacity <= 1 {
+		cur.MaskOpacity = in.MaskOpacity
+	}
+	if err := saveOverlayMask(cur); err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
+		return
+	}
+	recordCall("/api/overlay", "POST", true, 0, "保存压字广告遮挡配置")
+	writeJSON(w, map[string]interface{}{"success": true, "message": "遮挡配置已保存"})
+}
+
+// ============================================================
 // 弹幕过滤规则库（独立模块，后续可接弹幕源）：关键词/正则规则 → 过滤弹幕文案。
 // 持久化 danmaku_rules.json；API 只提供规则管理与单条文本过滤，不依赖播放器 DOM。
 // ============================================================
@@ -7830,6 +8128,9 @@ func main() {
 	http.HandleFunc("/api/skip", handleSkipList)
 	http.HandleFunc("/api/skip/add", guard(handleSkipAdd))
 	http.HandleFunc("/api/skip/delete", guard(handleSkipDelete))
+	// 压字广告遮挡：配置列表开放（播放器读取叠加遮罩条/放大裁边），保存需登录
+	http.HandleFunc("/api/overlay", handleOverlayGet)
+	http.HandleFunc("/api/overlay/save", guard(handleOverlaySet))
 	// 弹幕过滤规则库（独立模块，需登录）：/api/danmaku
 	http.HandleFunc("/api/danmaku", guard(handleDanmakuRulesList))
 	http.HandleFunc("/api/danmaku/add", guard(handleDanmakuRulesAdd))
