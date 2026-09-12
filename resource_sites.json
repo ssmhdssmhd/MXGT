@@ -1,6 +1,6 @@
 {
     "version": "1.0",
-    "update_date": "2026-09-10",
+    "update_date": "2026-09-12",
     "sites": [
         {
             "name": "量子",
@@ -14,8 +14,8 @@
         },
         {
             "name": "暴风",
-            "site_url": "http://bfzv8.lv",
-            "api_url": "https://bfzyapi.com/api.php/provide/vod/from/bfzym3u8/",
+            "site_url": "http://bfzy8.tv",
+            "api_url": "http://by.bfzyapi.com/api.php/provide/vod/",
             "type": "maccms",
             "status": "active",
             "enabled": true,
@@ -33,119 +33,19 @@
             "priority": 100
         },
         {
-            "name": "优质",
-            "site_url": "https://www.yzzy-app.com",
-            "api_url": "https://api.yzzy-app.com/mc.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://api.yzzy-app.com/mc.php/provide/vod/?ac=videoli",
-            "priority": 100
-        },
-        {
-            "name": "天影",
-            "site_url": "https://wsyzy.cc",
-            "api_url": "https://wsyzy.cc/api.php/provide/vod/from/wysm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
-            "name": "6度资源",
-            "site_url": "https://www.6duzy.com",
-            "api_url": "https://www.mdzyapi.com/api.php/provide/vod/from/lium3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
-            "name": "360酷",
-            "site_url": "https://www.360ku.com",
-            "api_url": "https://360ku.com/api.php/provide/vod/from/360ku/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
-            "name": "八豆",
-            "site_url": "https://badouzy.com",
-            "api_url": "https://api.akuapi.com/api.php/provide/vod/from/ukm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://api.akuapi.com/api.php/provide/vod/from/ukm3u8/",
-            "priority": 100
-        },
-        {
-            "name": "豆包",
-            "site_url": "https://dbzy.tv",
-            "api_url": "https://dbzy.tv/api.php/provide/vod/from/dbm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
             "name": "猫眼",
             "site_url": "https://www.maoyanzy.com",
-            "api_url": "https://www.maoyanzy.com/api.php/provide/vod/?ac=list",
+            "api_url": "https://api.maoyanapi.top/api.php/provide/vod/from/mym3u8/?ac=list",
             "type": "maccms",
             "status": "active",
             "enabled": true,
-            "note": "API已更新",
-            "priority": 100
-        },
-        {
-            "name": "10樱花",
-            "site_url": "https://yhznyy.com",
-            "api_url": "https://yhznyy.com/api.php/provide/vod/from/hm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://yhznyy.com/api.php/provide/vod/from/hm3u8/?ac=v",
-            "priority": 100
-        },
-        {
-            "name": "爱奇艺",
-            "site_url": "https://iqiyiapi.w1612.cc",
-            "api_url": "https://iqiyiapi.w1612.cc/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://iqiyiapi.w1612.cc/api.php/provide/vod/?ac=video",
-            "priority": 100
-        },
-        {
-            "name": "12官方",
-            "site_url": "https://www.gfzyw.com",
-            "api_url": "https://www.gfzyw.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "索尼",
-            "site_url": "https://suonizy.cc",
-            "api_url": "https://suonizy.cc/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(3316ms)",
+            "note": "压缩其他资源站，插播都没去",
             "priority": 100
         },
         {
             "name": "最大",
-            "site_url": "https://www.zuidazy.co",
-            "api_url": "https://www.zuidazy.co/api.php/provide/vod/?ac=list",
+            "site_url": "https://zuidazy.me",
+            "api_url": "https://api.zuidapi.com/api.php/provide/vod/from/zuidam3u8/?ac=list",
             "type": "maccms",
             "status": "active",
             "enabled": true,
@@ -155,7 +55,7 @@
         {
             "name": "OK资源",
             "site_url": "https://okzyw.cc",
-            "api_url": "https://okzyw.cc/api.php/provide/vod/?ac=list",
+            "api_url": "https://api.okzyw.net/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
             "enabled": true,
@@ -163,19 +63,9 @@
             "priority": 100
         },
         {
-            "name": "牛牛",
-            "site_url": "https://www.niuniuzy.vip",
-            "api_url": "https://api.niuniuzy.com/api.php/provide/vod/from/nnm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://api.niuniuzy.com/api.php/provide/vod/from/nnm3u",
-            "priority": 100
-        },
-        {
             "name": "快车",
-            "site_url": "https://kuaichezy.com",
-            "api_url": "https://kuaichezy.com/api.php/provide/vod/?ac=list",
+            "site_url": "https://kuaichezy.vip",
+            "api_url": "https://caiji.kuaichezy.org/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
             "enabled": true,
@@ -185,7 +75,7 @@
         {
             "name": "闪电",
             "site_url": "https://shandianzy.com",
-            "api_url": "https://shandianzy.com/api.php/provide/vod/?ac=list",
+            "api_url": "https://xsd.sdzyapi.com/api.php/provide/vod/from/sdm3u8/?ac=list",
             "type": "maccms",
             "status": "active",
             "enabled": true,
@@ -203,53 +93,23 @@
             "priority": 100
         },
         {
-            "name": "无尽",
-            "site_url": "https://wujinwszy.com",
-            "api_url": "http://api.wujinwszy.net/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(3783ms)",
-            "priority": 100
-        },
-        {
-            "name": "新浪",
-            "site_url": "https://www.xinlangzy.net",
-            "api_url": "https://www.xinlangapi.com/xinlangapi.php/provide/vod/from/xlm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://www.xinlangapi.com/xinlangapi.php/provide/vod/f",
-            "priority": 100
-        },
-        {
             "name": "速播",
             "site_url": "https://www.subozy.com",
-            "api_url": "https://www.subozy.com/api.php/provide/vod/",
+            "api_url": "https://subocj.com/api.php/provide/vod/from/subm3u8/at/json",
             "type": "maccms",
             "status": "active",
             "enabled": true,
-            "note": "检测可用",
+            "note": "新浪和速播链接相同",
             "priority": 100
         },
         {
             "name": "红牛",
-            "site_url": "https://hongniuzY2.com",
-            "api_url": "https://www.hongniuzY2.com/api.php/provide/vod/from/hnm3u8/?ac=list",
+            "site_url": "https://hongniuzy.net",
+            "api_url": "https://www.hongniuzy2.com/api.php/provide/vod/from/hnm3u8/?ac=list",
             "type": "maccms",
             "status": "active",
             "enabled": true,
             "note": "检测可用",
-            "priority": 100
-        },
-        {
-            "name": "极速",
-            "site_url": "https://www.jisusy.com",
-            "api_url": "https://jsszyapi.com/api.php/provide/vod/from/jsm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://jsszyapi.com/api.php/provide/vod/from/jsm3u8/?a",
             "priority": 100
         },
         {
@@ -273,36 +133,6 @@
             "priority": 100
         },
         {
-            "name": "淘片",
-            "site_url": "http://taopianapi.com",
-            "api_url": "http://taopianapi.com/cjapi/mc10/vod/json/m3u8.html",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(9701ms)",
-            "priority": 100
-        },
-        {
-            "name": "茅台",
-            "site_url": "https://mtzy.me",
-            "api_url": "https://caiji.maotai999.vip/api.php/provide/vod/from/mtm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(4250ms)",
-            "priority": 100
-        },
-        {
-            "name": "虎牙",
-            "site_url": "https://jinyangzy.com",
-            "api_url": "https://jyzypy.com/provide/vod/from/jinyangm3u8/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://jyzypy.com/provide/vod/from/jinyangm3u8/at/json",
-            "priority": 100
-        },
-        {
             "name": "13大众",
             "site_url": "https://www.dzzy.com",
             "api_url": "http://cdn.dzzyapi.com/api.php/provide/vod/?ac=list",
@@ -310,16 +140,6 @@
             "status": "active",
             "enabled": true,
             "note": "仅支持HTTP",
-            "priority": 100
-        },
-        {
-            "name": "ikun",
-            "site_url": "https://ikunzyapi.com",
-            "api_url": "https://ikunzypi.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://ikunzypi.com/api.php/provide/vod/?ac=videolist&",
             "priority": 100
         },
         {
@@ -353,146 +173,6 @@
             "priority": 100
         },
         {
-            "name": "飞刀资源",
-            "site_url": "http://www.feidaozy.com",
-            "api_url": "https://www.feidaozy.com/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://www.feidaozy.com/api.php/provide/vod/?ac=videol",
-            "priority": 100
-        },
-        {
-            "name": "乐视",
-            "site_url": "https://leshizy.com",
-            "api_url": "https://leshiapi.com/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://leshiapi.com/api.php/provide/vod/?ac=videolist&",
-            "priority": 100
-        },
-        {
-            "name": "好看",
-            "site_url": "https://xhkanzy9.com",
-            "api_url": "https://xkanzy10.com/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://xkanzy10.com/api.php/provide/vod/?ac=videolist&",
-            "priority": 100
-        },
-        {
-            "name": "奇快",
-            "site_url": "https://qikuzy.tv/",
-            "api_url": "https://caiji.qhzyapi.com/api.php/provide/vod/from/qhm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://caiji.qhzyapi.com/api.php/provide/vod/from/qhm3",
-            "priority": 100
-        },
-        {
-            "name": "九月",
-            "site_url": "https://jiuyuezy.com",
-            "api_url": "https://kuaikan-api.com/api.php/provide/vod/from/kykuakan/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "黑木耳",
-            "site_url": "https://mdzyapi.com",
-            "api_url": "https://mdzyapi.com/api.php/provide/vod",
-            "type": "maccms",
-            "status": "active",
-            "enabled": true,
-            "note": "修复API地址，更换域名，2026-07-23验证可用，响应时间约1065ms（原停更状态已恢复）",
-            "priority": 100
-        },
-        {
-            "name": "飞速",
-            "site_url": "https://www.feisuzy.com",
-            "api_url": "https://www.feisuzyapi.com/api.php/provide/vod/from/fsm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://www.feisuzyapi.com/api.php/provide/vod/from/fsm",
-            "priority": 100
-        },
-        {
-            "name": "天空",
-            "site_url": "http://tiankongzy.cc",
-            "api_url": "http://tiankongzy.cc/api.php/provide/vod/from/tkm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "优优",
-            "site_url": "https://jk2.yycmsszywapi.cc",
-            "api_url": "https://jk2.yycmsszywapi.cc/api.php/provide/vod",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://jk2.yycmsszywapi.cc/api.php/provide/vod?ac=vide",
-            "priority": 100
-        },
-        {
-            "name": "无线",
-            "site_url": "https://wuxianzy8.com",
-            "api_url": "https://api.wuxianzy.net/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://api.wuxianzy.net/api.php/provide/vod/?ac=videol",
-            "priority": 100
-        },
-        {
-            "name": "12鱼乐",
-            "site_url": "https://104.161.22.125",
-            "api_url": "https://104.161.22.125/api.php/provide/vod/from/lem3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://104.161.22.125/api.php/provide/vod/from/lem3u8/",
-            "priority": 100
-        },
-        {
-            "name": "13华为",
-            "site_url": "https://cjhwba.com",
-            "api_url": "https://cajhwba.com/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://cajhwba.com/api.php/provide/vod/?ac=videolist&l",
-            "priority": 100
-        },
-        {
-            "name": "蜂巢",
-            "site_url": "https://fczy908.com",
-            "api_url": "https://api.fczy888.me/api.php/provide/vod/from/fcm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://api.fczy888.me/api.php/provide/vod/from/fcm3u8/",
-            "priority": 100
-        },
-        {
-            "name": "15魔术",
-            "site_url": "https://mzzy.me",
-            "api_url": "https://mozhuazy.com/api.php/provide/vod/from/mzm3u8/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://mozhuazy.com/api.php/provide/vod/from/mzm3u8/?a",
-            "priority": 100
-        },
-        {
             "name": "蓝光",
             "site_url": "https://lgzyz.xyz",
             "api_url": "https://lgzyz.xyz/api.php/provide/vod/?ac=list",
@@ -500,16 +180,6 @@
             "status": "active",
             "enabled": true,
             "note": "新增，4K资源",
-            "priority": 100
-        },
-        {
-            "name": "魔都",
-            "site_url": "https://www.moduzy.cc",
-            "api_url": "https://www.moduzy.cc/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
             "priority": 100
         },
         {
@@ -524,8 +194,8 @@
         },
         {
             "name": "樱花",
-            "site_url": "https://yhzy.cc",
-            "api_url": "https://yhzy.cc/api.php/provide/vod/?ac=list",
+            "site_url": "https://yhzy.men/",
+            "api_url": "https://m3u8.apiyhzy.com/api.php/provide/vod/?ac=list",
             "type": "maccms",
             "status": "active",
             "enabled": true,
@@ -544,12 +214,12 @@
         },
         {
             "name": "百度",
-            "site_url": "https://bdzy.tv",
-            "api_url": "http://bdzy.tv/api.php/provide/vod/?ac=list",
+            "site_url": "https://api.apibdzy.com/",
+            "api_url": "https://api.apibdzy.com/api.php/provide/vod/from/dbm3u8/?ac=list",
             "type": "maccms",
             "status": "active",
             "enabled": true,
-            "note": "新增，仅支持HTTP",
+            "note": "地区限制，部分无法打开",
             "priority": 100
         },
         {
@@ -573,26 +243,6 @@
             "priority": 100
         },
         {
-            "name": "牛牛6",
-            "site_url": "https://niuniuzy6.com",
-            "api_url": "https://niuniuzy6.com/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(3013ms)",
-            "priority": 100
-        },
-        {
-            "name": "蓝志",
-            "site_url": "https://www.lzzy.tv",
-            "api_url": "https://www.lzzy.tv/api.php/provide/vod/?ac=list",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(5189ms)",
-            "priority": 100
-        },
-        {
             "name": "天逸",
             "site_url": "https://tyyszy.com",
             "api_url": "https://tyyszy.com/api.php/provide/vod/?ac=list",
@@ -600,56 +250,6 @@
             "status": "active",
             "enabled": true,
             "note": "新增",
-            "priority": 100
-        },
-        {
-            "name": "聚合资源",
-            "site_url": "https://vod.korge.cn",
-            "api_url": "https://vod.korge.cn/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://vod.korge.cn/api.php/provide/vod/?ac=videolist&",
-            "priority": 100
-        },
-        {
-            "name": "华为吧",
-            "site_url": "https://cjhwba.com",
-            "api_url": "https://cjhwba.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://cjhwba.com/api.php/provide/vod/?ac=videolist&li",
-            "priority": 100
-        },
-        {
-            "name": "黑木耳资源",
-            "site_url": "https://json02.heimuer.xyz",
-            "api_url": "https://json02.heimuer.xyz/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "ikun资源",
-            "site_url": "https://ikunzyapi.com",
-            "api_url": "https://ikunzyapi.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://ikunzyapi.com/api.php/provide/vod/?ac=videolist",
-            "priority": 100
-        },
-        {
-            "name": "旺旺短剧",
-            "site_url": "http://api.wzy.tv",
-            "api_url": "http://api.wzy.tv/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -663,133 +263,13 @@
             "priority": 100
         },
         {
-            "name": "卧龙资源",
-            "site_url": "https://collect.wolongzy.cc",
-            "api_url": "https://collect.wolongzy.cc/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://collect.wolongzy.cc/api.php/provide/vod/?ac=vid",
-            "priority": 100
-        },
-        {
-            "name": "海外看",
-            "site_url": "https://haiwaikan.com",
-            "api_url": "https://haiwaikan.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://haiwaikan.com/api.php/provide/vod/?ac=videolist",
-            "priority": 100
-        },
-        {
             "name": "360资源",
             "site_url": "https://360zy.com",
-            "api_url": "https://360zy.com/api.php/provide/vod/",
+            "api_url": "https://360zy.com/api.php/provide/vod/from/360zy/?ac=list",
             "type": "maccms",
             "status": "active",
             "enabled": true,
             "note": "JSON接口",
-            "priority": 100
-        },
-        {
-            "name": "刺桐资源",
-            "site_url": "http://ys9.cttv.vip",
-            "api_url": "http://ys9.cttv.vip/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "业余资源",
-            "site_url": "https://yyff.540734621.xyz",
-            "api_url": "https://yyff.540734621.xyz/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "华为吧2",
-            "site_url": "https://hw8.live",
-            "api_url": "https://hw8.live/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
-            "name": "小黄人",
-            "site_url": "https://iqyi.xiaohuangrenhtv.com",
-            "api_url": "https://iqyi.xiaohuangrenhtv.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://iqyi.xiaohuangrenhtv.com/api.php/provide/vod/?a",
-            "priority": 100
-        },
-        {
-            "name": "U酷资源",
-            "site_url": "https://api.ukuapi.com",
-            "api_url": "https://api.ukuapi.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://api.ukuapi.com/api.php/provide/vod/?ac=videolis",
-            "priority": 100
-        },
-        {
-            "name": "四九资源",
-            "site_url": "https://49zyw.com",
-            "api_url": "https://49zyw.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://49zyw.com/api.php/provide/vod/?ac=videolist&lim",
-            "priority": 100
-        },
-        {
-            "name": "快看资源",
-            "site_url": "https://www.kuaikan-api.com",
-            "api_url": "https://www.kuaikan-api.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "熊掌资源",
-            "site_url": "https://xzcjz.com",
-            "api_url": "https://xzcjz.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://xzcjz.com/api.php/provide/vod/?ac=videolist&lim",
-            "priority": 100
-        },
-        {
-            "name": "飘花资源",
-            "site_url": "http://www.ahjiuman.com",
-            "api_url": "http://www.ahjiuman.com/api.php/provide/vod/at/json/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "天翼资源",
-            "site_url": "https://www.911ysw.top",
-            "api_url": "https://www.911ysw.top/tianyi.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -843,86 +323,6 @@
             "priority": 100
         },
         {
-            "name": "快云资源",
-            "site_url": "https://www.kuaiyunzy.com",
-            "api_url": "https://www.kuaiyunzy.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://www.kuaiyunzy.com/api.php/provide/vod/?ac=video",
-            "priority": 100
-        },
-        {
-            "name": "开放电影",
-            "site_url": "http://vod-demo.onrender.com",
-            "api_url": "http://vod-demo.onrender.com/pubdvod.php",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "39影视",
-            "site_url": "http://39kan.com",
-            "api_url": "http://39kan.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "矢量资源",
-            "site_url": "http://vlbmv.cc",
-            "api_url": "http://vlbmv.cc/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "乐活影视",
-            "site_url": "http://lehootv.com",
-            "api_url": "http://lehootv.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "唐人街",
-            "site_url": "http://tangrenjie.tv",
-            "api_url": "http://tangrenjie.tv/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
-            "name": "酷点资源",
-            "site_url": "http://api.kuapi.cc",
-            "api_url": "http://api.kuapi.cc/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "酷点备用",
-            "site_url": "http://kudian10.com",
-            "api_url": "http://kudian10.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
             "name": "森林资源",
             "site_url": "http://slapibf.com",
             "api_url": "http://slapibf.com/api.php/provide/vod/",
@@ -930,176 +330,6 @@
             "status": "active",
             "enabled": true,
             "note": "补充资源站",
-            "priority": 100
-        },
-        {
-            "name": "影库资源",
-            "site_url": "http://api.ykapi.net",
-            "api_url": "http://api.ykapi.net/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "探探资源",
-            "site_url": "http://apitzy.com",
-            "api_url": "http://apitzy.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "金鹰资源",
-            "site_url": "http://j8zyapi.com",
-            "api_url": "http://j8zyapi.com/provide/vod/from/jin/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "奥斯卡资源",
-            "site_url": "http://aosikazy.com",
-            "api_url": "http://aosikazy.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(3665ms)",
-            "priority": 100
-        },
-        {
-            "name": "老鸭资源",
-            "site_url": "http://api.apilyzy.com",
-            "api_url": "http://api.apilyzy.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "北斗资源",
-            "site_url": "https://m3u8.bdxzyapi.com",
-            "api_url": "https://m3u8.bdxzyapi.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://m3u8.bdxzyapi.com/api.php/provide/vod/?ac=video",
-            "priority": 100
-        },
-        {
-            "name": "快播资源",
-            "site_url": "http://www.kuaibozy.com",
-            "api_url": "http://www.kuaibozy.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "艾旦影视",
-            "site_url": "http://lovedan.net",
-            "api_url": "http://lovedan.net/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 403",
-            "priority": 100
-        },
-        {
-            "name": "飘花电影",
-            "site_url": "http://www.zzrhgg.com",
-            "api_url": "http://www.zzrhgg.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
-            "name": "网片电影",
-            "site_url": "http://prinevillesda.org",
-            "api_url": "http://prinevillesda.org/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "麒麟资源",
-            "site_url": "https://www.qilinzyz.com",
-            "api_url": "https://www.qilinzyz.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
-            "name": "番茄资源",
-            "site_url": "http://api.lqzy.cc",
-            "api_url": "http://api.lqzy.cc/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "8090资源",
-            "site_url": "http://zy.yilans.net:8090",
-            "api_url": "http://zy.yilans.net:8090/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "官网采集",
-            "site_url": "http://gwcmslctv.vip",
-            "api_url": "http://gwcmslctv.vip/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "黑料资源网",
-            "site_url": "https://www.heiliaozydh.com",
-            "api_url": "https://www.heiliaozydh.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "奶香香资源",
-            "site_url": "https://www.nxxzyuan.cc",
-            "api_url": "https://www.nxxzyuan.cc/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "玉兔资源",
-            "site_url": "https://yutuzy.com",
-            "api_url": "https://yutuzy.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://yutuzy.com/api.php/provide/vod/?ac=videolist&li",
             "priority": 100
         },
         {
@@ -1113,16 +343,6 @@
             "priority": 100
         },
         {
-            "name": "888联盟",
-            "site_url": "https://888lm.vip",
-            "api_url": "https://888lm.vip/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
             "name": "杏吧资源站",
             "site_url": "https://sex8zy8.com",
             "api_url": "https://sex8zy8.com/api.php/provide/vod/",
@@ -1133,26 +353,6 @@
             "priority": 100
         },
         {
-            "name": "暴风资源站",
-            "site_url": "http://bfzy3.tv",
-            "api_url": "http://bfzy3.tv/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
-            "name": "155资源站",
-            "site_url": "https://155zy3.com",
-            "api_url": "https://155zy3.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
             "name": "森林资源站",
             "site_url": "http://senlinzy3.com",
             "api_url": "http://senlinzy3.com/api.php/provide/vod/",
@@ -1160,56 +360,6 @@
             "status": "active",
             "enabled": true,
             "note": "萌芽合作站",
-            "priority": 100
-        },
-        {
-            "name": "无水印资源站",
-            "site_url": "https://wsyzy.sbs",
-            "api_url": "https://wsyzy.sbs/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "九游联盟",
-            "site_url": "https://www.jiuyo.com",
-            "api_url": "https://www.jiuyo.com/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
-            "name": "合作共赢",
-            "site_url": "https://xn--2qqq4c14c921h.cc",
-            "api_url": "https://xn--2qqq4c14c921h.cc/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
-            "priority": 100
-        },
-        {
-            "name": "98资源网",
-            "site_url": "https://98zy.me",
-            "api_url": "https://98zy.me/api.php/provide/vod/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://98zy.me/api.php/provide/vod/?ac=videolist&limit",
-            "priority": 100
-        },
-        {
-            "name": "西瓜资源",
-            "site_url": "https://xgzy.tv",
-            "api_url": "https://xgzy.tv/api.php/provide/vod/from/xiguam3u8/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(3090ms)",
             "priority": 100
         },
         {
@@ -1253,26 +403,6 @@
             "priority": 100
         },
         {
-            "name": "无尽资源API",
-            "site_url": "https://api.wujinapi.me",
-            "api_url": "https://api.wujinapi.me/api.php/provide/vod/from/wjm3u8/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(3222ms)",
-            "priority": 100
-        },
-        {
-            "name": "OK资源API",
-            "site_url": "https://api.okzyw.net",
-            "api_url": "https://api.okzyw.net/api.php/provide/vod/from/okm3u8/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(4548ms)",
-            "priority": 100
-        },
-        {
             "name": "索尼资源",
             "site_url": "https://suoniapi.com",
             "api_url": "https://suoniapi.com/api.php/provide/vod/from/snm3u8/at/json",
@@ -1313,16 +443,6 @@
             "priority": 100
         },
         {
-            "name": "98资源",
-            "site_url": "https://98zy.vip",
-            "api_url": "https://98zy.vip/api.php/provide/vod/at/json/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://98zy.vip/api.php/provide/vod/at/json/?ac=videol",
-            "priority": 100
-        },
-        {
             "name": "爱奇艺站",
             "site_url": "https://iqiyizyapi.com",
             "api_url": "https://iqiyizyapi.com/api.php/provide/vod/at/json",
@@ -1343,26 +463,6 @@
             "priority": 100
         },
         {
-            "name": "茅台资源",
-            "site_url": "https://caiji.maotaizy.cc",
-            "api_url": "https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(4190ms)",
-            "priority": 100
-        },
-        {
-            "name": "旺旺资源",
-            "site_url": "https://api.wwzy.tv",
-            "api_url": "https://api.wwzy.tv/api.php/provide/vod/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://api.wwzy.tv/api.php/provide/vod/at/json?ac=vide",
-            "priority": 100
-        },
-        {
             "name": "红牛资源API",
             "site_url": "https://www.hongniuzy2.com",
             "api_url": "https://www.hongniuzy2.com/api.php/provide/vod/from/hnm3u8/at/json",
@@ -1373,16 +473,6 @@
             "priority": 100
         },
         {
-            "name": "如意资源API",
-            "site_url": "https://cj.rycjapi.com",
-            "api_url": "https://cj.rycjapi.com/api.php/provide/vod/from/rym3u8/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://cj.rycjapi.com/api.php/provide/vod/from/rym3u8/",
-            "priority": 100
-        },
-        {
             "name": "非凡资源API",
             "site_url": "https://cj.ffzyapi.com",
             "api_url": "http://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8/at/json/",
@@ -1390,16 +480,6 @@
             "status": "active",
             "enabled": true,
             "note": "检测可用",
-            "priority": 100
-        },
-        {
-            "name": "优秀资源",
-            "site_url": "https://api.yzzy-api.com",
-            "api_url": "http://api.yzzy-api.com/inc/api_mac10.php",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
             "priority": 100
         },
         {
@@ -1423,16 +503,6 @@
             "priority": 100
         },
         {
-            "name": "豆瓣资源API",
-            "site_url": "https://caiji.dbzy5.com",
-            "api_url": "https://caiji.dbzy5.com/api.php/provide/vod/from/dbm3u8/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
             "name": "极速资源API",
             "site_url": "https://jszyapi.com",
             "api_url": "https://jszyapi.com/api.php/provide/vod/from/jsm3u8/at/json",
@@ -1440,16 +510,6 @@
             "status": "active",
             "enabled": true,
             "note": "检测可用",
-            "priority": 100
-        },
-        {
-            "name": "樱花资源API",
-            "site_url": "https://m3u8.apiyhzy.com",
-            "api_url": "https://m3u8.apiyhzy.com/api.php/provide/vod/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "可用但慢(3277ms)",
             "priority": 100
         },
         {
@@ -1493,26 +553,6 @@
             "priority": 100
         },
         {
-            "name": "细胞资源",
-            "site_url": "https://www.xxibaozyw.com",
-            "api_url": "https://www.xxibaozyw.com/api.php/provide/vod/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 500",
-            "priority": 100
-        },
-        {
-            "name": "色猫资源",
-            "site_url": "https://caiji.semaozy.net",
-            "api_url": "https://caiji.semaozy.net/inc/apijson_vod.php",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
             "name": "黄色仓库",
             "site_url": "https://hsckzy888.com",
             "api_url": "https://hsckzy888.com/api.php/provide/vod/from/hsckm3u8/at/json",
@@ -1543,16 +583,6 @@
             "priority": 100
         },
         {
-            "name": "香蕉资源",
-            "site_url": "https://www.xiangjiaozyw.com",
-            "api_url": "https://www.xiangjiaozyw.com/api.php/provide/vod/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 500",
-            "priority": 100
-        },
-        {
             "name": "CK百货",
             "site_url": "https://ckbh1.xyz",
             "api_url": "https://ckbh1.xyz/api.php/provide/vod/from/ckm3u8/at/json",
@@ -1560,26 +590,6 @@
             "status": "active",
             "enabled": true,
             "note": "检测可用",
-            "priority": 100
-        },
-        {
-            "name": "幸资源站",
-            "site_url": "https://xzybb1.com",
-            "api_url": "https://xzybb1.com/api.php/provide/vod/at/json",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
-            "name": "789资源",
-            "site_url": "https://www.caiji.cyou",
-            "api_url": "https://www.caiji.cyou/api.php/provide/vod/at/json/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 404",
             "priority": 100
         },
         {
@@ -1593,26 +603,6 @@
             "priority": 100
         },
         {
-            "name": "金蝉资源",
-            "site_url": "https://zy.jinchancaiji.com",
-            "api_url": "http://zy.jinchancaiji.com/api.php/provide/vod/at/json/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: HTTP 502",
-            "priority": 100
-        },
-        {
-            "name": "山海资源",
-            "site_url": "https://gc.wki8.com",
-            "api_url": "https://gc.wki8.com/api.php/provide/vod/at/json/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
-            "priority": 100
-        },
-        {
             "name": "精品98资源",
             "site_url": "https://jp98.vip",
             "api_url": "https://jp98.vip/api.php/provide/vod/at/json/",
@@ -1620,16 +610,6 @@
             "status": "active",
             "enabled": true,
             "note": "检测可用",
-            "priority": 100
-        },
-        {
-            "name": "金马资源网",
-            "site_url": "https://api.jmzy.com",
-            "api_url": "https://api.jmzy.com/api.php/provide/vod/at/json/",
-            "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: Get \"https://api.jmzy.com/api.php/provide/vod/at/json/?ac=vi",
             "priority": 100
         },
         {
@@ -1643,14 +623,194 @@
             "priority": 100
         },
         {
-            "name": "热播4k公益",
-            "site_url": "https://res4k.jdyx.pro",
-            "api_url": "https://res4k.jdyx.pro/api.php/provide/vod/",
+            "name": "优质",
+            "site_url": "https://yzzy.tv",
+            "api_url": "https://api.yzzy-api.com/inc/api_mac10.php/provide/vod/?ac=list",
             "type": "maccms",
-            "status": "paused",
-            "enabled": false,
-            "note": "自动屏蔽: 响应解析失败（非 JSON/XML）",
+            "status": "active",
+            "enabled": true,
+            "note": "推荐",
             "priority": 100
+        },
+        {
+            "name": "无印",
+            "site_url": "https://wsyzy.cc",
+            "api_url": "https://wsyzy.cc/api.php/provide/vod/from/wym3u8/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "卡",
+            "priority": 60
+        },
+        {
+            "name": "魔都",
+            "site_url": "https://moduzy2.com",
+            "api_url": "https://www.mdzyapi.com/api.php/provide/vod/from/modum3u8/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "U酷",
+            "site_url": "http://www.ukuzy.com",
+            "api_url": "https://api.ukuapi.com/api.php/provide/vod/from/ukm3u8/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "豆瓣",
+            "site_url": "https://dbzy.tv",
+            "api_url": "https://caiji.dbzy.tv/api.php/provide/vod/from/dbm3u8/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "天涯",
+            "site_url": "https://tyyszy.com",
+            "api_url": "https://tyyszyapi.com/api.php/provide/vod/from/tym3u8?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "爱奇艺",
+            "site_url": "https://iqyapi.w1612.cc",
+            "api_url": "https://iqyapi.w1612.cc/api.php/provide/vod/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "索尼",
+            "site_url": "https://suonizy.com",
+            "api_url": "https://suoniapi.com/api.php/provide/vod/from/snm3u8/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "牛牛",
+            "site_url": "https://www.niuniuzy.org",
+            "api_url": "https://api.niuniuzy.me/api.php/provide/vod/from/nnm3u8/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "无尽",
+            "site_url": "https://www.wujinzy.net",
+            "api_url": "https://api.wujinapi.me/api.php/provide/vod/from/wjm3u8/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "无尽（无水印）",
+            "site_url": "https://wujinwszy.com",
+            "api_url": "http://api.wujinwszy.net/api.php/provide/vod/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "无水印，但卡",
+            "priority": 60
+        },
+        {
+            "name": "新浪",
+            "site_url": "https://www.xinlangzy.net",
+            "api_url": "https://api.xinlangapi.com/xinlangapi.php/provide/vod/from/xlm3u8/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "新浪和速播链接相同",
+            "priority": 60
+        },
+        {
+            "name": "极速",
+            "site_url": "http://www.jisuzy.com",
+            "api_url": "https://jszyapi.com/api.php/provide/vod/from/jsm3u8/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "淘片",
+            "site_url": "https://www.taopianzy.com/index.html",
+            "api_url": "https://taopianapi.com/cjapi/mc10/vod/json/m3u8.html",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "茅台",
+            "site_url": "https://mtzy.me",
+            "api_url": "https://caiji.maotai999.vip/api.php/provide/vod/from/mtm3u8/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "虎牙",
+            "site_url": "https://www.huyaapi.com",
+            "api_url": "https://www.huyaapi.com/api.php/provide/vod/from/hym3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "金鹰",
+            "site_url": "https://jinyingzy.com",
+            "api_url": "https://jyzyapi.com/provide/vod/from/jinyingm3u8/at/json",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "大众",
+            "site_url": "https://www.dzzy.com",
+            "api_url": "https://cdn.dzzyapi.com/api.php/provide/vod/?ac=list",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
+        },
+        {
+            "name": "ikun",
+            "site_url": "https://ikunzyapi.com",
+            "api_url": "https://ikunzyapi.com/api.php/provide/vod",
+            "type": "maccms",
+            "status": "active",
+            "enabled": true,
+            "note": "",
+            "priority": 60
         }
     ]
 }
