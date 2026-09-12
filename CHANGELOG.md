@@ -1,5 +1,25 @@
 # 更新日志
 
+## Go 分支 v0.6.30 (2026-09-12) — 修复后台保存 AI 配置报「no such file or directory」
+
+> 用户诉求：后台「AI 大模型接入」点保存报错 `open /www/wwwroot/go/go1/mxgtgo/ai/config.json: no such file or directory`。
+
+### 1. 根因（[main.go](file:///workspace/main.go)）
+
+- `saveAIConfig` 直接 `os.WriteFile` 写 `运行目录/ai/config.json`，但服务器上 `ai/` 目录不存在（未复制该子目录）时，父目录不存在导致写入失败；
+- 其他运行时文件（`resource_sites.json`、`official_platforms.json`、`title_maps.json` 等）都在运行目录根下（父目录必存在），不受影响。
+
+### 2. 修复
+
+- `saveAIConfig` 写入前 `os.MkdirAll(filepath.Dir(path), 0o755)` 自动创建 `ai/` 目录，再写文件；
+- 未复制 `ai/` 目录也能在后台正常保存 AI 配置。
+
+### 3. 验证与版本
+
+- `go build` + `go vet` 通过；版本升级 `v0.6.29 → v0.6.30`。
+
+---
+
 ## Go 分支 v0.6.29 (2026-09-12) — 实测智谱免费模型：修复 adjump 广告漏检 + AI 幻觉保护 + 官替 panic
 
 > 用户诉求：用智谱 GLM-4-Flash（免费）实测两个场景——① 腾讯视频链接 AI 识别剧名/集数；② m3u8 去插播/广告。实测 + 修复如下。

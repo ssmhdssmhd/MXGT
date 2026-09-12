@@ -181,6 +181,12 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.6.30 (2026-09-12) — 修复后台保存 AI 配置报「no such file or directory」
+
+> 后台「AI 大模型接入」点保存报 `open .../ai/config.json: no such file or directory`：服务器上 `ai/` 目录不存在时写文件失败。修复：`saveAIConfig` 写入前自动 `MkdirAll` 创建 `ai/` 目录，未复制 `ai/` 目录也能在后台正常保存。版本 `v0.6.29 → v0.6.30`。
+
+---
+
 ## v0.6.29 (2026-09-12) — 实测智谱免费模型：修复 adjump 广告漏检 + AI 幻觉保护 + 官替 panic
 
 > 用智谱 GLM-4-Flash 实测两个真实链接：① 腾讯官替「交锋/第1集」识别+匹配+无广告直链 ✅；② 951 段 m3u8 识别删除 18 段真实 `/video/adjump/` 插播广告（100-108、809-817）+超短片段共 32 段 ✅。修复：① `adURLRe` 补齐 `adjump|jumpad|adtime|adinsert` 关键词（原规则漏检该广告路径）；② 新增 AI 幻觉保护两道防线——`filterAIRuns`（只保留≤20 连续标记簇）+ `aiAdRatioGuard`（AI 判定占比>20% 整体丢弃，防免费小模型整段误标正片）；③ 修复 `episodeNumOfPlayItem` 纯剧名 nil 切片 panic（官替链路实测崩溃）。版本 `v0.6.28 → v0.6.29`。

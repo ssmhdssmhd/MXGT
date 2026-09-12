@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.29"
+	AppVersion = "v0.6.30"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -689,7 +689,11 @@ func loadAIConfig() *AIConfig {
 
 func saveAIConfig(cfg *AIConfig) error {
 	b, _ := json.MarshalIndent(cfg, "", "  ")
-	return os.WriteFile(aiConfigFile(), b, 0o644)
+	path := aiConfigFile()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o644)
 }
 
 // resolveEngine 根据用户 engine 参数与 AI 配置决定实际去广告引擎（basic / ai）
