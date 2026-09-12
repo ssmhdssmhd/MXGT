@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.26"
+	AppVersion = "v0.6.27"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -608,7 +608,8 @@ type AIConfig struct {
 	Format string `json:"format,omitempty"`
 }
 
-const defaultAIConfigJSON = `{"version":"v0.1.0","enabled":false,"mode":"basic","provider":"openai","api_url":"","api_key":"","model":"","prompt":"","max_segments":300,"timeout":25,"replace_enabled":false,"format":"openai"}`
+// 默认配置：免费方案（智谱 GLM-4-Flash 完全免费），enabled=false 需在后台启用并填 API Key 后生效
+const defaultAIConfigJSON = `{"version":"v0.1.0","enabled":false,"mode":"basic","provider":"zhipu","api_url":"https://open.bigmodel.cn/api/paas/v4/chat/completions","api_key":"","model":"glm-4-flash","prompt":"","max_segments":300,"timeout":25,"replace_enabled":false,"format":"openai"}`
 
 // AIProviderPreset 大模型提供商预设：选择即自动填入 endpoint 与默认模型，格式决定请求/解析协议
 type AIProviderPreset struct {
@@ -621,18 +622,21 @@ type AIProviderPreset struct {
 }
 
 // aiProviderPresets 市面主流 AI 大模型接口预设（OpenAI 兼容一大类 + Anthropic + Google Gemini）
+// Note 中标「免费」的可 0 成本试用；免费模型仍需注册账号获取 API Key（后台填 Key 后点测试即可）
 var aiProviderPresets = []AIProviderPreset{
-	{Key: "openai", Label: "OpenAI (ChatGPT)", Endpoint: "https://api.openai.com/v1/chat/completions", Model: "gpt-4o-mini", Format: "openai", Note: "官方"},
+	{Key: "zhipu", Label: "智谱 GLM（免费）", Endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions", Model: "glm-4-flash", Format: "openai", Note: "GLM-4-Flash 完全免费 · 手机号即开 · 国内首选"},
+	{Key: "siliconflow", Label: "硅基流动（免费）", Endpoint: "https://api.siliconflow.cn/v1/chat/completions", Model: "Qwen/Qwen2.5-7B-Instruct", Format: "openai", Note: "新用户送2000万Token + 9B以下模型永久免费"},
+	{Key: "modelscope", Label: "魔搭 ModelScope（免费）", Endpoint: "https://api-inference.modelscope.cn/v1/chat/completions", Model: "Qwen/Qwen3.5-27B", Format: "openai", Note: "免费2000次/天 · 需阿里云实名"},
+	{Key: "baidu", Label: "百度千帆（免费）", Endpoint: "https://qianfan.baidubce.com/v2/chat/completions", Model: "ernie-speed-128k", Format: "openai", Note: "ERNIE-Speed 永久免费 QPS50"},
+	{Key: "groq", Label: "Groq（免费）", Endpoint: "https://api.groq.com/openai/v1/chat/completions", Model: "llama-3.3-70b-versatile", Format: "openai", Note: "免费额度 · 超低延迟 · 需科学上网"},
+	{Key: "openai", Label: "OpenAI (ChatGPT)", Endpoint: "https://api.openai.com/v1/chat/completions", Model: "gpt-4o-mini", Format: "openai", Note: "官方 · 付费"},
 	{Key: "deepseek", Label: "DeepSeek 深度求索", Endpoint: "https://api.deepseek.com/v1/chat/completions", Model: "deepseek-chat", Format: "openai", Note: "性价比高"},
 	{Key: "moonshot", Label: "Kimi (月之暗面)", Endpoint: "https://api.moonshot.cn/v1/chat/completions", Model: "moonshot-v1-8k", Format: "openai"},
-	{Key: "zhipu", Label: "智谱 GLM", Endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions", Model: "glm-4-flash", Format: "openai"},
-	{Key: "qwen", Label: "通义千问 (阿里云)", Endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", Model: "qwen-plus", Format: "openai"},
-	{Key: "hunyuan", Label: "腾讯混元", Endpoint: "https://api.hunyuan.cloud.tencent.com/v1/chat/completions", Model: "hunyuan-turbos-latest", Format: "openai"},
-	{Key: "baidu", Label: "百度千帆 ERNIE", Endpoint: "https://qianfan.baidubce.com/v2/chat/completions", Model: "ernie-4.0-8k", Format: "openai"},
-	{Key: "siliconflow", Label: "硅基流动 SiliconFlow", Endpoint: "https://api.siliconflow.cn/v1/chat/completions", Model: "deepseek-ai/DeepSeek-V3", Format: "openai"},
+	{Key: "qwen", Label: "通义千问 (阿里云)", Endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", Model: "qwen-plus", Format: "openai", Note: "新用户送1000万Token"},
+	{Key: "hunyuan", Label: "腾讯混元", Endpoint: "https://api.hunyuan.cloud.tencent.com/v1/chat/completions", Model: "hunyuan-turbos-latest", Format: "openai", Note: "送100万Token/年"},
 	{Key: "ollama", Label: "Ollama (本地免费)", Endpoint: "http://127.0.0.1:11434/v1/chat/completions", Model: "llama3.1", Format: "openai", Note: "本地部署，无需 Key"},
-	{Key: "anthropic", Label: "Anthropic Claude", Endpoint: "https://api.anthropic.com/v1/messages", Model: "claude-3-5-sonnet-latest", Format: "anthropic"},
-	{Key: "gemini", Label: "Google Gemini", Endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", Model: "gemini-1.5-flash", Format: "gemini"},
+	{Key: "anthropic", Label: "Anthropic Claude", Endpoint: "https://api.anthropic.com/v1/messages", Model: "claude-3-5-sonnet-latest", Format: "anthropic", Note: "付费 · 需科学上网"},
+	{Key: "gemini", Label: "Google Gemini", Endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", Model: "gemini-1.5-flash", Format: "gemini", Note: "免费额度 · 需科学上网"},
 	{Key: "custom", Label: "自定义（OpenAI 兼容/中转/OneAPI）", Endpoint: "", Model: "", Format: "openai", Note: "api_url 填完整 /chat/completions 地址"},
 }
 
@@ -1655,6 +1659,7 @@ const adminPageHTML = `<!DOCTYPE html>
 
   <div class="panel">
     <h2>🧠 AI 大模型接入 <span class="muted">（OpenAI 兼容 / Anthropic / Gemini 三大协议，覆盖市面主流大模型；用于「AI 去广告引擎」+「AI 智能官替」，选择提供商自动填入接口与默认模型）</span></h2>
+    <div class="muted" style="margin-bottom:12px;line-height:1.7">💡 <b>免费试用推荐</b>（功能要求不高选这些够用，注册拿 Key 填下面即可，0 成本）：<b>智谱 GLM-4-Flash</b>（open.bigmodel.cn 手机号即开，完全免费，国内首选）· <b>硅基流动</b>（siliconflow.cn，送2000万Token）· <b>魔搭 ModelScope</b>（免费2000次/天）· <b>百度 ERNIE-Speed</b>（永久免费）· <b>Groq</b>（需科学上网）。各厂商免费额度与申请入口见 README。</div>
     <div class="row" style="flex-wrap:wrap;align-items:center">
       <label class="sw"><input type="checkbox" id="aiEnabled" onchange="aiEnableTip()"> 启用 AI</label>
       <span class="muted">提供商</span>

@@ -109,7 +109,8 @@ go run main.go "https://示例.com/playlist.m3u8"
 
 - 独立目录 [`ai/`](file:///workspace/ai/)：含 [`config.json`](file:///workspace/ai/config.json)、`VERSION`、`README.md`，**独立版本、可单独更新**（改配置/升级无需重编主程序）；
 - 配置文件控 `enabled`、`mode`（basic/ai/auto）、AI 服务商/接口/key/模型/提示词；主程序启动时读取可执行文件旁 `ai/config.json`（缺失用内置默认=基础规则去广告，行为不变）；
-- **🆕 后台「🧠 AI 大模型接入」配置面板**（v0.6.26+）：下拉选择市面主流大模型（OpenAI/DeepSeek/Kimi/智谱/通义/混元/百度/硅基流动/Ollama/Claude/Gemini/自定义），选择即自动填入接口地址与默认模型，支持 OpenAI 兼容 / Anthropic / Gemini 三大协议；💾 保存 + 📡 测试连接一键完成，无需手改配置文件；
+- **🆕 后台「🧠 AI 大模型接入」配置面板**（v0.6.26+）：下拉选择市面主流大模型，选择即自动填入接口地址与默认模型，支持 OpenAI 兼容 / Anthropic / Gemini 三大协议；💾 保存 + 📡 测试连接一键完成，无需手改配置文件；
+- **🆓 免费试用**（v0.6.27，功能要求不高够用）：默认配置已预填免费方案「智谱 GLM-4-Flash」（完全免费，手机号即开），另支持硅基流动 / 魔搭 ModelScope / 百度 ERNIE-Speed / Groq 等免费额度提供商——注册拿 Key → 后台选提供商 → 粘贴 Key → 💾保存 → 📡测试，三步开始试用（详见 [`ai/README.md`](file:///workspace/ai/README.md) 免费使用指引）；
 - 两个 AI 功能可同时启用：**启用 AI**（AI 去广告引擎）+ **AI 智能官替**（官方链接 → AI 识别剧名/集数 → 全资源站搜索 → AI 挑最优播放链接）；
 - 使用：`/api/clean?engine=ai`、`/api/jx?engine=ai`，或在后台「解析测试」选择「去广告引擎=AI」；AI 调用失败自动回退基础规则；
 - 查看/更新：`GET /api/ai/config`（key 打码）、`POST /api/ai/config`（需登录）、`POST /api/ai/test`（连通测试）。
@@ -179,6 +180,12 @@ chmod +x mxgt-go
 ---
 
 ## Go 版更新日志（branch `go`）
+
+## v0.6.27 (2026-09-12) — 免费 AI 大模型接入：0 成本试用（智谱 GLM-4-Flash 等）
+
+> 先用网络上免费的模型试效果（功能要求不高）：① 默认配置预填免费方案「智谱 GLM-4-Flash」（完全免费、手机号即开、国内直连），只需填 Key 并勾选启用；② 预设列表重排并标注免费——智谱 GLM / 硅基流动（送2000万Token+9B以下永久免费）/ 魔搭 ModelScope（免费2000次/天）/ 百度 ERNIE-Speed（永久免费）/ Groq（免费额度，需科学上网）置顶，付费与本地提供商后置；③ 后台 AI 面板顶部新增免费试用指引与注册入口。三步试用：注册拿 Key → 后台选免费提供商粘贴 Key 💾保存 → 📡测试连通后勾选启用 AI / AI 智能官替。版本 `v0.6.26 → v0.6.27`。
+
+---
 
 ## v0.6.26 (2026-09-12) — 后台「AI 大模型接入」配置面板：可选接入市面所有主流 AI 大模型
 
