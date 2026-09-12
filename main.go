@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.23"
+	AppVersion = "v0.6.24"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1361,7 +1361,7 @@ const adminPageHTML = `<!DOCTYPE html>
     <table>
       <tr><th>类型</th><th>接口</th><th>说明</th></tr>
       <tr><td>⚪ 通用</td><td><code>GET /</code> / <code>GET /mxadmin</code></td><td>落地页（不进入后台）/ 后台管理页（本页）</td></tr>
-      <tr><td>⚪ 通用</td><td><code>GET /api/clean?url=&lt;m3u8&gt;</code></td><td>返回过滤后的无广告 M3U8 纯文本（绝对地址）——客户端可直接喂播放器，服务端可抓取无广告地址</td></tr>
+      <tr><td>⚪ 通用</td><td><code>GET /api/clean?url=&lt;m3u8&gt;</code></td><td>返回过滤后的无广告 M3U8（分片已改写为本服务代理地址，可直接喂播放器正常播放）；服务端如需源站绝对地址可加 <code>&amp;format=json</code></td></tr>
       <tr><td>🟣 服务端</td><td><code>GET /api/clean/json?url=&lt;m3u8&gt;</code></td><td>返回 JSON：统计 + 过滤后文本 + 每个片段明细——服务端二次分析/审计</td></tr>
       <tr><td>🟣 服务端</td><td><code>GET /api/clean?url=&lt;m3u8&gt;&amp;opt=aggresive</code></td><td>开启聚合聚类识别（可能误伤统一切片正片）</td></tr>
       <tr><td>🟣 服务端</td><td><code>GET /api/clean/enhanced[/json]?url=&lt;m3u8&gt;</code></td><td>🆕 新版增强测试播放：独立引擎，叠加平台广告域关键词 + 片头片尾超短簇高置信检测</td></tr>
@@ -2432,7 +2432,7 @@ function card(lab,val,sub){return '<div class="card"><div class="lab">'+lab+'</d
 // t 标注接口用途：client=客户端调用（播放器/影视App/TVBox）、server=服务端调用（服务器间/二次处理）、
 // admin=后台管理（需登录）、both=客户端与服务端通用
 var APIS=[
-  {n:'去广告 M3U8',t:'both',d:'传入 m3u8 链接，返回过滤后无广告 M3U8 纯文本，可直接播放',u:'客户端：直接喂播放器；服务端：抓取过滤后的无广告地址',p:'/api/clean?url=<m3u8链接>'},
+  {n:'去广告 M3U8',t:'both',d:'传入 m3u8 链接，返回过滤后无广告 M3U8（分片已改写为本服务代理地址，可直接喂播放器正常播放）',u:'客户端：直接喂播放器；服务端：/json 抓取源站绝对地址二次处理',p:'/api/clean?url=<m3u8链接>'},
   {n:'去广告 JSON',t:'server',d:'同上去广告，返回 JSON（统计 + 过滤后文本 + 广告明细）',u:'服务端：二次分析广告片段、统计与审计',p:'/api/clean/json?url=<m3u8链接>'},
   {n:'增强去广告',t:'server',d:'独立引擎：平台广告域关键词 + 片头片尾超短簇高置信检测',u:'服务端：更高召回的去广告解析（/json 返回结构化结果）',p:'/api/clean/enhanced?url=<m3u8链接>'},
   {n:'播放代理',t:'client',d:'服务端代理 m3u8/分片/密钥，内置增强去广告，解决跨域与限速卡顿',u:'客户端：播放器直接播放本服务拼接的代理地址',p:'/api/play?url=<m3u8链接>'},
@@ -2692,6 +2692,25 @@ func playProxyURL(u string) string {
 // playProxyAbsURL 生成本服务播放代理绝对地址（基于请求 Host），供外部播放器（TVBox 等）使用
 func playProxyAbsURL(proxyBase, u string) string {
 	return proxyBase + "/api/play?url=" + url.QueryEscape(u)
+}
+
+// requestProxyBase 基于请求 Host 生成本服务绝对代理前缀（经其转发分片/密钥地址，保证任意播放器都能拉流）
+func requestProxyBase(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
+}
+
+// outCleanM3U8 把过滤后的无广告播放列表回写为「本服务代理地址」输出：
+// buildFilteredM3U8 生成的片段是源站绝对地址，直接抛给播放器会被源站跨域/反爬/IP 限制卡住而「不能播放」；
+// 这里统一改写为 /api/play?url=<源地址>（分片/密钥/子列表经由本服务拉流转发的代理），保证返回结果可正常播放。
+func outCleanM3U8(w http.ResponseWriter, r *http.Request, mediaURL, filtered string) {
+	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-store")
+	io.WriteString(w, string(rewritePlaylist([]byte(filtered), mediaURL, requestProxyBase(r))))
 }
 
 // rewritePlaylist 改写 m3u8 播放列表：分片/密钥/子列表地址全部指向本服务代理（解决跨域与源站限速卡顿）
@@ -7138,10 +7157,8 @@ func main() {
 			writeJSON(w, res)
 			return
 		}
-		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Cache-Control", "no-store")
-		io.WriteString(w, res.FilteredM3U8)
+		// 分片地址改写为经本服务 /api/play 转发，保证返回的无广告列表可正常播放
+		outCleanM3U8(w, r, res.MediaURL, res.FilteredM3U8)
 	})
 	http.HandleFunc("/api/clean/json", func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
@@ -7167,10 +7184,8 @@ func main() {
 			writeJSON(w, res)
 			return
 		}
-		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Cache-Control", "no-store")
-		io.WriteString(w, res.FilteredM3U8)
+		// 分片地址改写为经本服务 /api/play 转发，保证返回的无广告列表可正常播放
+		outCleanM3U8(w, r, res.MediaURL, res.FilteredM3U8)
 	})
 	http.HandleFunc("/api/clean/enhanced/json", func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
