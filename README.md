@@ -181,6 +181,12 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.6.31 (2026-09-12) — /api/jx/server 不传 engine 时默认强制 AI
+
+> `/api/jx/server?url=` 现在不传 engine 也默认 `engine=ai`（调用方无需在末尾追加参数）：m3u8 走 AI 审核去广告，官方页走 AI 智能官替；`?engine=ai&url=` 与 `?url=&engine=ai` 等价。版本 `v0.6.30 → v0.6.31`。
+
+---
+
 ## v0.6.30 (2026-09-12) — 修复后台保存 AI 配置报「no such file or directory」
 
 > 后台「AI 大模型接入」点保存报 `open .../ai/config.json: no such file or directory`：服务器上 `ai/` 目录不存在时写文件失败。修复：`saveAIConfig` 写入前自动 `MkdirAll` 创建 `ai/` 目录，未复制 `ai/` 目录也能在后台正常保存。版本 `v0.6.29 → v0.6.30`。

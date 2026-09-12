@@ -1,5 +1,21 @@
 # 更新日志
 
+## Go 分支 v0.6.31 (2026-09-12) — /api/jx/server 不传 engine 时默认强制 AI
+
+> 用户诉求：调用方配置 `/api/jx/server?url=` 时不用自己在末尾追加 `engine=ai`，服务端默认走 AI。
+
+### 1. 修改（[main.go](file:///workspace/main.go)）
+
+- `handleJXServer`：`engine` 参数为空时默认填 `"ai"`，调用方只填 `域名/api/jx/server?url=<链接>` 即强制 AI 去广告/官替；
+- m3u8 输入走 AI 审核去广告（`engine=ai`），官方视频页走 AI 智能官替（由 `replace_enabled` 控制，默认已开启）；
+- `url` 后是否再带 `&engine=...` 均可（参数顺序不影响解析，`?engine=ai&url=` 或 `?url=&engine=ai` 等价）。
+
+### 2. 验证与版本
+
+- `go build` + `go vet` 通过；版本升级 `v0.6.30 → v0.6.31`。
+
+---
+
 ## Go 分支 v0.6.30 (2026-09-12) — 修复后台保存 AI 配置报「no such file or directory」
 
 > 用户诉求：后台「AI 大模型接入」点保存报错 `open /www/wwwroot/go/go1/mxgtgo/ai/config.json: no such file or directory`。

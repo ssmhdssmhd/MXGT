@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.30"
+	AppVersion = "v0.6.31"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -7570,9 +7570,13 @@ func handleJX(w http.ResponseWriter, r *http.Request) {
 
 // handleJXServer GET /api/jx/server?url=...&engine=...：服务器调用 API 接口
 // 返回客户端全部字段 + detail 完整明细（去广告统计 / 官替全过程），供服务端二次处理
+// 不传 engine 时默认 engine=ai（调用方只需填 /api/jx/server?url= 即可强制 AI，无需在末尾追加参数）
 func handleJXServer(w http.ResponseWriter, r *http.Request) {
 	raw := r.URL.Query().Get("url")
 	engine := r.URL.Query().Get("engine")
+	if engine == "" {
+		engine = "ai"
+	}
 	resp, detail, ok, msg := jxResolve(r, raw, engine)
 	jxWrite(w, r, "/api/jx/server", resp, detail, ok, msg)
 }
