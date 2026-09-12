@@ -181,6 +181,12 @@ chmod +x mxgt-go
 
 ## Go 版更新日志（branch `go`）
 
+## v0.6.32 (2026-09-12) — /api/play 播放提速：连接复用 + 缓存加长 + 分片直连开关
+
+> `/api/play` 提速：① playHTTP 开启连接复用（MaxIdleConns=200/PerHost=64/IdleConnTimeout=90s），同一源站不再重复 TCP+TLS 握手，分片转发往返大减；② 去广告清单缓存 TTL 60s→300s，避免 hls.js 秒级重复抓源+过滤；③ 新增 `&segdirect=1` 开关：输出清单分片/密钥为源站绝对地址，播放器直连源站 CDN 拉流（延迟≈源站、不留代理带宽），速度最快（需源站分片允许跨域）。默认仍走代理保跨域兼容。版本 `v0.6.31 → v0.6.32`。
+
+---
+
 ## v0.6.31 (2026-09-12) — /api/jx/server 不传 engine 时默认强制 AI
 
 > `/api/jx/server?url=` 现在不传 engine 也默认 `engine=ai`（调用方无需在末尾追加参数）：m3u8 走 AI 审核去广告，官方页走 AI 智能官替；`?engine=ai&url=` 与 `?url=&engine=ai` 等价。版本 `v0.6.30 → v0.6.31`。

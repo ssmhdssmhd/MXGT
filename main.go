@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.31"
+	AppVersion = "v0.6.32"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -3112,14 +3112,21 @@ func handlePlayer(w http.ResponseWriter, r *http.Request) {
 // ============================================================
 
 // playHTTP 播放代理专用客户端：更长超时（分片可能慢）+ 关闭证书校验（部分源 http/自签）
+// 开启连接复用（IDLE/KeepAlive/连接数）与 TLS 握手缓存，减少每次分片转发的 TCP/TLS 往返开销，显著提速
 var playHTTP = &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{
-	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	Proxy:           http.ProxyFromEnvironment,
+	TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+	Proxy:                 http.ProxyFromEnvironment,
+	MaxIdleConns:          200,
+	MaxIdleConnsPerHost:   64,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   5 * time.Second,
+	ExpectContinueTimeout: time.Second,
+	MaxConnsPerHost:       0,
 }}
 
 // playlistCache 播放代理去广告结果缓存：同一 m3u8 清单播放器会重复请求，避免反复抓源站+过滤（慢/触发反爬）
 var playlistCache sync.Map // key=URL → cachedPlaylist
-const playlistCacheTTL = 60 * time.Second
+const playlistCacheTTL = 300 * time.Second
 
 type cachedPlaylist struct {
 	ts   time.Time
@@ -3193,17 +3200,25 @@ func outCleanM3U8(w http.ResponseWriter, r *http.Request, mediaURL, filtered str
 	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-store")
-	io.WriteString(w, string(rewritePlaylist([]byte(filtered), mediaURL, requestProxyBase(r))))
+	io.WriteString(w, string(rewritePlaylist([]byte(filtered), mediaURL, requestProxyBase(r), false)))
 }
 
 // rewritePlaylist 改写 m3u8 播放列表：分片/密钥/子列表地址全部指向本服务代理（解决跨域与源站限速卡顿）
 // proxyBase 非空时输出绝对代理地址（外部播放器可播）；为空输出相对路径（同源页面）
-func rewritePlaylist(body []byte, baseURL, proxyBase string) []byte {
+// segDirect 为 true 时输出源站绝对地址（分片/密钥直连，速度最快；要求源站分片允许跨域/防盗链宽松）
+func rewritePlaylist(body []byte, baseURL, proxyBase string, segDirect bool) []byte {
 	base := baseURL
 	if i := strings.LastIndex(base, "/"); i >= 0 {
 		base = base[:i+1]
 	}
 	prox := func(u string) string {
+		if segDirect {
+			// 直连：输出源站绝对地址
+			if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+				return u
+			}
+			return u // base 已拼接
+		}
 		if proxyBase != "" {
 			return playProxyAbsURL(proxyBase, u)
 		}
@@ -3381,6 +3396,9 @@ func handlePlayProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "url 参数需为 http(s) 地址", http.StatusBadRequest)
 		return
 	}
+	// segdirect=1：分片/密钥直连源站（跳过本服务转发）。要求源站分片允许跨域（CORS/防盗链宽松），
+	// 直连延迟与源站一致、不留存代理带宽，速度最快；默认 0=仍走本服务代理（跨域兼容最好）。
+	segDirect := r.URL.Query().Get("segdirect") == "1"
 	req, err := http.NewRequestWithContext(r.Context(), "GET", raw, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -3425,15 +3443,15 @@ func handlePlayProxy(w http.ResponseWriter, r *http.Request) {
 		// 增强去广告：输出过滤后清单，分片仍改走本代理（不卡顿 + 无广告）
 		if filtered, ok := cleanPlaylistOnce(b, raw); ok {
 			setCachedPlaylist(raw, []byte(filtered))
-			w.Write(rewritePlaylist([]byte(filtered), raw, proxyBase))
+			w.Write(rewritePlaylist([]byte(filtered), raw, proxyBase, segDirect))
 			return
 		}
 		// master 列表 / 解析失败：原样改写（子列表与分片仍走本代理过滤）
 		setCachedPlaylist(raw, b)
-		w.Write(rewritePlaylist(b, raw, proxyBase))
+		w.Write(rewritePlaylist(b, raw, proxyBase, segDirect))
 		return
 	}
-	// 分片/密钥/媒体字节流直传
+	// 分片/密钥/媒体字节流直传（segDirect 时调用方已直连源站，通常不会走到这里）
 	if resp.StatusCode == http.StatusPartialContent {
 		w.Header().Set("Content-Range", resp.Header.Get("Content-Range"))
 		w.Header().Set("Content-Length", resp.Header.Get("Content-Length"))

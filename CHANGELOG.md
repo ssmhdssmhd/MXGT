@@ -1,5 +1,25 @@
 # 更新日志
 
+## Go 分支 v0.6.32 (2026-09-12) — /api/play 播放提速：连接复用 + 缓存加长 + 分片直连开关
+
+> 用户诉求：`http://114.134.184.91:8080/api/play?url=` 调用返回速度能否提升。
+
+### 1. 现状与慢点（[main.go](file:///workspace/main.go)）
+
+`/api/play` 每段视频分片都经本服务转发（fetch 源站再给播放器），源站 CDN 直连 200-300ms 的分片，经服务器代理后延迟叠加、且占用服务器带宽。三个可提速点：
+
+### 2. 提速改动
+
+- **连接复用（最大影响，现默认生效）**：`playHTTP` Transport 开启 `MaxIdleConns=200 / MaxIdleConnsPerHost=64 / IdleConnTimeout=90s / TLSHandshakeTimeout=5s`——服务器到同一源站的连接不再每次 TCP+TLS 重连，分片转发大幅减少往返开销；
+- **去广告清单缓存 TTL 60s → 300s**：hls.js 等播放器秒级重请求同一 m3u8，避免反复抓源+重复去广告过滤；
+- **`&segdirect=1` 分片直连开关**：`/api/play?url=<m3u8>&segdirect=1` 时输出清单分片/密钥为**源站绝对地址**，播放器直连源站 CDN 拉流（延迟与源站一致、不留代理带宽），速度最接近直连；需源站分片允许跨域。
+
+### 3. 验证与版本
+
+- `go build` + `go vet` 通过；版本升级 `v0.6.31 → v0.6.32`。
+
+---
+
 ## Go 分支 v0.6.31 (2026-09-12) — /api/jx/server 不传 engine 时默认强制 AI
 
 > 用户诉求：调用方配置 `/api/jx/server?url=` 时不用自己在末尾追加 `engine=ai`，服务端默认走 AI。
