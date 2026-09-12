@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "update_date": "2026-09-12",
+  "enabled": true,
+  "enable_top": true,
+  "top_height_pct": 6,
+  "enable_bottom": true,
+  "bot_height_pct": 10,
+  "mask_color": "#000000",
+  "mask_opacity": 0.6,
+  "enable_zoom": true,
+  "zoom_scale": 1.05
+}
