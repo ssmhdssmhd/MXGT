@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.25"
+	AppVersion = "v0.6.26"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -604,9 +604,54 @@ type AIConfig struct {
 	// AI 智能官替（补丁1）：用户输入官方链接时，用 AI 识别影视剧名+集数，并跨全部资源站 AI 判定最优播放链接
 	ReplaceEnabled bool   `json:"replace_enabled"`
 	ReplacePrompt  string `json:"replace_prompt,omitempty"`
+	// 请求协议格式：openai(默认/兼容) | anthropic | gemini；由 Provider 预设自动决定，可手动覆盖
+	Format string `json:"format,omitempty"`
 }
 
-const defaultAIConfigJSON = `{"version":"v0.1.0","enabled":false,"mode":"basic","provider":"openai","api_url":"","api_key":"","model":"","prompt":"","max_segments":300,"timeout":25,"replace_enabled":false}`
+const defaultAIConfigJSON = `{"version":"v0.1.0","enabled":false,"mode":"basic","provider":"openai","api_url":"","api_key":"","model":"","prompt":"","max_segments":300,"timeout":25,"replace_enabled":false,"format":"openai"}`
+
+// AIProviderPreset 大模型提供商预设：选择即自动填入 endpoint 与默认模型，格式决定请求/解析协议
+type AIProviderPreset struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Endpoint string `json:"endpoint"`           // 请求地址（{model} 占位，Gemini 使用；OpenAI 兼容为空则用 api_url 拼 /chat/completions）
+	Model    string `json:"model"`              // 默认模型名
+	Format   string `json:"format"`             // openai | anthropic | gemini
+	Note     string `json:"note,omitempty"`
+}
+
+// aiProviderPresets 市面主流 AI 大模型接口预设（OpenAI 兼容一大类 + Anthropic + Google Gemini）
+var aiProviderPresets = []AIProviderPreset{
+	{Key: "openai", Label: "OpenAI (ChatGPT)", Endpoint: "https://api.openai.com/v1/chat/completions", Model: "gpt-4o-mini", Format: "openai", Note: "官方"},
+	{Key: "deepseek", Label: "DeepSeek 深度求索", Endpoint: "https://api.deepseek.com/v1/chat/completions", Model: "deepseek-chat", Format: "openai", Note: "性价比高"},
+	{Key: "moonshot", Label: "Kimi (月之暗面)", Endpoint: "https://api.moonshot.cn/v1/chat/completions", Model: "moonshot-v1-8k", Format: "openai"},
+	{Key: "zhipu", Label: "智谱 GLM", Endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions", Model: "glm-4-flash", Format: "openai"},
+	{Key: "qwen", Label: "通义千问 (阿里云)", Endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", Model: "qwen-plus", Format: "openai"},
+	{Key: "hunyuan", Label: "腾讯混元", Endpoint: "https://api.hunyuan.cloud.tencent.com/v1/chat/completions", Model: "hunyuan-turbos-latest", Format: "openai"},
+	{Key: "baidu", Label: "百度千帆 ERNIE", Endpoint: "https://qianfan.baidubce.com/v2/chat/completions", Model: "ernie-4.0-8k", Format: "openai"},
+	{Key: "siliconflow", Label: "硅基流动 SiliconFlow", Endpoint: "https://api.siliconflow.cn/v1/chat/completions", Model: "deepseek-ai/DeepSeek-V3", Format: "openai"},
+	{Key: "ollama", Label: "Ollama (本地免费)", Endpoint: "http://127.0.0.1:11434/v1/chat/completions", Model: "llama3.1", Format: "openai", Note: "本地部署，无需 Key"},
+	{Key: "anthropic", Label: "Anthropic Claude", Endpoint: "https://api.anthropic.com/v1/messages", Model: "claude-3-5-sonnet-latest", Format: "anthropic"},
+	{Key: "gemini", Label: "Google Gemini", Endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", Model: "gemini-1.5-flash", Format: "gemini"},
+	{Key: "custom", Label: "自定义（OpenAI 兼容/中转/OneAPI）", Endpoint: "", Model: "", Format: "openai", Note: "api_url 填完整 /chat/completions 地址"},
+}
+
+func aiProviderPreset(key string) *AIProviderPreset {
+	for i := range aiProviderPresets {
+		if aiProviderPresets[i].Key == key {
+			return &aiProviderPresets[i]
+		}
+	}
+	return &aiProviderPresets[0] // 未知回退 openai 兼容
+}
+
+// aiFormat 决定请求协议格式：配置显式 format 优先，否则按 Provider 预设
+func aiFormat(cfg *AIConfig) string {
+	if cfg.Format != "" && cfg.Format != "openai" {
+		return cfg.Format
+	}
+	return aiProviderPreset(cfg.Provider).Format
+}
 
 func aiConfigFile() string {
 	if exe, err := os.Executable(); err == nil {
@@ -703,49 +748,12 @@ func aiDetectAdIndexes(rawURL string, segs []Segment, cfg *AIConfig) ([]int, err
 	if codeHint := regexp.MustCompile(`[【}]`).MatchString(prompt); codeHint {
 		// 已有返回格式引导则保留原文
 	}
-	payload, _ := json.Marshal(map[string]interface{}{
-		"model":       cfg.Model,
-		"messages":    []map[string]string{{"role": "system", "content": prompt + " 只输出 JSON 数组，如 [2,5,8]，不含其它文字。"}, {"role": "user", "content": strings.Join(lines, "\n")}},
-		"temperature": 0,
-		"max_tokens":  1000,
-	})
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = 25
-	}
-	req, err := http.NewRequest("POST", cfg.APIURL, bytes.NewReader(payload))
+	user := strings.Join(lines, "\n")
+	content, err := aiChatCompleteEx(prompt+" 只输出 JSON 数组，如 [2,5,8]，不含其它文字。", user, cfg)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-	client := &http.Client{Timeout: time.Duration(timeout) * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("AI HTTP %d", resp.StatusCode)
-	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, err
-	}
-	var r struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(b, &r); err != nil {
-		return nil, err
-	}
-	if len(r.Choices) == 0 {
-		return nil, fmt.Errorf("AI 无返回")
-	}
-	content := stripCodeFence(r.Choices[0].Message.Content)
+	content = stripCodeFence(content)
 	if content == "" {
 		return nil, fmt.Errorf("AI 返回为空")
 	}
@@ -776,37 +784,66 @@ func aiReplaceEnabled(cfg *AIConfig) bool {
 	return cfg != nil && cfg.Enabled && cfg.APIURL != "" && cfg.APIKey != "" && cfg.ReplaceEnabled
 }
 
-// aiChatComplete 调用外部 OpenAI Chat Completions 兼容接口，返回纯文本回答（与 aiDetectAdIndexes 同一套鉴权/超时）。
+// aiChatComplete 调用配置的 AI 大模型接口（支持 OpenAI 兼容 / Anthropic / Gemini 三大协议），返回纯文本回答。
 func aiChatComplete(prompt string, cfg *AIConfig) (string, error) {
-	if cfg == nil || !cfg.Enabled || cfg.APIURL == "" || cfg.APIKey == "" {
+	return aiChatCompleteEx("", prompt, cfg)
+}
+
+// aiChatCompleteEx 带 system 提示的 AI 对话（多协议适配）。
+// protocol 由 Provider 预设 + cfg.Format 决定；失败/未配置返回错误，由调用方回退。
+func aiChatCompleteEx(system, user string, cfg *AIConfig) (string, error) {
+	if cfg == nil || !cfg.Enabled || cfg.APIURL == "" {
 		return "", fmt.Errorf("AI 未启用或未配置")
 	}
-	payload, _ := json.Marshal(map[string]interface{}{
-		"model":       cfg.Model,
-		"messages":    []map[string]string{{"role": "user", "content": prompt}},
-		"temperature": 0,
-		"max_tokens":  800,
-	})
+	if user == "" {
+		return "", fmt.Errorf("AI 内容为空")
+	}
 	timeout := cfg.Timeout
 	if timeout <= 0 {
 		timeout = 25
 	}
-	req, err := http.NewRequest("POST", cfg.APIURL, bytes.NewReader(payload))
-	if err != nil {
-		return "", err
+	pres := aiProviderPreset(cfg.Provider)
+	switch aiFormat(cfg) {
+	case "anthropic":
+		return aiChatAnthropic(system, user, cfg, pres, timeout)
+	case "gemini":
+		return aiChatGemini(system, user, cfg, pres, timeout)
+	default:
+		return aiChatOpenAICompat(system, user, cfg, pres, timeout)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-	client := &http.Client{Timeout: time.Duration(timeout) * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
+}
+
+// aiChatEndpoint 计算实际请求地址：预设 endpoint 优先（{model} 替换），否则用 api_url（自动补 /chat/completions）
+func aiChatEndpoint(cfg *AIConfig, pres *AIProviderPreset) string {
+	ep := pres.Endpoint
+	if ep == "" {
+		ep = cfg.APIURL
+		if !strings.HasSuffix(ep, "/chat/completions") && !strings.HasSuffix(ep, "/messages") && !strings.Contains(ep, ":generateContent") {
+			ep = strings.TrimRight(ep, "/") + "/chat/completions"
+		}
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("AI HTTP %d", resp.StatusCode)
+	if cfg.Model != "" {
+		ep = strings.ReplaceAll(ep, "{model}", cfg.Model)
 	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	return ep
+}
+
+// aiChatOpenAICompat OpenAI Chat Completions 兼容协议（OpenAI/DeepSeek/Kimi/GLM/千问/混元/千帆/Ollama/中转等）
+func aiChatOpenAICompat(system, user string, cfg *AIConfig, pres *AIProviderPreset, timeout int) (string, error) {
+	msgs := []map[string]string{}
+	if strings.TrimSpace(system) != "" {
+		msgs = append(msgs, map[string]string{"role": "system", "content": system})
+	}
+	msgs = append(msgs, map[string]string{"role": "user", "content": user})
+	payload, _ := json.Marshal(map[string]interface{}{
+		"model":       cfg.Model,
+		"messages":    msgs,
+		"temperature": 0,
+		"max_tokens":  1200,
+	})
+	body, err := aiHTTPPost(aiChatEndpoint(cfg, pres), payload, func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	}, timeout)
 	if err != nil {
 		return "", err
 	}
@@ -817,13 +854,108 @@ func aiChatComplete(prompt string, cfg *AIConfig) (string, error) {
 			} `json:"message"`
 		} `json:"choices"`
 	}
-	if err := json.Unmarshal(b, &r); err != nil {
+	if err := json.Unmarshal(body, &r); err != nil {
 		return "", err
 	}
-	if len(r.Choices) == 0 {
+	if len(r.Choices) == 0 || r.Choices[0].Message.Content == "" {
 		return "", fmt.Errorf("AI 无返回")
 	}
 	return stripCodeFence(r.Choices[0].Message.Content), nil
+}
+
+// aiChatAnthropic Anthropic Messages 协议（Claude）
+func aiChatAnthropic(system, user string, cfg *AIConfig, pres *AIProviderPreset, timeout int) (string, error) {
+	payload := map[string]interface{}{
+		"model":      cfg.Model,
+		"max_tokens": 1200,
+		"messages":   []map[string]string{{"role": "user", "content": user}},
+	}
+	if strings.TrimSpace(system) != "" {
+		payload["system"] = system
+	}
+	bp, _ := json.Marshal(payload)
+	body, err := aiHTTPPost(aiChatEndpoint(cfg, pres), bp, func(req *http.Request) {
+		req.Header.Set("x-api-key", cfg.APIKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	}, timeout)
+	if err != nil {
+		return "", err
+	}
+	var r struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", err
+	}
+	for _, c := range r.Content {
+		if c.Type == "text" && strings.TrimSpace(c.Text) != "" {
+			return stripCodeFence(c.Text), nil
+		}
+	}
+	return "", fmt.Errorf("AI 无返回")
+}
+
+// aiChatGemini Google Gemini generateContent 协议
+func aiChatGemini(system, user string, cfg *AIConfig, pres *AIProviderPreset, timeout int) (string, error) {
+	text := user
+	if strings.TrimSpace(system) != "" {
+		text = system + "\n\n" + user
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"contents": []map[string]interface{}{{"role": "user", "parts": []map[string]string{{"text": text}}}},
+	})
+	ep := aiChatEndpoint(cfg, pres)
+	if strings.Contains(ep, "?") {
+		ep += "&key=" + url.QueryEscape(cfg.APIKey)
+	} else {
+		ep += "?key=" + url.QueryEscape(cfg.APIKey)
+	}
+	body, err := aiHTTPPost(ep, payload, nil, timeout)
+	if err != nil {
+		return "", err
+	}
+	var r struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", err
+	}
+	if len(r.Candidates) == 0 || len(r.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("AI 无返回")
+	}
+	return stripCodeFence(r.Candidates[0].Content.Parts[0].Text), nil
+}
+
+// aiHTTPPost 通用 AI 请求：短超时 + 可选头部注入，返回响应体
+func aiHTTPPost(url string, payload []byte, header func(*http.Request), timeout int) ([]byte, error) {
+	req, err := http.NewRequest("POST", url, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if header != nil {
+		header(req)
+	}
+	client := &http.Client{Timeout: time.Duration(timeout) * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		eb, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("AI HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(eb)))
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 }
 
 // aiExtractFirstJSON 从 AI 文本中提取第一个 {…} JSON 对象并解析到 v
@@ -1522,6 +1654,47 @@ const adminPageHTML = `<!DOCTYPE html>
   </div>
 
   <div class="panel">
+    <h2>🧠 AI 大模型接入 <span class="muted">（OpenAI 兼容 / Anthropic / Gemini 三大协议，覆盖市面主流大模型；用于「AI 去广告引擎」+「AI 智能官替」，选择提供商自动填入接口与默认模型）</span></h2>
+    <div class="row" style="flex-wrap:wrap;align-items:center">
+      <label class="sw"><input type="checkbox" id="aiEnabled" onchange="aiEnableTip()"> 启用 AI</label>
+      <span class="muted">提供商</span>
+      <select id="aiProvider" style="padding:8px 10px;border-radius:10px;border:1px solid #d1d5db;max-width:280px" onchange="aiProviderChanged()"></select>
+      <span class="muted" id="aiProvNote"></span>
+    </div>
+    <div class="row" style="flex-wrap:wrap">
+      <span class="muted">接口地址</span>
+      <input id="aiAPIURL" placeholder="https://api.openai.com/v1/chat/completions（选择提供商自动填入，可改；自定义协议选 anthropic/gemini 时填对应 messages/generateContent 地址）" style="flex:1;min-width:300px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+    </div>
+    <div class="row" style="flex-wrap:wrap">
+      <span class="muted">API Key</span>
+      <input id="aiAPIKey" type="password" autocomplete="off" placeholder="sk-…（已保存显示 <set>，留空保持原 Key 不变）" style="flex:1;min-width:300px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <span class="muted">模型</span>
+      <input id="aiModel" placeholder="gpt-4o-mini" style="flex:1;min-width:200px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+    </div>
+    <div class="row" style="flex-wrap:wrap">
+      <span class="muted">超时(秒)</span>
+      <input id="aiTimeout" type="number" min="5" max="120" value="25" style="width:84px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <span class="muted">AI 审核最大分段</span>
+      <input id="aiMaxSegments" type="number" min="10" max="2000" value="300" style="width:110px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+      <label class="sw" style="margin-left:6px"><input type="checkbox" id="aiReplace"> AI 智能官替（官方链接 → AI 识别剧名/集数 → 全资源站搜索 → AI 挑最优播放链接）</label>
+    </div>
+    <div class="row" style="flex-wrap:wrap">
+      <span class="muted">去广告判定提示词</span>
+      <input id="aiPrompt" placeholder="留空用内置默认：判断 M3U8 每个片段是否广告…" style="flex:1;min-width:300px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+    </div>
+    <div class="row" style="flex-wrap:wrap">
+      <span class="muted">官替判定提示词</span>
+      <input id="aiReplacePrompt" placeholder="留空用内置默认：识别剧名+集数 / 挑选最优播放链接…" style="flex:1;min-width:300px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+    </div>
+    <div class="row" style="flex-wrap:wrap;align-items:center">
+      <button class="btn" style="padding:7px 14px;font-size:12px" onclick="saveAIConfig()">💾 保存配置</button>
+      <button class="btn ghost" style="padding:7px 14px;font-size:12px" onclick="testAIConnect()">📡 测试连接</button>
+      <span class="muted" id="aiStatus"></span>
+    </div>
+    <div class="muted" id="aiInfo" style="margin-top:4px;word-break:break-all"></div>
+  </div>
+
+  <div class="panel">
     <h2>🔄 远程在线更新</h2>
     <div class="row">
       <div class="stat-line" id="updInfo" style="display:block"><!--UPD_BLOCK--></div>
@@ -1623,7 +1796,80 @@ function applyUpdate(){
     setTimeout(function(){location.reload();},4000);
   }).catch(function(e){el('updInfo').textContent='发起失败: '+e.message});
 }
-refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms(); loadOneClickLinks(); loadSkips(); loadDanmaku(); initSkipAuto();
+refreshStats(); setInterval(refreshStats,5000); checkUpdate(); loadSites(); loadMaps(); loadPlatforms(); loadOneClickLinks(); loadSkips(); loadDanmaku(); initSkipAuto(); loadAIConfigUI();
+
+// —— AI 大模型接入（/api/ai/config + /api/ai/test）——
+let aiProviders=[];
+async function loadAIConfigUI(){
+  try{
+    const r=await fetch('/api/ai/config');
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    if(!j.success)return;
+    aiProviders=j.providers||[];
+    const cfg=j.config||{};
+    const sel=el('aiProvider');
+    sel.innerHTML=aiProviders.map(function(p){
+      return '<option value="'+esc(p.key)+'">'+esc(p.label)+'</option>';
+    }).join('');
+    sel.value=cfg.provider||'openai';
+    el('aiEnabled').checked=!!cfg.enabled;
+    el('aiReplace').checked=!!cfg.replace_enabled;
+    el('aiAPIURL').value=cfg.api_url||'';
+    el('aiAPIKey').value=cfg.api_key?'<set>':'';
+    el('aiModel').value=cfg.model||'';
+    el('aiTimeout').value=cfg.timeout||25;
+    el('aiMaxSegments').value=cfg.max_segments||300;
+    el('aiPrompt').value=cfg.prompt||'';
+    el('aiReplacePrompt').value=cfg.replace_prompt||'';
+    el('aiInfo').textContent=(cfg.enabled?'✅ AI 已启用 · ':'⛔ AI 未启用 · ')+'协议='+(cfg.format||'openai')+' · 子模块版本 '+(j.ai_version||'');
+    aiProviderChanged();
+  }catch(e){el('aiInfo').textContent='加载失败: '+e.message;}
+}
+function aiProviderChanged(){
+  const key=el('aiProvider').value;
+  const p=aiProviders.filter(function(x){return x.key===key})[0];
+  if(!p)return;
+  el('aiProvNote').textContent=((p.note||'')+' · 协议 '+(p.format||'openai')).trim();
+  if(p.endpoint)el('aiAPIURL').value=p.endpoint;
+  if(p.model)el('aiModel').value=p.model;
+}
+function aiEnableTip(){
+  el('aiInfo').textContent=el('aiEnabled').checked?'✅ AI 已勾选启用（保存后生效）':'⛔ AI 未启用';
+}
+async function saveAIConfig(){
+  const key=el('aiAPIKey').value.trim();
+  el('aiStatus').textContent='保存中…';
+  const body={
+    enabled:el('aiEnabled').checked,
+    provider:el('aiProvider').value,
+    api_url:el('aiAPIURL').value.trim(),
+    // 留空或 <set> 均视为保留原 Key（后端不回传明文）
+    api_key:key?key:'<set>',
+    model:el('aiModel').value.trim(),
+    timeout:parseInt(el('aiTimeout').value)||25,
+    max_segments:parseInt(el('aiMaxSegments').value)||300,
+    prompt:el('aiPrompt').value.trim(),
+    replace_enabled:el('aiReplace').checked,
+    replace_prompt:el('aiReplacePrompt').value.trim()
+  };
+  try{
+    const r=await fetch('/api/ai/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    el('aiStatus').textContent=j.success?('✅ '+j.message):('✕ '+j.message);
+    if(j.success)loadAIConfigUI();
+  }catch(e){el('aiStatus').textContent='保存失败: '+e.message;}
+}
+async function testAIConnect(){
+  el('aiStatus').textContent='测试中…';
+  try{
+    const r=await fetch('/api/ai/test',{method:'POST'});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const j=await r.json();
+    el('aiStatus').innerHTML=j.success?('✅ '+esc(j.message)+'：<code>'+esc(j.reply||'')+'</code>'):('✕ '+esc(j.message||'测试失败'));
+  }catch(e){el('aiStatus').textContent='测试失败: '+e.message;}
+}
 
 // —— 新版增强测试播放（/api/clean/enhanced）——
 function enhBuildURL(url, eng){
@@ -7301,12 +7547,26 @@ func handleAIConfig(w http.ResponseWriter, r *http.Request) {
 		if in.Version == "" {
 			in.Version = loadAIConfig().Version
 		}
+		if in.Provider == "" {
+			in.Provider = "openai"
+		}
+		// 保存时若 api_key 为占位符 <set>，保留旧值（前端不回传明文）
+		old := loadAIConfig()
+		if in.APIKey == "<set>" {
+			in.APIKey = old.APIKey
+		}
+		if in.APIURL == "" && in.Provider != "custom" {
+			in.APIURL = aiProviderPreset(in.Provider).Endpoint
+		}
+		if in.Model == "" {
+			in.Model = aiProviderPreset(in.Provider).Model
+		}
 		if err := saveAIConfig(&in); err != nil {
 			writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error()})
 			return
 		}
-		recordCall("/api/ai/config", "POST", true, 0, "更新 AI 去广告配置")
-		writeJSON(w, map[string]interface{}{"success": true, "message": "AI 去广告配置已保存", "version": in.Version})
+		recordCall("/api/ai/config", "POST", true, 0, "更新 AI 配置")
+		writeJSON(w, map[string]interface{}{"success": true, "message": "AI 配置已保存", "version": in.Version})
 		return
 	}
 	cfg := loadAIConfig()
@@ -7314,7 +7574,30 @@ func handleAIConfig(w http.ResponseWriter, r *http.Request) {
 	if masked.APIKey != "" {
 		masked.APIKey = "<set>"
 	}
-	writeJSON(w, map[string]interface{}{"success": true, "ai_version": aiVersionText(), "config": masked})
+	writeJSON(w, map[string]interface{}{
+		"success": true, "ai_version": aiVersionText(), "config": masked,
+		"providers": aiProviderPresets,
+	})
+}
+
+// handleAITest POST /api/ai/test（需登录）：用当前配置发一条测试消息，验证接口/Key/模型是否可用
+func handleAITest(w http.ResponseWriter, r *http.Request) {
+	if !isAuthed(r) {
+		w.WriteHeader(http.StatusUnauthorized)
+		writeJSON(w, map[string]interface{}{"success": false, "message": "请先登录"})
+		return
+	}
+	cfg := loadAIConfig()
+	if !cfg.Enabled || cfg.APIURL == "" || cfg.APIKey == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "请先在「AI 大模型接入」中启用并填写接口/Key 再测试"})
+		return
+	}
+	out, err := aiChatComplete("回复\"OK\"两个字即可", cfg)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "测试失败: " + err.Error()})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"success": true, "message": "连通成功", "reply": shortURL(out, 120)})
 }
 
 func main() {
@@ -7434,8 +7717,9 @@ func main() {
 	http.HandleFunc("/api/danmaku/toggle", guard(handleDanmakuRulesToggle))
 	http.HandleFunc("/api/danmaku/delete", guard(handleDanmakuRulesDelete))
 	http.HandleFunc("/api/danmaku/test", guard(handleDanmakuTest))
-	// AI 去广告配置查看/更新
+	// AI 去广告配置查看/更新 + 连通测试
 	http.HandleFunc("/api/ai/config", handleAIConfig)
+	http.HandleFunc("/api/ai/test", handleAITest)
 	// 官替链路：官方视频页 → 资源站 → 无广告 m3u8
 	http.HandleFunc("/api/replace", handleReplace)
 	// JSON 通用兼容接口（影视 / TVBox / 盒子等调用）

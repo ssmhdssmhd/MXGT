@@ -1,5 +1,30 @@
 # 更新日志
 
+## Go 分支 v0.6.26 (2026-09-12) — 后台「AI 大模型接入」配置面板：可选接入市面所有主流 AI 大模型
+
+> 用户诉求：AI 去广告 + AI 智能官替「两个都要」，同时支持选择市面上的所有 AI 大模型接口，都可以被接入。
+
+### 1. 多 AI 大模型协议适配（[main.go](file:///workspace/main.go)）
+
+- 新增 12 个主流大模型提供商预设（`aiProviderPresets`），覆盖三大协议格式：
+  - **OpenAI 兼容协议**（一大类）：OpenAI ChatGPT、DeepSeek、Kimi(月之暗面)、智谱 GLM、通义千问、腾讯混元、百度千帆 ERNIE、硅基流动 SiliconFlow、Ollama 本地、以及任意 OpenAI 兼容/中转/OneAPI 自定义；
+  - **Anthropic 协议**：Claude（`/v1/messages`）；
+  - **Google 协议**：Gemini（`{model}:generateContent`）；
+- 多协议调用分发：`aiChatCompleteEx` 按 `format`（openai/anthropic/gemini）分发到 `aiChatOpenAICompat` / `aiChatAnthropic` / `aiChatGemini`，AI 去广告（`aiDetectAdIndexes`）与 AI 智能官替（`aiExtractVideoInfo`/`aiPickPlay`）共用一套调用封装，一处配置两处生效。
+
+### 2. 后台「🧠 AI 大模型接入」配置面板
+
+- 新增独立配置面板：**提供商下拉选择**（选择即自动填入接口地址与默认模型）→ 可改接口/模型/API Key/超时/AI 审核最大分段/两条提示词（去广告判定 + 官替判定）；
+- **启用 AI** 开关（AI 去广告引擎）+ **AI 智能官替**开关（`replace_enabled`），两个功能可同时启用；
+- 💾 保存配置（`POST /api/ai/config`）+ 📡 测试连接（`POST /api/ai/test`，发一条消息验证接口/Key/模型是否连通）；
+- API Key 安全：后台不回传明文（显示 `<set>`，留空保持原 Key 不变）。
+
+### 3. 验证与版本
+
+- `go build` 全量编译通过；版本升级 `v0.6.25 → v0.6.26`。
+
+---
+
 ## Go 分支 v0.6.25 (2026-09-12) — 补丁修复1：AI 智能官替（AI识别剧名+集数、扫全部资源站、AI挑最优播放链接）
 
 > 用户诉求：用户输入官方链接时，利用 AI 自动识别影视剧名和链接是哪一集，调用当前所有资源站搜索匹配，取用匹配度最高、AI 自动判断并调用对应链接。
