@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.32"
+	AppVersion = "v0.6.33"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -364,6 +364,7 @@ func applyAdSafetyRoof(segs []Segment) {
 		"url_keyword":          true, // 广告型文件名
 		"enhanced_url_keyword": true, // 广告域 / 前中后插播特征
 		"ad_tag_range":         true, // 播放列表显式声明广告区间
+		"ai_model":             true, // AI 语义审核标记：AI 已按 URL+内容语义判断，视为可靠，不因启发式误伤被批量回退
 	}
 	kept := 0
 	for i := range segs {
@@ -735,14 +736,20 @@ func stripCodeFence(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// filterAIRuns AI 幻觉保护：只保留长度 ≤20 的连续标记簇。
-// 免费小模型送长列表时偶发「整段幻觉」——把大段连续正片标成广告；真实广告插入通常为短簇（几秒~1分钟），
-// 丢弃长簇可防止误删整段正片（符合项目「保守防误删」原则）。相邻索引视为同一簇。
-func filterAIRuns(idx []int) []int {
+// filterAIRuns AI 幻觉保护：只保留长度 ≤ max(20, total/3) 的连续标记簇。
+// 免费小模型送长列表时偶发「整段幻觉」——把大段连续正片标成广告；但真实插播广告/滚动字幕块常达几十段，
+// 原固定 20 段上限会把这些真实广告整块丢掉，导致「插播/字幕没完全去掉」。这里适当放宽：
+//   连续簇最大允许到全片 1/3（且至少 20 段），大块广告能保留，同时仍拦截「几乎整片被标」的全片级幻觉
+//  （那种由 aiAdRatioGuard 的总比例闸兜底）。相邻索引视为同一簇。
+func filterAIRuns(idx []int, total int) []int {
 	if len(idx) < 2 {
 		return idx
 	}
 	sort.Ints(idx)
+	runLimit := 20
+	if total > runLimit*3 {
+		runLimit = total / 3
+	}
 	out := make([]int, 0, len(idx))
 	i := 0
 	for i < len(idx) {
@@ -750,7 +757,7 @@ func filterAIRuns(idx []int) []int {
 		for j+1 < len(idx) && idx[j+1] == idx[j]+1 {
 			j++
 		}
-		if j-i+1 <= 20 {
+		if j-i+1 <= runLimit {
 			out = append(out, idx[i:j+1]...)
 		}
 		i = j + 1
@@ -776,8 +783,13 @@ func aiDetectAdIndexes(rawURL string, segs []Segment, cfg *AIConfig) ([]int, err
 	}
 	prompt := cfg.Prompt
 	if prompt == "" {
-		prompt = "识别以下视频片段中的广告，返回广告片段索引 JSON 数组，仅返回数组。"
+		prompt = "你是视频去广告助手。识别以下视频片段中的广告，返回广告片段索引 JSON 数组，仅返回数组。"
 	}
+	// 判定要点：除常规广告外，额外识别「插播/前贴/中插/后贴广告、滚动字幕、广告字幕、角标/水印推荐位、预告片」
+	// —— 展开覆盖用户反馈的「部分插播、广告字幕、滚动字幕未完全去除」情况，引导免费小模型按语义而非仅时长标记。
+	prompt += "\n判定要点（以下均为广告，请标记出所有相关片段索引）：①插播广告块；②前贴/中插/后贴广告；③滚动字幕/跑马灯；④广告字幕/片尾推广字幕；⑤角标/水印广告推荐位；⑥预告片/花絮。请用语义判断尽量找全，而不仅是依赖片段时间长短。"
+	// 每天给模型把「短连续段」当成广告的心理提示：正片一样有短段，务必看 URL 语义与邻段节奏判断
+	prompt += "\n注意：正片中也存在 2~6 秒的普通镜头短段，不要仅凭时长判定为广告；优先依据 URL 中的广告特征（ad/promo/insert/tvc/滚动字幕等关键词）与片段内容语义判断。"
 	user := strings.Join(lines, "\n")
 	content, err := aiChatCompleteEx(prompt+" 只输出 JSON 数组，如 [2,5,8]，不含其它文字。", user, cfg)
 	if err != nil {
@@ -797,7 +809,7 @@ func aiDetectAdIndexes(rawURL string, segs []Segment, cfg *AIConfig) ([]int, err
 			}
 		}
 	}
-	idx = filterAIRuns(idx)
+	idx = filterAIRuns(idx, len(segs))
 	if err := aiAdRatioGuard(idx, len(segs)); err != nil {
 		return nil, err
 	}
@@ -805,12 +817,15 @@ func aiDetectAdIndexes(rawURL string, segs []Segment, cfg *AIConfig) ([]int, err
 }
 
 // aiAdRatioGuard AI 幻觉总闸：AI 判定占比过高视为幻觉（免费小模型送长列表时偶发大面积误标），
-// 保守丢弃全部 AI 结果，宁可不删也不能误删整段正片。真实广告插入占比通常很低（<20%）。
+// 保守丢弃全部 AI 结果，宁可不删也不能误删整段正片。
+// 阈值原为 20%，会把插播广告+滚动字幕多的流误判为幻觉而整批丢弃（用户反馈「插播/字幕没去掉」）。
+// 放宽到 50%：真实插播/字幕/贴片占比可达这一量级；若仍超 50% 则基本是模型幻觉，弃整批。
+// 最终播放安全由 applyAdSafetyRoof（ai_model 视为高置信，另含空列表保留兜底）保证。
 func aiAdRatioGuard(idx []int, total int) error {
 	if total <= 0 {
 		return nil
 	}
-	if len(idx) > total*20/100 {
+	if len(idx) > total*50/100 {
 		return fmt.Errorf("AI 判定占比 %.0f%%（%d/%d 段）疑似幻觉，已忽略（保守兜底）",
 			float64(len(idx))*100/float64(total), len(idx), total)
 	}
@@ -1118,10 +1133,15 @@ func buildFilteredM3U8(segs []Segment, targetDuration int) string {
 	}
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
+	// VOD 播放类型：声明为「完整静态点播列表」，播放器据此开启完整随机 seek（拖动秒定位，无需等待整清单）——
+	// 否则 HLS 客户端把列表当 EVENT/现场只支持渐进播放，拖到头要等待并缓存，这正是「秒拖秒播」的关键。
+	b.WriteString("#EXT-X-PLAYLIST-TYPE:VOD\n")
 	if targetDuration > 0 {
 		b.WriteString("#EXT-X-TARGETDURATION:" + strconv.Itoa(targetDuration) + "\n")
 	}
 	b.WriteString("#EXT-X-VERSION:3\n")
+	// 声明各分片关键帧对齐，便于播放器精确 seek 到目标时间（配合 DISCONTINUITY 处快速拉到广告后正确位置）
+	b.WriteString("#EXT-X-INDEPENDENT-SEGMENTS\n")
 	lastKey := ""
 	lastMap := ""
 	lastDiscont := false
@@ -3152,7 +3172,8 @@ func setCachedPlaylist(key string, body []byte) {
 
 // cleanPlaylistOnce 对已抓取的 m3u8 body 做增强去广告，返回过滤后的播放列表文本。
 // master 列表（仅码率分叉、无分片）或解析失败返回 ok=false，由调用方原样改写（其子列表请求仍会走本代理过滤）。
-// 供 /api/play 播放代理复用，保证「播放即去广告」且与「新版增强测试播放」引擎一致。
+// 供 /api/play 播放代理复用，保证「播放即去广告」且与「新版增强测试播放」引擎一致；
+// 若 AI 已启用（auto/ai 模式且配置完整）则追加 AI 语义审核，覆盖规则漏检的插播/滚动字幕/广告字幕等。
 func cleanPlaylistOnce(body []byte, mediaURL string) (string, bool) {
 	segs, _, isMaster, err := parseM3U8(string(body), mediaURL)
 	if err != nil || isMaster || len(segs) == 0 {
@@ -3160,6 +3181,18 @@ func cleanPlaylistOnce(body []byte, mediaURL string) (string, bool) {
 	}
 	detectAds(segs, false) // aggresive=false：禁用同目录聚类去重（统一正片会被误判为广告团，导致播放列表被删空）
 	enhancedDetectAds(segs)
+	// 播放即 AI 去广告：AI 已启用则对清单做一次语义审核，标记插播/滚动字幕/广告字幕等规则漏检项。
+	// 失败（网络/超时/token超限）静默忽略——AI 是增强、不阻塞播放链路，服务不可用也能正常播（仅规则引擎）。
+	if aiCfg := loadAIConfig(); resolveEngine("", aiCfg) == "ai" {
+		if idx, err := aiDetectAdIndexes(mediaURL, segs, aiCfg); err == nil {
+			for _, i := range idx {
+				if i >= 0 && i < len(segs) && !segs[i].IsAd {
+					segs[i].IsAd = true
+					segs[i].AdReason = "ai_model"
+				}
+			}
+		}
+	}
 	applyAdSafetyRoof(segs) // 播放安全兜底：宁可少删广告，不可删到播不了
 	return buildFilteredM3U8(segs, maxTargetDuration(segs)), true
 }

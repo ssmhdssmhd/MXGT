@@ -1,5 +1,30 @@
 # 更新日志
 
+## Go 分支 v0.6.33 (2026-09-12) — AI 去广告更彻底 + 播放清单 VOD 秒拖秒播
+
+> 用户诉求：① 调用 AI 去除时，部分插播、广告字幕、滚动字幕等没有完全去除；② 播放成功返回后的播放链接要支持秒拖、秒播。
+
+### 1. 根因（[main.go](file:///workspace/main.go)）
+
+- **播放链路没走 AI**：实际播放走 `/api/play`，其去广告函数 `cleanPlaylistOnce` 只跑了规则引擎（`detectAds`+`enhancedDetectAds`），从未调用 AI 审核——用户启用 AI 后，正常播放根本不会触发 AI，自然去不干净；
+- **AI 召回过严**：`aiAdRatioGuard` 把 AI 删除占比限到 20%、`filterAIRuns` 丢弃超过 20 段的连续簇——插播广告/滚动字幕常达几十段，被整块丢弃；
+- **AI 标记被启发式误伤**：`applyAdSafetyRoof` 把 `ai_model` 当低置信，一旦启发式误判比例高就会把 AI 结果一并回退；
+- **秒拖秒播缺 VOD**：`buildFilteredM3U8` 输出无 `#EXT-X-PLAYLIST-TYPE:VOD`，HLS 客户端把手按 EVENT/渐进处理，拖动手柄需等待整清单。
+
+### 2. 改动
+
+- **播放即 AI 去广告**：`cleanPlaylistOnce` 在规则检测后、若 AI 已启用（`resolveEngine("")==ai` 且 `ai/detect`）追加一次 `aiDetectAdIndexes` 语义审核；AI 调用失败静默忽略，服务不可用也正常播（仅规则引擎）；
+- **放宽 AI 召回**：`aiAdRatioGuard` 20%→50%；`filterAIRuns` 连续簇上限 20 段→`max(20,total/3)`；
+- **AI 高置信**：`applyAdSafetyRoof` 的 `highConfidence` 增加 `ai_model`，AI 标记不再被启发式误伤批量回退；空列表保留兜底仍生效，保证能播；
+- **识别更全**：`aiDetectAdIndexes` 判定提示词扩展覆盖插播/前贴/中插/后贴/滚动字幕/广告字幕/角标水印/预告片，并提示「正片也存在 2~6s 短段，勿仅凭时长判定」；
+- **秒拖秒播**：`buildFilteredM3U8` 输出新增 `#EXT-X-PLAYLIST-TYPE:VOD` 与 `#EXT-X-INDEPENDENT-SEGMENTS`，播放器开启完整随机 seek、关键帧对齐，拖动即时定位。
+
+### 3. 验证与版本
+
+- `go build` + `go vet` 通过；版本升级 `v0.6.32 → v0.6.33`；AI 子模块版本 `v0.1.1 → v0.1.2`。
+
+---
+
 ## Go 分支 v0.6.32 (2026-09-12) — /api/play 播放提速：连接复用 + 缓存加长 + 分片直连开关
 
 > 用户诉求：`http://114.134.184.91:8080/api/play?url=` 调用返回速度能否提升。
