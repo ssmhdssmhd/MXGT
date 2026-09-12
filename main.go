@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.22"
+	AppVersion = "v0.6.23"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -345,12 +345,80 @@ func enhancedDetectAds(segs []Segment) {
 	markDiscontinuityBlocks(segs)
 }
 
+// applyAdSafetyRoof 播放安全兜底（「成功却播不了」的总开关）：
+// 启发式去广告（短段簇/不连续广告块/边界短簇/聚类时长去重/超短视频）识别的是「形态」，对统一正片
+// 会误判为广告一阵狂删，导致过滤后的播放列表被删空/只剩极少，轻则黑屏卡死、重则无法起播。
+// 兜底原则：宁可不删广告，也要保证返回结果能正常播放。
+// 规则：一旦启发式删除了整部片段过高比例（>50%），判定为「统一正片误伤」，
+// 回退全部低置信启发式标记，仅保留高置信显式标记（URL 关键词 / 广告标签区间）；
+// 若回退后仍为空，则保留全部片段（彻底放弃过滤，保证能播）。
+func applyAdSafetyRoof(segs []Segment) {
+	total := len(segs)
+	if total == 0 {
+		return
+	}
+	// 高置信显式标记：这些不常见且明确指向广告，不参与回退
+	highConfidence := map[string]bool{
+		"url_keyword":          true, // 广告型文件名
+		"enhanced_url_keyword": true, // 广告域 / 前中后插播特征
+		"ad_tag_range":         true, // 播放列表显式声明广告区间
+	}
+	kept := 0
+	for i := range segs {
+		if !segs[i].IsAd {
+			kept++
+		}
+	}
+	adCount := total - kept
+	if adCount == 0 {
+		return
+	}
+	overFilter := float64(adCount)/float64(total) > 0.5
+	if kept == 0 {
+		overFilter = true
+	}
+	if overFilter {
+		// 回退低置信启发式标记
+		for i := range segs {
+			if segs[i].IsAd && !highConfidence[segs[i].AdReason] {
+				segs[i].IsAd = false
+				segs[i].AdReason = ""
+			}
+		}
+		// 若仍为空（极少数全片都被判为 URL 关键词广告），彻底保留，保证能播
+		stillKept := 0
+		for i := range segs {
+			if !segs[i].IsAd {
+				stillKept++
+			}
+		}
+		if stillKept == 0 {
+			for i := range segs {
+				segs[i].IsAd = false
+				segs[i].AdReason = ""
+			}
+		}
+	}
+}
+
 // markDiscontinuityBlocks 成对 DISCONTINUITY 广告块检测：
 // 广告插入在 m3u8 中常表现为「插入点 DISCONTINUITY → 若干段 → 恢复点 DISCONTINUITY」成对出现。
 // 两个 DISCONTINUITY 之间夹 1-12 段且总时长 ≤ 120s 时判为广告；
 // 片头拼接/正片大段切分通常夹块远大于此（或仅单次 DISCONTINUITY），避免误伤。
 func markDiscontinuityBlocks(segs []Segment) {
 	n := len(segs)
+	// 分隔符型播放列表保护：若 DISCONTINUITY 出现得极其频繁（>5% 的片段都带不连续标记），
+	// 说明它被用作「分段分隔符」而非「广告插入点」（快车/闪电/牛牛/无水印等 CDN 每个 ~2s 段前都放一个），
+	// 此时成对不连续间隙遍布全片，按块判广告会误删大半正片（曾导致整部视频 40%+ 被删、无法正常播放）。
+	discont := 0
+	for i := range segs {
+		if segs[i].Discontinuity {
+			discont++
+		}
+	}
+	if discont > 0 && float64(discont)/float64(n) > 0.05 {
+		return
+	}
 	i := 0
 	for i < n {
 		if !segs[i].Discontinuity {
@@ -368,7 +436,15 @@ func markDiscontinuityBlocks(segs []Segment) {
 			break // 无成对恢复点（如片头单次拼接），跳过
 		}
 		cnt := j - start
-		if cnt >= 1 && cnt <= 12 && sum > 0 && sum <= 120 {
+		// 广告块需足够短于全片均长：按块平均时长显著短于全片均值才判，
+		// 避免「全片都是 ~2s 短段」的统一正片被误删（分隔符型已在上面提前拦截，这里是双保险）
+		avgBlock := sum / float64(cnt)
+		avgAll := 0.0
+		for k := range segs {
+			avgAll += segs[k].Duration
+		}
+		avgAll /= float64(n)
+		if cnt >= 1 && cnt <= 12 && sum > 0 && sum <= 120 && avgBlock < avgAll*0.6 {
 			for k := start; k < j; k++ {
 				if !segs[k].IsAd {
 					segs[k].IsAd = true
@@ -801,6 +877,8 @@ func runClean(rawURL string, aggresive bool, engine string, enhanced func(segs [
 			}
 		}
 	}
+	// 播放安全兜底：启发式把整部误删过大比例时回退，宁可不删广告也要能正常播放
+	applyAdSafetyRoof(segs)
 
 	adCount := 0
 	for i := range segs {
@@ -2590,8 +2668,9 @@ func cleanPlaylistOnce(body []byte, mediaURL string) (string, bool) {
 	if err != nil || isMaster || len(segs) == 0 {
 		return "", false
 	}
-	detectAds(segs, true)
+	detectAds(segs, false) // aggresive=false：禁用同目录聚类去重（统一正片会被误判为广告团，导致播放列表被删空）
 	enhancedDetectAds(segs)
+	applyAdSafetyRoof(segs) // 播放安全兜底：宁可少删广告，不可删到播不了
 	return buildFilteredM3U8(segs, maxTargetDuration(segs)), true
 }
 
@@ -2723,8 +2802,9 @@ func auditParse(rawURL string) AuditResult {
 		res.Message = "无有效片段"
 		return res
 	}
-	detectAds(segs, true)
+	detectAds(segs, false) // 禁用聚类去重，避免统一正片被误判为广告团导致核查清单被删空
 	enhancedDetectAds(segs)
+	applyAdSafetyRoof(segs) // 播放安全兜底：宁可不删广告，不可删到播不了
 
 	var kept []Segment
 	for _, s := range segs {
