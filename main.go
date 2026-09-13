@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.35"
+	AppVersion = "v0.6.36"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
