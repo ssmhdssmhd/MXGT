@@ -6,7 +6,7 @@
   "api_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
   "api_key": "674c8fddfbf5421d84b9a78135a24e55.dw61Fp7fQCvp020Y",
   "model": "glm-4-flash",
-  "vision_model": "glm-4v-plus",
+  "vision_model": "glm-4v-flash",
   "prompt": "你是视频去广告助手。下面是一次 M3U8 播放列表的片段列表（索引|时长秒|URL）。请识别其中属于广告/预告片/插播/水印节点 的片段，只返回一个 JSON 数组，元素为该片段的索引（整数），不要任何其他文字。",
   "max_segments": 1500,
   "timeout": 60,
