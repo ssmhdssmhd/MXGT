@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	AppVersion = "v0.6.34"
+	AppVersion = "v0.6.35"
 	UserAgent  = "MXGT-Go/" + AppVersion + " (+https://github.com/ssmhdssmhd/MXGT)"
 )
 
@@ -1795,8 +1795,10 @@ const adminPageHTML = `<!DOCTYPE html>
     <div class="row" style="flex-wrap:wrap;align-items:center">
       <button class="btn" style="padding:7px 14px;font-size:12px" onclick="saveOverlayCfg()">💾 保存遮挡配置</button>
       <button class="btn ghost" style="padding:7px 14px;font-size:12px" onclick="loadOverlayCfg()">⟳ 刷新</button>
+      <button class="btn" style="padding:7px 14px;font-size:12px;background:#7c3aed" onclick="ovlDetect()">🎯 AI 识别压字位置</button>
       <span class="muted" id="ovlStatus"></span>
     </div>
+    <div class="muted" id="ovlRectsInfo" style="margin-top:4px;line-height:1.7"></div>
     <div class="muted" style="margin-top:4px;line-height:1.7">播放链接临时覆盖：<code>/player?url=…&amp;overlay=on</code> 强制启用全局 · <code>overlay=off</code> 关闭 · <code>overlay=top:10,bottom:8,zoom:1.1,opacity:0.5,color:000</code> 精确指定（逗号/分号分隔）。</div>
   </div>
 
@@ -1840,6 +1842,7 @@ const adminPageHTML = `<!DOCTYPE html>
       <tr><td>🟠 后台管理</td><td><code>POST /api/update/apply</code></td><td>下载新版本 zip 并自动替换重启（需登录）</td></tr>
       <tr><td>🟠 后台管理</td><td><code>GET /api/ai/config</code> / <code>POST /api/ai/config</code></td><td>查看（key 打码）/ 更新 AI 去广告配置（更新需登录）</td></tr>
       <tr><td>🟠 后台管理</td><td><code>GET /api/overlay</code> / <code>POST /api/overlay/save</code></td><td>🧱 压字广告遮挡：读取全局遮挡配置（播放器用）/ 保存（需登录）——盖顶部底部滚动字幕条 + 放大裁边</td></tr>
+      <tr><td>🟠 后台管理</td><td><code>POST /api/overlay/detect</code></td><td>🎯 AI 视觉识别压字广告位置：截一帧画面送多模态模型，返回任意位置矩形并可选保存（需登录，需配支持看图模型）</td></tr>
       <tr><td>⚪ 通用</td><td><code>GET /api/stats</code></td><td>运行统计（JSON）——监控服务状态与调用量</td></tr>
       <tr><td>⚪ 通用</td><td><code>GET /healthz</code></td><td>健康检查——探活/负载均衡健康检测</td></tr>
     </table>
@@ -1993,7 +1996,37 @@ async function loadOverlayCfg(){
     el('ovlZoomS').value=c.zoom_scale||1.08;
     el('ovlOpacity').value=c.mask_opacity==null?0.55:c.mask_opacity;
     el('ovlColor').value=c.mask_color||'#000000';
+    showOvlRects(c.rects);
   }catch(e){el('ovlStatus').textContent='加载失败: '+e.message;}
+}
+function showOvlRects(rects){
+  const info=el('ovlRectsInfo');
+  if(!info)return;
+  if(!rects||!rects.length){info.textContent='（尚无 AI 识别出的任意位置遮罩块）';return;}
+  info.innerHTML='🎯 AI 识别出的压字广告位置：'+rects.map(function(rc,i){
+    return (i+1)+'. (x'+Math.round(rc.x*100)+'%, y'+Math.round(rc.y*100)+'%, '+Math.round(rc.w*100)+'×'+Math.round(rc.h*100)+'%)'+(rc.label?'「'+esc(rc.label)+'」':'');
+  }).join('　')+' —— 已全局生效，播放器自动叠遮罩';
+}
+async function ovlDetect(){
+  const v=el('player');
+  if(!v){el('ovlStatus').textContent='未找到内置播放器';return;}
+  if(!v.videoWidth){el('ovlStatus').textContent='请先在内置播放器开始播放再识别';return;}
+  el('ovlStatus').textContent='AI 识别压字位置中…';
+  const cv=document.createElement('canvas');
+  const maxW=1024, sc=Math.min(1, maxW/v.videoWidth);
+  cv.width=Math.round(v.videoWidth*sc); cv.height=Math.round(v.videoHeight*sc);
+  cv.getContext('2d').drawImage(v,0,0,cv.width,cv.height);
+  const jpeg=cv.toDataURL('image/jpeg',0.75);
+  try{
+    const r=await fetch('/api/overlay/detect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:jpeg,mime:'image/jpeg',save:true})});
+    if(r.status===401){location.href='/mxadmin/login';return;}
+    const d=await r.json();
+    if(!d.success){el('ovlStatus').textContent='✕ '+d.message;return;}
+    showOvlRects(d.rects||[]);
+    el('ovlStatus').textContent='🎯 '+d.message+'（已保存，回内置播放器可见）';
+    loadOverlayCfg();
+    applyOverlayInit();
+  }catch(e){el('ovlStatus').textContent='识别失败: '+e.message;}
 }
 async function saveOverlayCfg(){
   el('ovlStatus').textContent='保存中…';
@@ -2853,6 +2886,16 @@ function applyOverlay(v,c){
   }
   if(c.enable_top&&c.top_height_pct>0)addMask(c.top_height_pct,'top:0;');
   if(c.enable_bottom&&c.bot_height_pct>0)addMask(c.bot_height_pct,'bottom:0;');
+  // AI 视觉识别出的任意位置遮罩块（c.rects 归一化）
+  if(c.rects&&c.rects.length){
+    for(let i=0;i<c.rects.length;i++){
+      const rc=c.rects[i]; if(!rc)continue;
+      const d=document.createElement('div');
+      d.className='ovl-mask ovl-rect';
+      d.style.cssText='position:absolute;left:'+rc.x*100+'%;top:'+rc.y*100+'%;width:'+rc.w*100+'%;height:'+rc.h*100+'%;z-index:2;pointer-events:none;background:'+col+';opacity:'+op+';';
+      wrap.appendChild(d);
+    }
+  }
   const z=(c.enable_zoom&&c.zoom_scale>1)?c.zoom_scale:1;
   v.style.transformOrigin='center center';
   v.style.transform=z>1?'scale('+z+')':'';
@@ -3157,6 +3200,10 @@ const playerPageHTML = `<!DOCTYPE html>
   <h1>🎬 MXGT-Go 无广告播放器</h1>
   <div class="sub" id="src"></div>
   <video id="player" controls playsinline autoplay></video>
+  <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+    <button id="ovlDetectBtn" style="padding:7px 14px;border:none;border-radius:10px;background:#7c3aed;color:#fff;font-size:13px;cursor:pointer;box-shadow:0 4px 14px rgba(124,58,237,.4)" onclick="aiAutoDetect()">🎯 自动识别压字广告位置</button>
+    <span style="font-size:12px;color:#94a3b8">截取当前画面，AI 识别水印/滚动字幕/压字广告所在位置并自动叠遮罩。需配置支持「看图」的视觉模型。</span>
+  </div>
   <div class="tip">来源：资源站 → 官替去广告直链（支持跨域）。m3u8 自动走 hls.js，mp4/mkv 直链原生播放。</div>
 <script>
 function g(n){return new URLSearchParams(location.search).get(n)||''}
@@ -3283,10 +3330,47 @@ function applyOverlay(el,c){
   }
   if(c.enable_top&&c.top_height_pct>0)addMask('ovl-top',c.top_height_pct,'top:0;');
   if(c.enable_bottom&&c.bot_height_pct>0)addMask('ovl-bot',c.bot_height_pct,'bottom:0;');
+  // AI 视觉识别出的任意位置遮罩块（c.rects 归一化）
+  if(c.rects&&c.rects.length){
+    for(var i=0;i<c.rects.length;i++){
+      var rc=c.rects[i]; if(!rc)continue;
+      var d=document.createElement('div');
+      d.className='ovl-mask ovl-rect';
+      d.style.cssText='position:absolute;left:'+rc.x*100+'%;top:'+rc.y*100+'%;width:'+rc.w*100+'%;height:'+rc.h*100+'%;z-index:2;pointer-events:none;background:'+col+';opacity:'+op+';';
+      wrap.appendChild(d);
+    }
+  }
   // 放大裁边：transform scale 让画面四边各被裁掉 (scale-1)/2，把边缘压字挤出画面
   var z=(c.enable_zoom&&c.zoom_scale>1)?c.zoom_scale:1;
   el.style.transformOrigin='center center';
   el.style.transform=z>1?'scale('+z+')':'';
+}
+// 自动识别压字广告位置并遮挡：截当前视频帧 JPEG → 调用 /api/overlay/detect（视觉模型）→ 叠加识别矩形
+function aiAutoDetect(){
+  var el=document.getElementById('player');
+  if(!el){alert('视频尚未加载');return;}
+  if(!el.videoWidth){alert('请先开始播放再识别');return;}
+  var btn=document.getElementById('ovlDetectBtn');
+  if(btn){var _t=btn.textContent;btn.textContent='识别中…';btn.disabled=true;}
+  var cv=document.createElement('canvas');
+  var maxW=1024, sc=Math.min(1, maxW/el.videoWidth);
+  cv.width=Math.round(el.videoWidth*sc); cv.height=Math.round(el.videoHeight*sc);
+  cv.getContext('2d').drawImage(el,0,0,cv.width,cv.height);
+  var jpeg=cv.toDataURL('image/jpeg',0.75);
+  fetch('/api/overlay/detect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:jpeg, mime:'image/jpeg', save:true})})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(btn){btn.textContent=_t;btn.disabled=false;}
+      if(!d.success){alert(d.message||'识别失败');return;}
+      // 保留当前已生效的配置，仅替换 rects
+      fetch('/api/overlay').then(function(r){return r.json()}).then(function(g){
+        var cfg=(g&&g.config)||{};
+        cfg.enabled=true; cfg.rects=d.rects||[];
+        applyOverlay(el,cfg);
+        alert('🎯 '+d.message+'；已叠加遮罩');
+      }).catch(function(){/* 加载全局配置失败时仅提示已识别，不做覆盖 */});
+    })
+    .catch(function(e){if(btn){btn.textContent=_t;btn.disabled=false;}alert('识别失败: '+e.message);});
 }
 applyOverlayInit();
 </script>
@@ -7292,19 +7376,29 @@ func handleSkipDelete(w http.ResponseWriter, r *http.Request) {
 // 持久化 overlay_masks.json；GET 开放（播放器读取），POST 需登录（后台保存）。
 // ============================================================
 
+// OverlayRect 一个任意位置遮罩矩形（画面归一化坐标 0~1）
+type OverlayRect struct {
+	X	float64 `json:"x"`
+	Y	float64 `json:"y"`
+	W	float64 `json:"w"`
+	H	float64 `json:"h"`
+	Label string `json:"label,omitempty"`
+}
+
 // OverlayMaskConfig 压字广告遮挡全局配置
 type OverlayMaskConfig struct {
-	Version      string  `json:"version"`
-	UpdateDate   string  `json:"update_date"`
-	Enabled      bool    `json:"enabled"`       // 总开关
-	EnableTop    bool    `json:"enable_top"`    // 顶部遮罩条
-	TopHeightPct float64 `json:"top_height_pct"` // 顶部遮罩条高度（占画面高度 %，0=自动按 8）
-	EnableBottom bool    `json:"enable_bottom"` // 底部遮罩条
-	BotHeightPct float64 `json:"bot_height_pct"` // 底部遮罩条高度（%）
-	MaskColor    string  `json:"mask_color"`   // 遮罩条颜色，默认 #000
-	MaskOpacity  float64 `json:"mask_opacity"` // 遮罩条透明度 0~1，默认 0.55
-	EnableZoom   bool    `json:"enable_zoom"`  // 放大裁边（把边缘压字挤出画面）
-	ZoomScale    float64 `json:"zoom_scale"`   // 放大倍数，默认 1.08
+	Version      string        `json:"version"`
+	UpdateDate   string        `json:"update_date"`
+	Enabled      bool          `json:"enabled"`       // 总开关
+	EnableTop    bool          `json:"enable_top"`    // 顶部遮罩条
+	TopHeightPct float64       `json:"top_height_pct"` // 顶部遮罩条高度（占画面高度 %，0=自动按 8）
+	EnableBottom bool          `json:"enable_bottom"` // 底部遮罩条
+	BotHeightPct float64       `json:"bot_height_pct"` // 底部遮罩条高度（%）
+	MaskColor    string        `json:"mask_color"`   // 遮罩条颜色，默认 #000
+	MaskOpacity  float64       `json:"mask_opacity"` // 遮罩条透明度 0~1，默认 0.55
+	EnableZoom   bool          `json:"enable_zoom"`  // 放大裁边（把边缘压字挤出画面）
+	ZoomScale    float64       `json:"zoom_scale"`   // 放大倍数，默认 1.08
+	Rects        []OverlayRect `json:"rects,omitempty"` // AI 视觉识别出的任意位置通道块（归一化）
 }
 
 func defaultOverlayConfig() *OverlayMaskConfig {
@@ -7403,6 +7497,204 @@ func handleOverlaySet(w http.ResponseWriter, r *http.Request) {
 	}
 	recordCall("/api/overlay", "POST", true, 0, "保存压字广告遮挡配置")
 	writeJSON(w, map[string]interface{}{"success": true, "message": "遮挡配置已保存"})
+}
+
+// ============================================================
+// 压字广告位置 AI 视觉识别：把一帧画面(JPEG base64)送给多模态大模型，
+// 让它找出画面内压字/水印/滚动字幕等广告文本所在的矩形(归一化 0~1)，前端据此叠加遮罩。
+// 支持 OpenAI 兼容 / Anthropic / Gemini 三大多模态协议。依赖配置了"能看图"的视觉模型。
+// ============================================================
+
+// aiVisionDetect 用视觉大模型识别一帧画面中的广告文本区域。
+// mime 通常 image/jpeg；data 为图片 base64（调用方自行压缩，建议宽 ≤ 1024 控制 token）。
+// 返回多个归一化矩形(坐标 0~1)。
+func aiVisionDetect(mime, data string, cfg *AIConfig) ([]OverlayRect, error) {
+	if cfg == nil || !cfg.Enabled || cfg.APIURL == "" || cfg.APIKey == "" {
+		return nil, fmt.Errorf("AI 未启用或未配置")
+	}
+	if data == "" {
+		return nil, fmt.Errorf("图片为空")
+	}
+	prompt := `你是视频画面广告检测助手。这是一张视频截图。请找出画面中所有"压字广告/推广文本/水印/滚动字幕"所在的矩形区域（例如：本片由XX赞助/主营… 的滚动字幕、网站水印、角标推广文字）。注意：不要标记视频自带的正常字幕/片名。只输出一个 JSON 数组，每个元素为 {"x":0~1,"y":0~1,"w":0~1,"h":0~1,"label":"简短描述"}，坐标都是占画面宽高比（左上角为原点）。没有广告时输出 []。不要输出任何其它文字。`
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 25
+	}
+	pres := aiProviderPreset(cfg.Provider)
+	var bodyRaw []byte
+	var err error
+	switch aiFormat(cfg) {
+	case "anthropic":
+		payload := map[string]interface{}{
+			"model": cfg.Model, "max_tokens": 800,
+			"messages": []map[string]interface{}{
+				{"role": "user", "content": []interface{}{
+					map[string]string{"type": "text", "text": prompt},
+					map[string]interface{}{"type": "image", "source": map[string]string{"type": "base64", "media_type": mime, "data": data}},
+				}},
+			},
+		}
+		bodyRaw, _ = json.Marshal(payload)
+		bodyRaw, err = aiHTTPPost(aiChatEndpoint(cfg, pres), bodyRaw, func(req *http.Request) {
+			req.Header.Set("x-api-key", cfg.APIKey)
+			req.Header.Set("anthropic-version", "2023-06-01")
+		}, timeout)
+	case "gemini":
+		payload := map[string]interface{}{
+			"contents": []map[string]interface{}{
+				{"role": "user", "parts": []interface{}{
+					map[string]string{"text": prompt},
+					map[string]interface{}{"inline_data": map[string]string{"mime_type": mime, "data": data}},
+				}},
+			},
+		}
+		bodyRaw, _ = json.Marshal(payload)
+		ep := aiChatEndpoint(cfg, pres)
+		if strings.Contains(ep, "?") {
+			ep += "&key=" + url.QueryEscape(cfg.APIKey)
+		} else {
+			ep += "?key=" + url.QueryEscape(cfg.APIKey)
+		}
+		bodyRaw, err = aiHTTPPost(ep, bodyRaw, nil, timeout)
+	default: // openai 兼容
+		payload := map[string]interface{}{
+			"model": cfg.Model, "temperature": 0.1, "max_tokens": 800,
+			"messages": []map[string]interface{}{
+				{"role": "user", "content": []interface{}{
+					map[string]string{"type": "text", "text": prompt},
+					map[string]interface{}{"type": "image_url", "image_url": map[string]string{"url": "data:" + mime + ";base64," + data}},
+				}},
+			},
+		}
+		bodyRaw, _ = json.Marshal(payload)
+		bodyRaw, err = aiHTTPPost(aiChatEndpoint(cfg, pres), bodyRaw, func(req *http.Request) {
+			req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+		}, timeout)
+	}
+	if err != nil {
+		return nil, err
+	}
+	// 解析文本答案
+	var text string
+	switch aiFormat(cfg) {
+	case "anthropic":
+		var r struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		}
+		if json.Unmarshal(bodyRaw, &r) == nil {
+			for _, c := range r.Content {
+				if c.Type == "text" {
+					text = c.Text
+					break
+				}
+			}
+		}
+	case "gemini":
+		var r struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+		}
+		if json.Unmarshal(bodyRaw, &r) == nil && len(r.Candidates) > 0 {
+			for _, p := range r.Candidates[0].Content.Parts {
+				text += p.Text
+			}
+		}
+	default:
+		var r struct {
+			Choices []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+		if json.Unmarshal(bodyRaw, &r) == nil && len(r.Choices) > 0 {
+			text = r.Choices[0].Message.Content
+		}
+	}
+	text = stripCodeFence(text)
+	// 提取 JSON 数组
+	arrRe := regexp.MustCompile(`\[[\s\S]*\]`)
+	m := arrRe.FindString(text)
+	if m == "" {
+		return nil, fmt.Errorf("AI 未返回可解析的坐标: %s", shortURL(text, 80))
+	}
+	var rects []OverlayRect
+	if err := json.Unmarshal([]byte(m), &rects); err != nil {
+		return nil, fmt.Errorf("坐标解析失败: %s", shortURL(m, 100))
+	}
+	// 合法性过滤：坐标须在 0~1 合理范围，尺寸不能过大过小
+	var out []OverlayRect
+	for _, rc := range rects {
+		if rc.W <= 0 || rc.H <= 0 || rc.X < 0 || rc.Y < 0 || rc.X > 1 || rc.Y > 1 {
+			continue
+		}
+		if rc.W > 1 {
+			rc.W = 1
+		}
+		if rc.H > 1 {
+			rc.H = 1
+		}
+		out = append(out, rc)
+	}
+	return out, nil
+}
+
+// handleOverlayDetect POST /api/overlay/detect {image:<jpeg base64>, mime:...}（需登录）
+// 用配置的视觉模型识别压字广告位置，返回识别到/新写入的矩形遮罩列表。
+func handleOverlayDetect(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Image string `json:"image"`
+		Mime  string `json:"mime"`
+		Save  bool   `json:"save"` // 是否把识别结果写入全局配置(rects)，供后续自动遮挡
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&in)
+	}
+	if in.Image == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "缺少 image"})
+		return
+	}
+	mime := in.Mime
+	if mime == "" {
+		mime = "image/jpeg"
+	}
+	// 去掉可能带上的 dataURL 前缀
+	if idx := strings.Index(in.Image, ";base64,"); idx >= 0 {
+		in.Image = in.Image[idx+len(";base64,"):]
+	}
+	aiCfg := loadAIConfig()
+	if !aiCfg.Enabled || aiCfg.APIURL == "" || aiCfg.APIKey == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未启用 AI 或未配置接口/Key（需配支持‘看图’的视觉模型）"})
+		return
+	}
+	rects, err := aiVisionDetect(mime, in.Image, aiCfg)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "识别失败: " + err.Error()})
+		return
+	}
+	msg := fmt.Sprintf("识别到 %d 处压字广告", len(rects))
+	if in.Save && len(rects) > 0 {
+		overlayMu.Lock()
+		cur := loadOverlayMask()
+		cur.Rects = rects
+		cur.Enabled = true
+		if err := saveOverlayMask(cur); err != nil {
+			overlayMu.Unlock()
+			writeJSON(w, map[string]interface{}{"success": false, "message": "保存失败: " + err.Error(), "rects": rects})
+			return
+		}
+		overlayMu.Unlock()
+		msg += "（已保存，全局生效）"
+	}
+	writeJSON(w, map[string]interface{}{"success": true, "message": msg, "rects": rects})
 }
 
 // ============================================================
@@ -8131,6 +8423,7 @@ func main() {
 	// 压字广告遮挡：配置列表开放（播放器读取叠加遮罩条/放大裁边），保存需登录
 	http.HandleFunc("/api/overlay", handleOverlayGet)
 	http.HandleFunc("/api/overlay/save", guard(handleOverlaySet))
+	http.HandleFunc("/api/overlay/detect", guard(handleOverlayDetect)) // AI 视觉识别压字广告位置（需登录）
 	// 弹幕过滤规则库（独立模块，需登录）：/api/danmaku
 	http.HandleFunc("/api/danmaku", guard(handleDanmakuRulesList))
 	http.HandleFunc("/api/danmaku/add", guard(handleDanmakuRulesAdd))
