@@ -609,6 +609,10 @@ type AIConfig struct {
 	ReplacePrompt  string `json:"replace_prompt,omitempty"`
 	// 请求协议格式：openai(默认/兼容) | anthropic | gemini；由 Provider 预设自动决定，可手动覆盖
 	Format string `json:"format,omitempty"`
+	// 视觉识别模型（可选）：专用于「压字广告位置识别」的多模态模型名。
+	// 去广告/官替仍用上方 Model（GLM-4-Flash 等文本模型，免费且快）；这里填能"看图"的模型（如 glm-4v-plus / gpt-4o / Qwen-VL）。
+	// 为空时压字识别回退用 Model（此时需 Model 本身支持图片）。
+	VisionModel string `json:"vision_model,omitempty"`
 }
 
 // 默认配置：免费方案（智谱 GLM-4-Flash 完全免费），enabled=false 需在后台启用并填 API Key 后生效
@@ -1750,6 +1754,10 @@ const adminPageHTML = `<!DOCTYPE html>
       <input id="aiModel" placeholder="gpt-4o-mini" style="flex:1;min-width:200px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
     </div>
     <div class="row" style="flex-wrap:wrap">
+      <span class="muted">🖼️ 视觉识别模型</span>
+      <input id="aiVisionModel" placeholder="可选：压字广告识别专用多模态模型，如 glm-4v-plus / gpt-4o / Qwen-VL（留空则用上方模型，此时上方需支持看图）" style="flex:1;min-width:300px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
+    </div>
+    <div class="row" style="flex-wrap:wrap">
       <span class="muted">超时(秒)</span>
       <input id="aiTimeout" type="number" min="5" max="120" value="25" style="width:84px;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db">
       <span class="muted">AI 审核最大分段</span>
@@ -1928,6 +1936,7 @@ async function loadAIConfigUI(){
     el('aiAPIURL').value=cfg.api_url||'';
     el('aiAPIKey').value=cfg.api_key?'<set>':'';
     el('aiModel').value=cfg.model||'';
+    el('aiVisionModel').value=cfg.vision_model||'';
     el('aiTimeout').value=cfg.timeout||25;
     el('aiMaxSegments').value=cfg.max_segments||300;
     el('aiPrompt').value=cfg.prompt||'';
@@ -1957,6 +1966,7 @@ async function saveAIConfig(){
     // 留空或 <set> 均视为保留原 Key（后端不回传明文）
     api_key:key?key:'<set>',
     model:el('aiModel').value.trim(),
+    vision_model:el('aiVisionModel').value.trim(),
     timeout:parseInt(el('aiTimeout').value)||25,
     max_segments:parseInt(el('aiMaxSegments').value)||300,
     prompt:el('aiPrompt').value.trim(),
@@ -7515,6 +7525,12 @@ func aiVisionDetect(mime, data string, cfg *AIConfig) ([]OverlayRect, error) {
 	if data == "" {
 		return nil, fmt.Errorf("图片为空")
 	}
+	// 优先使用独立的「视觉识别模型」，未配置则回退主 Model（此时需主模型支持图片）
+	if cfg.VisionModel != "" {
+		vc := *cfg
+		vc.Model = cfg.VisionModel
+		cfg = &vc
+	}
 	prompt := `你是视频画面广告检测助手。这是一张视频截图。请找出画面中所有"压字广告/推广文本/水印/滚动字幕"所在的矩形区域（例如：本片由XX赞助/主营… 的滚动字幕、网站水印、角标推广文字）。注意：不要标记视频自带的正常字幕/片名。只输出一个 JSON 数组，每个元素为 {"x":0~1,"y":0~1,"w":0~1,"h":0~1,"label":"简短描述"}，坐标都是占画面宽高比（左上角为原点）。没有广告时输出 []。不要输出任何其它文字。`
 	timeout := cfg.Timeout
 	if timeout <= 0 {
@@ -7672,7 +7688,11 @@ func handleOverlayDetect(w http.ResponseWriter, r *http.Request) {
 	}
 	aiCfg := loadAIConfig()
 	if !aiCfg.Enabled || aiCfg.APIURL == "" || aiCfg.APIKey == "" {
-		writeJSON(w, map[string]interface{}{"success": false, "message": "未启用 AI 或未配置接口/Key（需配支持‘看图’的视觉模型）"})
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未启用 AI 或未配置接口/Key"})
+		return
+	}
+	if aiCfg.VisionModel == "" {
+		writeJSON(w, map[string]interface{}{"success": false, "message": "未配置视觉识别模型：请在「AI 大模型接入」的“视觉识别模型”填写支持‘看图’的模型（如 glm-4v-plus / gpt-4o / Qwen-VL），或把主模型设为多模态"})
 		return
 	}
 	rects, err := aiVisionDetect(mime, in.Image, aiCfg)
